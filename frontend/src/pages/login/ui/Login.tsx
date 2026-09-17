@@ -14,10 +14,14 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { ThemeSwitcher } from "@/theme/ThemeSwitcher";
 
 export default function Login() {
   return (
-    <div className="flex min-h-svh flex-col items-center justify-center bg-muted/30 px-4 py-10">
+    <div className="relative flex min-h-svh flex-col items-center justify-center bg-muted/30 px-4 py-10">
+      <div className="absolute top-4 right-4">
+        <ThemeSwitcher />
+      </div>
       <div className="mb-8 flex flex-col items-center gap-3 text-center">
         <div
           className="flex size-11 items-center justify-center rounded-lg bg-primary text-primary-foreground"

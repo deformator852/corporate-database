@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from "react-router";
+import { ThemeSwitcher } from "@/theme/ThemeSwitcher";
 
 const nav = [
   { to: "/", label: "Home", end: true },
@@ -11,6 +12,7 @@ export default function AppLayout() {
       <header className="app-header app-layout__header">
         <div className="app-header__inner app-layout__header-inner">
           <strong className="app-layout__brand">Corporate Database</strong>
+          <ThemeSwitcher />
         </div>
       </header>
 
