@@ -15,8 +15,16 @@ async def seed_users(session: AsyncSession) -> None:
     session.add_all(
         [
             User(
-                email="admin@local.test", hashed_password=hash_password(SEED_PASSWORD)
+                first_name="John",
+                last_name="Doe",
+                email="admin@local.test",
+                password=hash_password(SEED_PASSWORD),
             ),
-            User(email="dev@local.test", hashed_password=hash_password(SEED_PASSWORD)),
+            User(
+                first_name="Michael",
+                last_name="Keel",
+                email="dev@local.test",
+                password=hash_password(SEED_PASSWORD),
+            ),
         ]
     )

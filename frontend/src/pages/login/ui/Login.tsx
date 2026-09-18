@@ -1,6 +1,4 @@
 import {Database} from "lucide-react";
-import {Link} from "react-router";
-import {Button} from "@/components/ui/button";
 import {Card, CardContent, CardDescription, CardHeader, CardTitle,} from "@/components/ui/card";
 import {ThemeSwitcher} from "@/theme/ThemeSwitcher";
 import {LoginForm} from "@pages/login/ui/LoginForm.tsx";
@@ -38,13 +36,6 @@ export default function Login() {
                     <LoginForm/>
                 </CardContent>
             </Card>
-
-            <p className="mt-8 text-center text-sm text-muted-foreground">
-                No access?{" "}
-                <Button variant="link" className="h-auto px-1" render={<Link to="/"/>}>
-                    Back to home
-                </Button>
-            </p>
         </div>
     );
 }

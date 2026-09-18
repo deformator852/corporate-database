@@ -1,7 +1,7 @@
 from authx.schema import TokenPayload
 from fastapi import APIRouter, Depends, Response
 
-from api.deps import get_auth_service
+from api.deps import get_auth_service, get_current_user
 from models.user import User
 from schemas.auth import UserLoginResponseSchema, UserLoginSchema
 from schemas.error_schema import ErrorSchema
@@ -39,3 +39,12 @@ async def refresh(
     payload: TokenPayload = Depends(security.refresh_token_required),
 ) -> None:
     set_auth_cookies(response, payload.sub, fresh=False)
+
+
+@router.get(
+    "/me",
+    response_model=UserLoginResponseSchema,
+    responses={401: {"model": ErrorSchema}},
+)
+async def me(user: User = Depends(get_current_user)) -> User:
+    return user

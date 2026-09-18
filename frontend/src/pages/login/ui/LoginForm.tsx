@@ -4,7 +4,8 @@ import {useForm} from "react-hook-form";
 import {useNavigate} from "react-router";
 
 import {login} from "@pages/login/api/login";
-import {getApiErrorMessage} from "@/lib/api/errors";
+import {getApiErrorMessage} from "@/shared/lib/api/errors";
+import {useSessionStore} from "@/shared/auth/session-store";
 import {Button} from "@/components/ui/button";
 import {Field, FieldError, FieldGroup, FieldLabel} from "@/components/ui/field";
 import {Input} from "@/components/ui/input";
@@ -12,6 +13,7 @@ import {type LoginFormData, loginSchema} from "@pages/login/schema/schema";
 
 export function LoginForm() {
     const navigate = useNavigate();
+    const setUser = useSessionStore((state) => state.setUser);
     const {
         register,
         handleSubmit,
@@ -27,7 +29,8 @@ export function LoginForm() {
 
     const onSubmit = async (data: LoginFormData) => {
         try {
-            await login(data);
+            const user = await login(data);
+            setUser(user);
             await navigate("/");
         } catch (error) {
             setError("root", {

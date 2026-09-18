@@ -1,8 +1,10 @@
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict
+
+from schemas.email import Email
 
 
 class UserLoginSchema(BaseModel):
-    email: EmailStr
+    email: Email
     password: str
 
 
@@ -11,4 +13,4 @@ class UserLoginResponseSchema(BaseModel):
 
     first_name: str
     last_name: str
-    email: EmailStr
+    email: Email

@@ -3,6 +3,8 @@ import axios, {
     type InternalAxiosRequestConfig,
 } from "axios";
 
+import {useSessionStore} from "@/shared/auth/session-store";
+
 export const api = axios.create({
     baseURL: "/api",
     withCredentials: true,
@@ -51,7 +53,7 @@ api.interceptors.response.use(
             await refreshSession();
             return api(original);
         } catch (refreshError) {
-            redirectToLogin();
+            useSessionStore.getState().clear();
             return Promise.reject(refreshError);
         }
     },
@@ -101,10 +103,4 @@ function readCookie(name: string): string | undefined {
     }
 
     return decodeURIComponent(row.slice(prefix.length));
-}
-
-function redirectToLogin(): void {
-    if (window.location.pathname !== "/login") {
-        window.location.assign("/login");
-    }
 }
