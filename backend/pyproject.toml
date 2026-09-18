@@ -22,5 +22,8 @@ dependencies = [
 [tool.uv]
 package = true
 
+[tool.ruff.lint]
+ignore = ["B008"]
+
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.params.Depends"]

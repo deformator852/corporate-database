@@ -3,16 +3,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from exceptions import AppError
 from models.user import User
-from services.password_service import verify_password
+from schemas.auth import UserLoginSchema
+from services.password import verify_password
 
 
 class AuthService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def authenticate(self, email: str, password: str) -> User:
-        user = await self.session.scalar(select(User).where(User.email == email))
-        if user is None or not verify_password(password, user.hashed_password):
+    async def authenticate(self, data: UserLoginSchema) -> User:
+        user = await self.session.scalar(select(User).where(User.email == data.email))
+        if user is None or not verify_password(data.password, user.password):
             raise AppError(
                 "invalid_credentials",
                 "Email or password is wrong",

@@ -13,4 +13,9 @@ export default defineConfig({
       "@layouts": path.resolve(import.meta.dirname, "./src/layouts"),
     },
   },
+  server: {
+    proxy: {
+      "/api": "http://127.0.0.1:8000",
+    },
+  },
 });

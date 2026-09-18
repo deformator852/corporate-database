@@ -2,11 +2,11 @@ from authx.schema import TokenPayload
 from fastapi import APIRouter, Depends, Response
 
 from api.deps import get_auth_service
+from models.user import User
+from schemas.auth import UserLoginResponseSchema, UserLoginSchema
 from schemas.error_schema import ErrorSchema
-from schemas.login import UserLoginSchema
-from schemas.login.user_login_response_schema import UserLoginResponseSchema
 from security import security, set_auth_cookies
-from services.auth_service import AuthService
+from services.auth import AuthService
 
 router = APIRouter(
     prefix="/auth",
@@ -15,7 +15,7 @@ router = APIRouter(
 
 
 @router.post(
-    "/login",
+    "/auth",
     response_model=UserLoginResponseSchema,
     responses={401: {"model": ErrorSchema}},
 )
@@ -23,10 +23,10 @@ async def login(
     creds: UserLoginSchema,
     response: Response,
     auth: AuthService = Depends(get_auth_service),
-) -> UserLoginResponseSchema:
-    user = await auth.authenticate(creds.email, creds.password)
+) -> User:
+    user = await auth.authenticate(creds)
     set_auth_cookies(response, str(user.id), fresh=True)
-    return UserLoginResponseSchema(email=user.email)
+    return user
 
 
 @router.post(
