@@ -4,9 +4,10 @@ import axios, {
 } from "axios";
 
 import {useSessionStore} from "@/shared/auth/session-store";
+import {API_PREFIX} from "@/shared/lib/api/config";
 
 export const api = axios.create({
-    baseURL: "/api",
+    baseURL: API_PREFIX,
     withCredentials: true,
 });
 
@@ -77,7 +78,7 @@ function isRefreshRequest(config: InternalAxiosRequestConfig): boolean {
 }
 
 function isLoginRequest(config: InternalAxiosRequestConfig): boolean {
-    return requestPath(config).endsWith("/auth/auth");
+    return requestPath(config).endsWith("/auth/login");
 }
 
 function requestPath(config: InternalAxiosRequestConfig): string {

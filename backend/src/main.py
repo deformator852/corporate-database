@@ -13,7 +13,7 @@ app = FastAPI(
     title="My API",
     version="1.0.0",
 )
-app.include_router(api_router, prefix="/api")
+app.include_router(api_router)
 security.handle_errors(app)
 
 

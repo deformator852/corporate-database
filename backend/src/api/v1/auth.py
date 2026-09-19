@@ -15,7 +15,7 @@ router = APIRouter(
 
 
 @router.post(
-    "/auth",
+    "/login",
     response_model=UserLoginResponseSchema,
     responses={401: {"model": ErrorSchema}},
 )

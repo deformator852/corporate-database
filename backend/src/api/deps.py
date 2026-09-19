@@ -1,9 +1,14 @@
+from collections.abc import Callable
+from select import select
+
+from authx.schema import TokenPayload
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from authx.schema import TokenPayload
 from database import get_db
 from exceptions import AppError
+from models import Permission, Role
+from models.rbac import role_permissions, role_users
 from models.user import User
 from security import security
 from services.auth import AuthService
@@ -26,3 +31,46 @@ async def get_current_user(
     if user is None:
         raise AppError("unauthorized", "Not authenticated", status_code=401)
     return user
+
+
+def require_permission(*keys) -> Callable:
+    async def checker(
+        user: User = Depends(get_current_user),
+        session: AsyncSession = Depends(get_db),
+    ):
+        found = await session.scalar(
+            select(Permission.id)
+            .join(role_permissions, role_permissions.c.permission_id == Permission.id)
+            .join(role_users, role_users.c.role_id == role_permissions.c.role_id)
+            .where(
+                role_users.c.user_id == user.id,
+                Permission.key.in_(keys),
+            )
+            .limit(1)
+        )
+        if found is None:
+            raise AppError("forbidden", "Insufficient permissions", status_code=403)
+        return user
+
+    return checker
+
+
+def require_role(*keys) -> Callable:
+    async def checker(
+        user: User = Depends(get_current_user),
+        session: AsyncSession = Depends(get_db),
+    ) -> User:
+        found = await session.scalar(
+            select(Role.id)
+            .join(role_users, role_users.c.role_id == Role.id)
+            .where(
+                role_users.c.user_id == user.id,
+                Role.key.in_(keys),
+            )
+            .limit(1)
+        )
+        if found is None:
+            raise AppError("forbidden", "Insufficient permissions", status_code=403)
+        return user
+
+    return checker
