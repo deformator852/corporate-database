@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, Response
 from api.deps import get_auth_service, get_current_user
 from exceptions import AppError
 from models.user import User
-from schemas.auth import UserLoginResponseSchema, UserLoginSchema
-from schemas.error_schema import ErrorSchema
+from schemas.auth import LoginSchema, SessionUserSchema
+from schemas.error import ErrorSchema
 from security import security, set_auth_cookies
 from services.auth import AuthService
 
@@ -17,17 +17,17 @@ router = APIRouter(
 
 @router.post(
     "/login",
-    response_model=UserLoginResponseSchema,
+    response_model=SessionUserSchema,
     responses={401: {"model": ErrorSchema}},
 )
 async def login(
-    creds: UserLoginSchema,
+    creds: LoginSchema,
     response: Response,
     auth: AuthService = Depends(get_auth_service),
-) -> UserLoginResponseSchema:
+) -> SessionUserSchema:
     user = await auth.authenticate(creds)
     set_auth_cookies(response, str(user.id), fresh=True)
-    return UserLoginResponseSchema.from_user(user)
+    return SessionUserSchema.from_user(user)
 
 
 @router.post(
@@ -44,14 +44,14 @@ async def refresh(
 
 @router.get(
     "/me",
-    response_model=UserLoginResponseSchema,
+    response_model=SessionUserSchema,
     responses={401: {"model": ErrorSchema}},
 )
 async def me(
     user: User = Depends(get_current_user),
     auth: AuthService = Depends(get_auth_service),
-) -> UserLoginResponseSchema:
+) -> SessionUserSchema:
     loaded = await auth.get_with_permissions(user.id)
     if loaded is None:
         raise AppError("unauthorized", "Not authenticated", status_code=401)
-    return UserLoginResponseSchema.from_user(loaded)
+    return SessionUserSchema.from_user(loaded)

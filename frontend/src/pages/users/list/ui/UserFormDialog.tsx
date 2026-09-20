@@ -1,10 +1,8 @@
-import {useEffect, useState} from "react";
 import {zodResolver} from "@hookform/resolvers/zod";
 import {CircleAlert} from "lucide-react";
 import {Controller, useForm} from "react-hook-form";
 
 import {Button} from "@/components/ui/button";
-import {Checkbox} from "@/components/ui/checkbox";
 import {
     Dialog,
     DialogContent,
@@ -16,12 +14,14 @@ import {
 import {Field, FieldError, FieldGroup, FieldLabel} from "@/components/ui/field";
 import {Input} from "@/components/ui/input";
 import {getApiErrorCode, getApiErrorMessage} from "@/shared/lib/api/errors";
-import {createUser, getRoles, updateUser} from "@pages/users/list/api/users";
-import type {RoleRef, UserListItem} from "@pages/users/list/model/users";
+import {can} from "@/shared/lib/api/me";
+import {createUser, updateUser} from "@pages/users/list/api/users";
+import type {UserListItem} from "@pages/users/list/model/users";
 import {
     createUserFormSchema,
     type UserFormData,
 } from "@pages/users/list/schema/userForm";
+import {RolePicker} from "@pages/users/list/ui/RolePicker";
 
 type UserFormDialogProps = {
     open: boolean;
@@ -47,13 +47,7 @@ export function UserFormDialog({
     onSaved,
 }: UserFormDialogProps) {
     const mode = user ? "edit" : "create";
-    const rolesKey = user == null ? "create" : String(user.id);
-    const [rolesReloadKey, setRolesReloadKey] = useState(0);
-    const [rolesLoad, setRolesLoad] = useState<
-        | {key: string; status: "ready"; roles: RoleRef[]}
-        | {key: string; status: "error"; message: string}
-        | null
-    >(null);
+    const canListRoles = can("roles.list");
     const {
         register,
         control,
@@ -65,46 +59,7 @@ export function UserFormDialog({
         defaultValues: defaultValues(user),
     });
 
-    useEffect(() => {
-        if (!open) {
-            return;
-        }
-        let cancelled = false;
-        void getRoles()
-            .then((roles) => {
-                if (!cancelled) {
-                    setRolesLoad({key: rolesKey, status: "ready", roles});
-                }
-            })
-            .catch((reason) => {
-                if (!cancelled) {
-                    setRolesLoad({
-                        key: rolesKey,
-                        status: "error",
-                        message: getApiErrorMessage(reason, "Could not load roles."),
-                    });
-                }
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [open, rolesKey, rolesReloadKey]);
-
-    const rolesCurrent = rolesLoad?.key === rolesKey ? rolesLoad : null;
-    const roles = rolesCurrent?.status === "ready" ? rolesCurrent.roles : null;
-    const rolesError =
-        rolesCurrent?.status === "error" ? rolesCurrent.message : null;
-    const rolesReady = roles != null;
-    const saveDisabledReason = rolesError
-        ? "Roles could not be loaded. Try again."
-        : !rolesReady
-          ? "Roles are still loading."
-          : undefined;
-
     const onSubmit = async (data: UserFormData) => {
-        if (!rolesReady) {
-            return;
-        }
         const payload = {
             first_name: data.first_name,
             last_name: data.last_name,
@@ -232,80 +187,27 @@ export function UserFormDialog({
 
                         <fieldset className="flex min-h-0 flex-col gap-2">
                             <legend className="text-sm font-medium">Roles</legend>
-                            {rolesError ? (
-                                <div className="flex flex-col items-start gap-2">
-                                    <p className="text-sm text-destructive">{rolesError}</p>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => {
-                                            setRolesLoad(null);
-                                            setRolesReloadKey((key) => key + 1);
-                                        }}
-                                    >
-                                        Try again
-                                    </Button>
-                                </div>
-                            ) : roles == null ? (
-                                <p className="text-sm text-muted-foreground">Loading roles…</p>
-                            ) : roles.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">
-                                    No roles are available.
-                                </p>
-                            ) : (
+                            {canListRoles ? (
                                 <Controller
                                     name="role_keys"
                                     control={control}
                                     render={({field}) => (
-                                        <div className="max-h-40 overflow-y-auto rounded-lg border border-input">
-                                            {roles.map((role) => {
-                                                const checkboxId = `user-role-${role.key}`;
-                                                const adminLocked =
-                                                    role.key === "admin" &&
-                                                    Boolean(user?.is_last_admin);
-                                                return (
-                                                    <label
-                                                        key={role.key}
-                                                        htmlFor={checkboxId}
-                                                        className={`flex items-center gap-2 border-b border-input px-3 py-2 text-sm last:border-b-0 ${
-                                                            adminLocked
-                                                                ? "cursor-not-allowed opacity-70"
-                                                                : "cursor-pointer"
-                                                        }`}
-                                                    >
-                                                        <Checkbox
-                                                            id={checkboxId}
-                                                            disabled={adminLocked}
-                                                            title={
-                                                                adminLocked
-                                                                    ? "The Admin role cannot be removed from the last admin"
-                                                                    : undefined
-                                                            }
-                                                            checked={
-                                                                adminLocked ||
-                                                                field.value.includes(role.key)
-                                                            }
-                                                            onCheckedChange={(checked) => {
-                                                                if (adminLocked) {
-                                                                    return;
-                                                                }
-                                                                const selected = new Set(field.value);
-                                                                if (checked) {
-                                                                    selected.add(role.key);
-                                                                } else {
-                                                                    selected.delete(role.key);
-                                                                }
-                                                                field.onChange([...selected]);
-                                                            }}
-                                                        />
-                                                        {role.name}
-                                                    </label>
-                                                );
-                                            })}
-                                        </div>
+                                        <RolePicker
+                                            key={open ? "open" : "closed"}
+                                            value={field.value}
+                                            onChange={field.onChange}
+                                            enabled={open}
+                                            lockedKeys={
+                                                user?.is_last_admin ? ["admin"] : []
+                                            }
+                                            lockedReason="The Admin role cannot be removed from the last admin"
+                                        />
                                     )}
                                 />
+                            ) : (
+                                <p className="text-sm text-muted-foreground">
+                                    You don't have permission to view roles.
+                                </p>
                             )}
                         </fieldset>
                     </FieldGroup>
@@ -320,12 +222,7 @@ export function UserFormDialog({
                     >
                         Cancel
                     </Button>
-                    <Button
-                        type="submit"
-                        form="user-form"
-                        disabled={isSubmitting || !rolesReady}
-                        title={saveDisabledReason}
-                    >
+                    <Button type="submit" form="user-form" disabled={isSubmitting}>
                         {isSubmitting
                             ? user
                                 ? "Saving…"

@@ -6,12 +6,12 @@ from models.user import User
 from schemas.email import Email
 
 
-class UserLoginSchema(BaseModel):
+class LoginSchema(BaseModel):
     email: Email
     password: str
 
 
-class UserLoginResponseSchema(BaseModel):
+class SessionUserSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int

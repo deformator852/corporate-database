@@ -5,7 +5,7 @@ from sqlalchemy.orm import selectinload
 from exceptions import AppError
 from models.rbac.role import Role
 from models.user import User
-from schemas.auth import UserLoginSchema
+from schemas.auth import LoginSchema
 from services.password import verify_password
 
 _USER_WITH_PERMISSIONS = selectinload(User.roles).selectinload(Role.permissions)
@@ -15,7 +15,7 @@ class AuthService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def authenticate(self, data: UserLoginSchema) -> User:
+    async def authenticate(self, data: LoginSchema) -> User:
         user = await self.session.scalar(
             select(User)
             .where(User.email == data.email)

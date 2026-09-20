@@ -16,7 +16,7 @@ class UserService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def get_users(
+    async def list_users(
         self, page: int = 1, per_page: int = 20
     ) -> tuple[list[User], int]:
         total = await self.session.scalar(select(func.count()).select_from(User))
@@ -29,14 +29,10 @@ class UserService:
         )
         return list(users), total or 0
 
-    async def get_by_id(self, user_id: int) -> User | None:
+    async def get_user(self, user_id: int) -> User | None:
         return await self.session.scalar(
             select(User).where(User.id == user_id).options(selectinload(User.roles))
         )
-
-    async def list_roles(self) -> list[Role]:
-        roles = await self.session.scalars(select(Role).order_by(Role.name))
-        return list(roles)
 
     async def create_user(self, data: UserCreateSchema) -> User:
         await self._ensure_email_available(data.email)
@@ -77,7 +73,7 @@ class UserService:
         await self.session.delete(user)
 
     async def _require_user(self, user_id: int) -> User:
-        user = await self.get_by_id(user_id)
+        user = await self.get_user(user_id)
         if user is None:
             raise AppError("not_found", "User not found", status_code=404)
         return user

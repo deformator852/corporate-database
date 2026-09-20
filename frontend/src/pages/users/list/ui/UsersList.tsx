@@ -15,7 +15,7 @@ import {
 import {useSessionStore} from "@/shared/auth/session-store";
 import {can} from "@/shared/lib/api/me";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
-import {getUsers} from "@pages/users/list/api/getUsers";
+import {getUsersPage} from "@pages/users/list/api/users";
 import {
     USERS_PER_PAGE,
     type UserListItem,
@@ -59,7 +59,7 @@ export function UsersList() {
     useEffect(() => {
         let cancelled = false;
 
-        void getUsers(page)
+        void getUsersPage(page)
             .then((data) => {
                 if (!cancelled) {
                     setLoad({key: requestKey, status: "ready", data});

@@ -3,10 +3,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Response, status
 
 from api.deps import get_role_service, require_permission
-from exceptions import AppError
-from schemas.error_schema import ErrorSchema
+from schemas.error import ErrorSchema
 from schemas.role import (
-    PermissionOptionPageSchema,
     RoleCreateSchema,
     RoleListItemSchema,
     RoleListResponseSchema,
@@ -26,43 +24,18 @@ ERROR_RESPONSES = {
 
 
 @router.get(
-    "/permissions",
-    response_model=PermissionOptionPageSchema,
-    responses=ERROR_RESPONSES,
-    dependencies=[Depends(require_permission("roles.create", "roles.update"))],
-)
-async def list_role_permissions(
-    page: Annotated[int, Query(ge=1)] = 1,
-    per_page: Annotated[int, Query(ge=1, le=100)] = 20,
-    q: Annotated[str, Query(max_length=100)] = "",
-    service: RoleService = Depends(get_role_service),
-) -> PermissionOptionPageSchema:
-    permissions, total = await service.list_permissions(
-        page=page,
-        per_page=per_page,
-        q=q,
-    )
-    return PermissionOptionPageSchema.from_page(
-        permissions,
-        page=page,
-        per_page=per_page,
-        total=total,
-    )
-
-
-@router.get(
     "",
     response_model=RoleListResponseSchema,
     responses=ERROR_RESPONSES,
     dependencies=[Depends(require_permission("roles.list"))],
 )
-async def get_roles(
+async def list_roles(
     page: Annotated[int, Query(ge=1)] = 1,
     per_page: Annotated[int, Query(ge=1, le=100)] = 20,
+    q: Annotated[str, Query(max_length=100)] = "",
     service: RoleService = Depends(get_role_service),
 ) -> RoleListResponseSchema:
-    raise AppError("dsd", "asdd", 400)
-    roles, total = await service.get_roles(page=page, per_page=per_page)
+    roles, total = await service.list_roles(page=page, per_page=per_page, q=q)
     return RoleListResponseSchema.from_page(
         roles,
         page=page,

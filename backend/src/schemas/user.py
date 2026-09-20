@@ -4,11 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from models.user import User
 from schemas.email import Email
-
-
-class RoleRefSchema(BaseModel):
-    key: str
-    name: str
+from schemas.role import RoleRefSchema
 
 
 class UserListItemSchema(BaseModel):

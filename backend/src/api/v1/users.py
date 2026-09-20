@@ -4,8 +4,7 @@ from fastapi import APIRouter, Depends, Query, Response, status
 
 from api.deps import get_user_service, require_permission
 from models.user import User
-from schemas.error_schema import ErrorSchema
-from schemas.role import RoleOptionSchema
+from schemas.error import ErrorSchema
 from schemas.user import (
     UserCreateSchema,
     UserListItemSchema,
@@ -26,30 +25,17 @@ ERROR_RESPONSES = {
 
 
 @router.get(
-    "/roles",
-    response_model=list[RoleOptionSchema],
-    responses=ERROR_RESPONSES,
-    dependencies=[Depends(require_permission("users.create", "users.update"))],
-)
-async def list_user_roles(
-    service: UserService = Depends(get_user_service),
-) -> list[RoleOptionSchema]:
-    roles = await service.list_roles()
-    return [RoleOptionSchema.from_role(role) for role in roles]
-
-
-@router.get(
     "",
     response_model=UserListResponseSchema,
     responses=ERROR_RESPONSES,
     dependencies=[Depends(require_permission("users.list"))],
 )
-async def get_users(
+async def list_users(
     page: Annotated[int, Query(ge=1)] = 1,
     per_page: Annotated[int, Query(ge=1, le=100)] = 20,
     service: UserService = Depends(get_user_service),
 ) -> UserListResponseSchema:
-    users, total = await service.get_users(page=page, per_page=per_page)
+    users, total = await service.list_users(page=page, per_page=per_page)
     return UserListResponseSchema.from_page(
         users,
         page=page,

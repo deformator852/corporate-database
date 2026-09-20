@@ -15,6 +15,7 @@ import {Field, FieldError, FieldGroup, FieldLabel} from "@/components/ui/field";
 import {Input} from "@/components/ui/input";
 import {Textarea} from "@/components/ui/textarea";
 import {getApiErrorCode, getApiErrorMessage} from "@/shared/lib/api/errors";
+import {can} from "@/shared/lib/api/me";
 import {keyFromName} from "@/shared/lib/keyFromName";
 import {createRole, updateRole} from "@pages/roles/list/api/roles";
 import type {RoleListItem} from "@pages/roles/list/model/roles";
@@ -55,6 +56,7 @@ export function RoleFormDialog({
         resolver: zodResolver(roleFormSchema(mode)),
         defaultValues: defaultValues(role),
     });
+    const canListPermissions = can("permissions.list");
     const derivedKey = role?.key ?? keyFromName(watch("name"));
 
     const onSubmit = async (data: RoleFormData) => {
@@ -164,18 +166,24 @@ export function RoleFormDialog({
 
                         <fieldset className="flex min-h-0 flex-col gap-2">
                             <legend className="text-sm font-medium">Permissions</legend>
-                            <Controller
-                                name="permission_keys"
-                                control={control}
-                                render={({field}) => (
-                                    <PermissionPicker
-                                        key={open ? "open" : "closed"}
-                                        value={field.value}
-                                        onChange={field.onChange}
-                                        enabled={open}
-                                    />
-                                )}
-                            />
+                            {canListPermissions ? (
+                                <Controller
+                                    name="permission_keys"
+                                    control={control}
+                                    render={({field}) => (
+                                        <PermissionPicker
+                                            key={open ? "open" : "closed"}
+                                            value={field.value}
+                                            onChange={field.onChange}
+                                            enabled={open}
+                                        />
+                                    )}
+                                />
+                            ) : (
+                                <p className="text-sm text-muted-foreground">
+                                    You don't have permission to view permissions.
+                                </p>
+                            )}
                         </fieldset>
                     </FieldGroup>
                 </form>

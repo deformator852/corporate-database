@@ -3,57 +3,18 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from models.rbac.constants import ADMIN_ROLE_KEY
-from models.rbac.permission import Permission
 from models.rbac.role import Role
 from schemas.key import key_from_name
+
+
+class RoleRefSchema(BaseModel):
+    key: str
+    name: str
 
 
 class PermissionRefSchema(BaseModel):
     key: str
     name: str
-
-
-class PermissionOptionPageSchema(BaseModel):
-    items: list[PermissionRefSchema]
-    page: int
-    per_page: int
-    total: int
-    pages: int
-
-    @classmethod
-    def from_page(
-        cls,
-        permissions: list[Permission],
-        *,
-        page: int,
-        per_page: int,
-        total: int,
-    ) -> Self:
-        pages = (total + per_page - 1) // per_page if per_page and total else 0
-        return cls(
-            items=[
-                PermissionRefSchema(key=permission.key, name=permission.name)
-                for permission in permissions
-            ],
-            page=page,
-            per_page=per_page,
-            total=total,
-            pages=pages,
-        )
-
-
-class RoleOptionSchema(BaseModel):
-    key: str
-    name: str
-    protected: bool
-
-    @classmethod
-    def from_role(cls, role: Role) -> Self:
-        return cls(
-            key=role.key,
-            name=role.name,
-            protected=role.key == ADMIN_ROLE_KEY,
-        )
 
 
 class RoleListItemSchema(BaseModel):

@@ -4,10 +4,11 @@ import {Button} from "@/components/ui/button";
 import {Checkbox} from "@/components/ui/checkbox";
 import {Input} from "@/components/ui/input";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
-import {getPermissionOptions} from "@pages/roles/list/api/roles";
+import {getPermissionsPage} from "@pages/permissions/list/api/permissions";
 import type {PermissionRef} from "@pages/roles/list/model/roles";
 
 const SEARCH_DEBOUNCE_MS = 300;
+const PICKER_PAGE_SIZE = 10;
 
 type PermissionPickerProps = {
     value: string[];
@@ -67,7 +68,7 @@ export function PermissionPicker({
             return;
         }
         let cancelled = false;
-        void getPermissionOptions(1, debouncedQuery)
+        void getPermissionsPage(1, PICKER_PAGE_SIZE, debouncedQuery)
             .then((page) => {
                 if (cancelled) {
                     return;
@@ -113,7 +114,7 @@ export function PermissionPicker({
         }
         loadingMoreRef.current = true;
         const nextPage = state.page + 1;
-        void getPermissionOptions(nextPage, debouncedQuery)
+        void getPermissionsPage(nextPage, PICKER_PAGE_SIZE, debouncedQuery)
             .then((page) => {
                 setState((current) => {
                     if (

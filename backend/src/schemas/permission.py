@@ -3,11 +3,7 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict
 
 from models.rbac.permission import Permission
-
-
-class RoleRefSchema(BaseModel):
-    key: str
-    name: str
+from schemas.role import RoleRefSchema
 
 
 class PermissionListItemSchema(BaseModel):

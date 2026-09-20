@@ -15,38 +15,22 @@ class RoleService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def get_roles(
-        self, page: int = 1, per_page: int = 20
+    async def list_roles(
+        self, page: int = 1, per_page: int = 20, q: str = ""
     ) -> tuple[list[Role], int]:
-        total = await self.session.scalar(select(func.count()).select_from(Role))
-        roles = await self.session.scalars(
-            select(Role)
-            .options(selectinload(Role.permissions))
-            .order_by(Role.name, Role.key)
-            .offset((page - 1) * per_page)
-            .limit(per_page)
-        )
-        return list(roles), total or 0
-
-    async def list_permissions(
-        self,
-        page: int = 1,
-        per_page: int = 20,
-        q: str = "",
-    ) -> tuple[list[Permission], int]:
-        filters = _permission_search_filters(q)
-        count_query = select(func.count()).select_from(Permission)
-        list_query = select(Permission)
+        filters = _role_search_filters(q)
+        count_query = select(func.count()).select_from(Role)
+        list_query = select(Role).options(selectinload(Role.permissions))
         if filters:
             count_query = count_query.where(*filters)
             list_query = list_query.where(*filters)
         total = await self.session.scalar(count_query)
-        permissions = await self.session.scalars(
-            list_query.order_by(Permission.name, Permission.key)
+        roles = await self.session.scalars(
+            list_query.order_by(Role.name, Role.key)
             .offset((page - 1) * per_page)
             .limit(per_page)
         )
-        return list(permissions), total or 0
+        return list(roles), total or 0
 
     async def create_role(self, data: RoleCreateSchema) -> Role:
         key = key_from_name(data.name)
@@ -133,7 +117,7 @@ class RoleService:
         await self.session.refresh(role, attribute_names=["permissions"])
 
 
-def _permission_search_filters(q: str) -> list:
+def _role_search_filters(q: str) -> list:
     term = q.strip()
     if not term:
         return []
@@ -143,7 +127,7 @@ def _permission_search_filters(q: str) -> list:
     pattern = f"%{escaped}%"
     return [
         or_(
-            Permission.name.ilike(pattern, escape="\\"),
-            Permission.key.ilike(pattern, escape="\\"),
+            Role.name.ilike(pattern, escape="\\"),
+            Role.key.ilike(pattern, escape="\\"),
         )
     ]

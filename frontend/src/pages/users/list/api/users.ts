@@ -1,8 +1,18 @@
 import {api} from "@/shared/lib/api/client";
-import type {RoleRef, UserListItem, UserWritePayload} from "@pages/users/list/model/users";
+import {
+    USERS_PER_PAGE,
+    type UserListItem,
+    type UserListPage,
+    type UserWritePayload,
+} from "@pages/users/list/model/users";
 
-export async function getRoles(): Promise<RoleRef[]> {
-    const {data} = await api.get<RoleRef[]>("/users/roles");
+export async function getUsersPage(
+    page: number,
+    perPage = USERS_PER_PAGE,
+): Promise<UserListPage> {
+    const {data} = await api.get<UserListPage>("/users", {
+        params: {page, per_page: perPage},
+    });
     return data;
 }
 

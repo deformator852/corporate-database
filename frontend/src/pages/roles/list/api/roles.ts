@@ -1,8 +1,6 @@
 import {api} from "@/shared/lib/api/client";
 import {
-    ROLE_PERMISSION_PAGE_SIZE,
     ROLES_PER_PAGE,
-    type PermissionOptionPage,
     type RoleListItem,
     type RoleListPage,
     type RoleWritePayload,
@@ -11,19 +9,9 @@ import {
 export async function getRolesPage(
     page: number,
     perPage = ROLES_PER_PAGE,
+    q = "",
 ): Promise<RoleListPage> {
     const {data} = await api.get<RoleListPage>("/roles", {
-        params: {page, per_page: perPage},
-    });
-    return data;
-}
-
-export async function getPermissionOptions(
-    page: number,
-    q = "",
-    perPage = ROLE_PERMISSION_PAGE_SIZE,
-): Promise<PermissionOptionPage> {
-    const {data} = await api.get<PermissionOptionPage>("/roles/permissions", {
         params: {page, per_page: perPage, q: q || undefined},
     });
     return data;

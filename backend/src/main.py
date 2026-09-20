@@ -6,7 +6,7 @@ load_dotenv()
 
 from api.v1.router import api_router
 from exceptions import AppError
-from schemas.error_schema import ErrorSchema
+from schemas.error import ErrorSchema
 from security import security
 
 app = FastAPI(

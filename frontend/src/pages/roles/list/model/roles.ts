@@ -1,5 +1,4 @@
 export const ROLES_PER_PAGE = 20;
-export const ROLE_PERMISSION_PAGE_SIZE = 10;
 
 export type PermissionRef = {
     key: string;
@@ -16,14 +15,6 @@ export type RoleListItem = {
 
 export type RoleListPage = {
     items: RoleListItem[];
-    page: number;
-    per_page: number;
-    total: number;
-    pages: number;
-};
-
-export type PermissionOptionPage = {
-    items: PermissionRef[];
     page: number;
     per_page: number;
     total: number;

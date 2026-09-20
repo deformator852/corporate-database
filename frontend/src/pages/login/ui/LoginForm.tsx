@@ -9,7 +9,7 @@ import {useSessionStore} from "@/shared/auth/session-store";
 import {Button} from "@/components/ui/button";
 import {Field, FieldError, FieldGroup, FieldLabel} from "@/components/ui/field";
 import {Input} from "@/components/ui/input";
-import {type LoginFormData, loginSchema} from "@pages/login/schema/schema";
+import {type LoginFormData, loginSchema} from "@pages/login/schema/loginForm";
 
 export function LoginForm() {
     const navigate = useNavigate();
