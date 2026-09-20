@@ -1,24 +1,43 @@
 import {createBrowserRouter, type RouteObject} from "react-router";
 import Login from "@/pages/login/ui/Login";
 import Home from "@/pages/home/ui/Home";
+import NotFound from "@/pages/not-found/ui/NotFound";
 import AppLayout from "./layouts/AppLayout";
 import {SessionGate} from "@/shared/auth/SessionGate";
+import {UsersList} from "@pages/users/list/ui/UsersList.tsx";
+import {RolesList} from "@pages/roles/list/ui/RolesList";
+import {PermissionsList} from "@pages/permissions/list/ui/PermissionsList";
 
 const routes: RouteObject[] = [
     {
-        path: "/",
+        path: "/login",
+        Component: Login,
+    },
+    {
         Component: SessionGate,
         children: [
-            {
-                path: "login",
-                Component: Login,
-            },
             {
                 Component: AppLayout,
                 children: [
                     {
                         index: true,
                         Component: Home,
+                    },
+                    {
+                        path: "users",
+                        Component: UsersList,
+                    },
+                    {
+                        path: "roles",
+                        Component: RolesList,
+                    },
+                    {
+                        path: "permissions",
+                        Component: PermissionsList,
+                    },
+                    {
+                        path: "*",
+                        Component: NotFound,
                     },
                 ],
             },

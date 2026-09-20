@@ -5,6 +5,7 @@ import axios, {
 
 import {useSessionStore} from "@/shared/auth/session-store";
 import {API_PREFIX} from "@/shared/lib/api/config";
+import {isUnauthorized} from "@/shared/lib/api/errors";
 
 export const api = axios.create({
     baseURL: API_PREFIX,
@@ -54,7 +55,9 @@ api.interceptors.response.use(
             await refreshSession();
             return api(original);
         } catch (refreshError) {
-            useSessionStore.getState().clear();
+            if (isUnauthorized(refreshError)) {
+                useSessionStore.getState().clear();
+            }
             return Promise.reject(refreshError);
         }
     },

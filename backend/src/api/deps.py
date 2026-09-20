@@ -1,8 +1,8 @@
 from collections.abc import Callable
-from select import select
 
 from authx.schema import TokenPayload
 from fastapi import Depends
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
@@ -12,6 +12,23 @@ from models.rbac import role_permissions, role_users
 from models.user import User
 from security import security
 from services.auth import AuthService
+from services.permission import PermissionService
+from services.role import RoleService
+from services.user import UserService
+
+
+def get_user_service(session: AsyncSession = Depends(get_db)) -> UserService:
+    return UserService(session)
+
+
+def get_role_service(session: AsyncSession = Depends(get_db)) -> RoleService:
+    return RoleService(session)
+
+
+def get_permission_service(
+    session: AsyncSession = Depends(get_db),
+) -> PermissionService:
+    return PermissionService(session)
 
 
 def get_auth_service(session: AsyncSession = Depends(get_db)) -> AuthService:

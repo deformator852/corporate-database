@@ -347,11 +347,18 @@
   }
 
   .app-layout__main {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-direction: column;
     padding-block: var(--section-gap);
   }
 
   .app-layout__content {
+    display: flex;
+    flex: 1 1 auto;
     min-width: 0;
+    flex-direction: column;
   }
 
   @media (min-width: 48rem) {

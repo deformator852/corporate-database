@@ -1,7 +1,8 @@
-from sqlalchemy import CheckConstraint, String, Text
+from sqlalchemy import CheckConstraint, String, Text, event
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
+from exceptions import AppError
 from models.mixins import TimestampMixin
 
 
@@ -25,3 +26,13 @@ class Role(TimestampMixin, Base):
         CheckConstraint("length(key) BETWEEN 2 AND 50"),
         CheckConstraint("length(name) BETWEEN 2 AND 100"),
     )
+
+
+@event.listens_for(Role, "before_delete")
+def before_role_delete(mapper, connection, target):
+    if target.key == "admin":
+        raise AppError(
+            "conflict",
+            "The Admin role cannot be deleted",
+            status_code=409,
+        )

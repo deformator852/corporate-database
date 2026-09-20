@@ -10,6 +10,7 @@ async def main() -> None:
     async with AsyncSessionLocal() as session:
         await seed_permissions(session)
         await seed_roles(session)
+        await seed_permissions(session)
         await seed_users(session)
         await session.commit()
 

@@ -2,6 +2,7 @@ from authx.schema import TokenPayload
 from fastapi import APIRouter, Depends, Response
 
 from api.deps import get_auth_service, get_current_user
+from exceptions import AppError
 from models.user import User
 from schemas.auth import UserLoginResponseSchema, UserLoginSchema
 from schemas.error_schema import ErrorSchema
@@ -23,10 +24,10 @@ async def login(
     creds: UserLoginSchema,
     response: Response,
     auth: AuthService = Depends(get_auth_service),
-) -> User:
+) -> UserLoginResponseSchema:
     user = await auth.authenticate(creds)
     set_auth_cookies(response, str(user.id), fresh=True)
-    return user
+    return UserLoginResponseSchema.from_user(user)
 
 
 @router.post(
@@ -46,5 +47,11 @@ async def refresh(
     response_model=UserLoginResponseSchema,
     responses={401: {"model": ErrorSchema}},
 )
-async def me(user: User = Depends(get_current_user)) -> User:
-    return user
+async def me(
+    user: User = Depends(get_current_user),
+    auth: AuthService = Depends(get_auth_service),
+) -> UserLoginResponseSchema:
+    loaded = await auth.get_with_permissions(user.id)
+    if loaded is None:
+        raise AppError("unauthorized", "Not authenticated", status_code=401)
+    return UserLoginResponseSchema.from_user(loaded)
