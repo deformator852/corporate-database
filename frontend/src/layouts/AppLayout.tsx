@@ -1,8 +1,9 @@
 import {Outlet} from "react-router";
-import {ThemeSwitcher} from "@/theme/ThemeSwitcher";
-import {useSessionStore} from "@/shared/auth/session-store";
-import {Sidebar} from "@/widgets/sidebar/ui/Sidebar.tsx";
 
+import {useSessionStore} from "@/shared/auth/session-store";
+import {ThemeSwitcher} from "@/theme/ThemeSwitcher";
+import {NotificationBell} from "@/widgets/notifications/ui/NotificationBell";
+import {Sidebar} from "@/widgets/sidebar/ui/Sidebar.tsx";
 
 export default function AppLayout() {
     const user = useSessionStore((state) => state.user);
@@ -17,17 +18,18 @@ export default function AppLayout() {
                 <div className="app-header__inner app-layout__header-inner">
                     <strong className="app-layout__brand">Corporate Database</strong>
                     <div className="flex items-center gap-3">
+                        <NotificationBell />
                         <p className="text-sm text-muted-foreground">{user.email}</p>
-                        <ThemeSwitcher/>
+                        <ThemeSwitcher />
                     </div>
                 </div>
             </header>
 
             <div className="app-layout__body">
-                <Sidebar/>
+                <Sidebar />
                 <main className="app-main app-layout__main">
                     <div className="container app-layout__content">
-                        <Outlet/>
+                        <Outlet />
                     </div>
                 </main>
             </div>

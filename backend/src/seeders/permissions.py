@@ -22,7 +22,18 @@ PERMISSION_PERMISSIONS = (
     ("permissions.list", "List permissions", "View the list of permissions"),
 )
 
-ALL_PERMISSIONS = USER_PERMISSIONS + ROLE_PERMISSIONS + PERMISSION_PERMISSIONS
+DOCUMENT_PERMISSIONS = (
+    ("documents.list", "List documents", "View the list of documents"),
+    ("documents.create", "Create document", "Upload a new document"),
+    ("documents.delete", "Delete document", "Delete a document"),
+)
+
+ALL_PERMISSIONS = (
+    USER_PERMISSIONS
+    + ROLE_PERMISSIONS
+    + PERMISSION_PERMISSIONS
+    + DOCUMENT_PERMISSIONS
+)
 
 
 async def seed_permissions(session: AsyncSession) -> None:

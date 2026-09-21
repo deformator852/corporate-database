@@ -11,6 +11,7 @@ type NavItem = {
 export function Sidebar() {
     const nav = [
         {to: "/", label: "Home", end: true},
+        {to: "/documents", label: "Documents", end: true, can: "documents.list"},
         {to: "/users", label: "Users", end: true, can: "users.list"},
         {to: "/roles", label: "Roles", end: true, can: "roles.list"},
         {to: "/permissions", label: "Permissions", end: true, can: "permissions.list"},

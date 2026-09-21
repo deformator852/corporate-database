@@ -12,8 +12,11 @@ from models.rbac import role_permissions, role_users
 from models.user import User
 from security import security
 from services.auth import AuthService
+from services.document import DocumentService
+from services.notification import NotificationService
 from services.permission import PermissionService
 from services.role import RoleService
+from services.storage import ObjectStorage
 from services.user import UserService
 
 
@@ -33,6 +36,23 @@ def get_permission_service(
 
 def get_auth_service(session: AsyncSession = Depends(get_db)) -> AuthService:
     return AuthService(session)
+
+
+def get_notification_service(
+    session: AsyncSession = Depends(get_db),
+) -> NotificationService:
+    return NotificationService(session)
+
+
+def get_storage() -> ObjectStorage:
+    return ObjectStorage()
+
+
+def get_document_service(
+    session: AsyncSession = Depends(get_db),
+    storage: ObjectStorage = Depends(get_storage),
+) -> DocumentService:
+    return DocumentService(session, storage)
 
 
 async def get_current_user(

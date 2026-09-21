@@ -1,0 +1,222 @@
+import {useEffect, useState} from "react";
+import {useSearchParams} from "react-router";
+
+import {can} from "@/shared/lib/api/me";
+import {getApiErrorMessage} from "@/shared/lib/api/errors";
+import {
+    documentsSocketUrl,
+    getDocumentsPage,
+} from "@pages/documents/api/documents";
+import {
+    DOCUMENTS_PER_PAGE,
+    isDocumentStatus,
+    isDocumentUpdateNewer,
+    type DocumentListItem,
+    type DocumentListPage,
+} from "@pages/documents/model/documents";
+import {DeleteDocumentDialog} from "@pages/documents/ui/DeleteDocumentDialog";
+import {DocumentList} from "@pages/documents/ui/DocumentList";
+import {DocumentUploadForm} from "@pages/documents/ui/DocumentUploadForm";
+
+function parsePage(value: string | null): number {
+    const page = Number(value);
+    if (!Number.isInteger(page) || page < 1) {
+        return 1;
+    }
+    return page;
+}
+
+type LoadState =
+    | {key: string; status: "ready"; data: DocumentListPage}
+    | {key: string; status: "error"; message: string};
+
+export function Documents() {
+    const canCreate = can("documents.create");
+    const canList = can("documents.list");
+    const canDelete = can("documents.delete");
+    const [searchParams, setSearchParams] = useSearchParams();
+    const page = parsePage(searchParams.get("page"));
+    const [reloadKey, setReloadKey] = useState(0);
+    const requestKey = `${page}:${reloadKey}`;
+    const [load, setLoad] = useState<LoadState | null>(null);
+    const [deleting, setDeleting] = useState<DocumentListItem | null>(null);
+
+    useEffect(() => {
+        if (!canList) {
+            return;
+        }
+        let cancelled = false;
+        void getDocumentsPage(page)
+            .then((data) => {
+                if (!cancelled) {
+                    setLoad({key: requestKey, status: "ready", data});
+                }
+            })
+            .catch((reason) => {
+                if (!cancelled) {
+                    setLoad({
+                        key: requestKey,
+                        status: "error",
+                        message: getApiErrorMessage(
+                            reason,
+                            "Could not load documents.",
+                        ),
+                    });
+                }
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [canList, page, reloadKey, requestKey]);
+
+    useEffect(() => {
+        if (!canList) {
+            return;
+        }
+        const socket = new WebSocket(documentsSocketUrl());
+        socket.addEventListener("message", (event) => {
+            let payload: unknown;
+            try {
+                payload = JSON.parse(event.data);
+            } catch {
+                return;
+            }
+            if (!isDocumentEvent(payload)) {
+                return;
+            }
+            setLoad((current) => mergeDocument(current, payload, page));
+        });
+        return () => {
+            socket.close();
+        };
+    }, [canList, page]);
+
+    const goToPage = (nextPage: number) => {
+        setSearchParams((current) => {
+            const params = new URLSearchParams(current);
+            if (nextPage <= 1) {
+                params.delete("page");
+            } else {
+                params.set("page", String(nextPage));
+            }
+            return params;
+        });
+    };
+
+    const isCurrent = load?.key === requestKey;
+    const listStatus = !canList
+        ? "ready"
+        : !isCurrent
+          ? "loading"
+          : load.status;
+    const data = isCurrent && load.status === "ready" ? load.data : null;
+    const error = isCurrent && load.status === "error" ? load.message : null;
+
+    return (
+        <div className="stack stack--lg w-full">
+            <div className="stack">
+                <h1 id="documents-heading">Documents</h1>
+                <p className="max-w-xl text-muted-foreground">
+                    Upload files for this workspace.
+                </p>
+            </div>
+
+            {canCreate ? (
+                <div className="w-full rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+                    <DocumentUploadForm
+                        onUploaded={(document) => {
+                            setLoad((current) =>
+                                mergeDocument(current, document, page),
+                            );
+                        }}
+                    />
+                </div>
+            ) : (
+                <p className="text-sm text-muted-foreground">
+                    You don't have permission to upload documents.
+                </p>
+            )}
+
+            {canList ? (
+                <DocumentList
+                    headingId="documents-heading"
+                    status={listStatus}
+                    error={error}
+                    data={data}
+                    page={page}
+                    onRetry={() => setReloadKey((key) => key + 1)}
+                    onPageChange={goToPage}
+                    canDelete={canDelete}
+                    onDelete={setDeleting}
+                />
+            ) : null}
+
+            <DeleteDocumentDialog
+                document={deleting}
+                open={deleting != null}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setDeleting(null);
+                    }
+                }}
+                onDeleted={() => {
+                    const items = data?.items ?? [];
+                    if (items.length === 1 && page > 1) {
+                        goToPage(page - 1);
+                        return;
+                    }
+                    setReloadKey((key) => key + 1);
+                }}
+            />
+        </div>
+    );
+}
+
+function isDocumentEvent(value: unknown): value is DocumentListItem {
+    if (value == null || typeof value !== "object") {
+        return false;
+    }
+    const item = value as Partial<DocumentListItem>;
+    return (
+        typeof item.id === "number" &&
+        typeof item.name === "string" &&
+        typeof item.filename === "string" &&
+        typeof item.status === "string" &&
+        isDocumentStatus(item.status) &&
+        typeof item.progress === "number"
+    );
+}
+
+function mergeDocument(
+    current: LoadState | null,
+    incoming: DocumentListItem,
+    page: number,
+): LoadState | null {
+    if (current == null || current.status !== "ready") {
+        return current;
+    }
+    const items = current.data.items;
+    const index = items.findIndex((item) => item.id === incoming.id);
+    if (index >= 0) {
+        if (!isDocumentUpdateNewer(incoming, items[index])) {
+            return current;
+        }
+        const next = items.slice();
+        next[index] = {...items[index], ...incoming};
+        return {
+            ...current,
+            data: {...current.data, items: next},
+        };
+    }
+    if (page !== 1) {
+        return current;
+    }
+    return {
+        ...current,
+        data: {
+            ...current.data,
+            items: [incoming, ...items].slice(0, DOCUMENTS_PER_PAGE),
+            total: current.data.total + 1,
+        },
+    };
+}

@@ -7,6 +7,7 @@ import {SessionGate} from "@/shared/auth/SessionGate";
 import {UsersList} from "@pages/users/list/ui/UsersList.tsx";
 import {RolesList} from "@pages/roles/list/ui/RolesList";
 import {PermissionsList} from "@pages/permissions/list/ui/PermissionsList";
+import {Documents} from "@pages/documents/ui/Documents";
 
 const routes: RouteObject[] = [
     {
@@ -34,6 +35,10 @@ const routes: RouteObject[] = [
                     {
                         path: "permissions",
                         Component: PermissionsList,
+                    },
+                    {
+                        path: "documents",
+                        Component: Documents,
                     },
                     {
                         path: "*",
