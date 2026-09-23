@@ -1,6 +1,7 @@
 import {z} from "zod";
 
 import {
+    DOCUMENT_CLASSIFICATIONS,
     DOCUMENT_EXTENSIONS,
     fileExtension,
     MAX_DOCUMENT_BYTES,
@@ -14,6 +15,7 @@ export const documentUploadSchema = z.object({
         .trim()
         .min(1, "Enter a name")
         .max(200, "Name is too long"),
+    classification: z.enum(DOCUMENT_CLASSIFICATIONS),
     file: z
         .instanceof(File, {message: "Choose a file"})
         .refine((file) => file.size > 0, "The file is empty.")

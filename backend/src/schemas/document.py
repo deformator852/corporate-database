@@ -4,7 +4,7 @@ from typing import Self
 from fastapi import UploadFile
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from models.document import Document
+from models.document import Document, DocumentClassification
 
 
 class DocumentListItemSchema(BaseModel):
@@ -16,6 +16,7 @@ class DocumentListItemSchema(BaseModel):
     status: str
     progress: int
     error_message: str | None
+    classification: DocumentClassification
     created_at: datetime
 
     @classmethod
@@ -53,6 +54,7 @@ class DocumentUploadSchema(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     name: str = Field(min_length=1, max_length=200)
+    classification: DocumentClassification = DocumentClassification.STANDARD
     file: UploadFile
 
     @field_validator("name")

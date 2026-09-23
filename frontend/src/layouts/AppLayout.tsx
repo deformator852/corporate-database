@@ -1,4 +1,4 @@
-import {Outlet} from "react-router";
+import {Outlet, useLocation} from "react-router";
 
 import {useSessionStore} from "@/shared/auth/session-store";
 import {ThemeSwitcher} from "@/theme/ThemeSwitcher";
@@ -7,6 +7,8 @@ import {Sidebar} from "@/widgets/sidebar/ui/Sidebar.tsx";
 
 export default function AppLayout() {
     const user = useSessionStore((state) => state.user);
+    const location = useLocation();
+    const pane = location.pathname === "/";
 
     if (!user) {
         return null;
@@ -28,7 +30,13 @@ export default function AppLayout() {
             <div className="app-layout__body">
                 <Sidebar />
                 <main className="app-main app-layout__main">
-                    <div className="container app-layout__content">
+                    <div
+                        className={
+                            pane
+                                ? "container app-layout__content app-layout__content--pane"
+                                : "container app-layout__content"
+                        }
+                    >
                         <Outlet />
                     </div>
                 </main>

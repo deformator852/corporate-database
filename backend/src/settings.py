@@ -81,3 +81,11 @@ def minio_secure() -> bool:
         "true",
         "yes",
     }
+
+
+def llm_host() -> str:
+    return (os.getenv("LLM_HOST") or "http://127.0.0.1:11434").strip()
+
+
+def llm_model() -> str:
+    return _require("LLM_MODEL")

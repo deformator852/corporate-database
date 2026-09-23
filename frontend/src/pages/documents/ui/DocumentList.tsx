@@ -11,6 +11,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import {
+    DOCUMENT_CLASSIFICATION_LABELS,
     DOCUMENT_STATUS_LABELS,
     type DocumentListItem,
     type DocumentListPage,
@@ -46,7 +47,7 @@ export function DocumentList({
     const perPage = data?.per_page ?? 20;
     const from = total === 0 ? 0 : (page - 1) * perPage + 1;
     const to = total === 0 ? 0 : (page - 1) * perPage + items.length;
-    const columns = canDelete ? 5 : 4;
+    const columns = canDelete ? 6 : 5;
 
     if (status === "error") {
         return (
@@ -79,6 +80,7 @@ export function DocumentList({
                         <TableRow className="hover:bg-transparent">
                             <TableHead className="px-4">Name</TableHead>
                             <TableHead>File</TableHead>
+                            <TableHead>Access</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead className="px-4">Progress</TableHead>
                             {canDelete ? (
@@ -154,6 +156,10 @@ function DocumentRow({
         <TableRow>
             <TableCell className="px-4 font-medium">{document.name}</TableCell>
             <TableCell className="text-muted-foreground">{document.filename}</TableCell>
+            <TableCell>
+                {DOCUMENT_CLASSIFICATION_LABELS[document.classification] ??
+                    document.classification}
+            </TableCell>
             <TableCell>
                 <div className="flex flex-col gap-1">
                     <span>{DOCUMENT_STATUS_LABELS[status] ?? document.status}</span>

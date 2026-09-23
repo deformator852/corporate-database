@@ -16,6 +16,13 @@ class DocumentStatus(StrEnum):
     FAILED = "failed"
 
 
+class DocumentClassification(StrEnum):
+    STANDARD = "standard"
+    RESTRICTED = "restricted"
+    CONFIDENTIAL = "confidential"
+    SECRET = "secret"
+
+
 class Document(TimestampMixin, Base):
     __tablename__ = "documents"
 
@@ -28,6 +35,10 @@ class Document(TimestampMixin, Base):
     progress: Mapped[int] = mapped_column(Integer, default=0)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     object_key: Mapped[str] = mapped_column(String(500))
+    classification: Mapped[str] = mapped_column(
+        String(20),
+        default=DocumentClassification.STANDARD,
+    )
     user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
@@ -39,5 +50,9 @@ class Document(TimestampMixin, Base):
         CheckConstraint("progress BETWEEN 0 AND 100"),
         CheckConstraint(
             "status IN ('queued','parsing','chunking','embedding','completed','failed')"
+        ),
+        CheckConstraint(
+            "classification IN ('standard','restricted','confidential','secret')",
+            name="ck_documents_classification",
         ),
     )

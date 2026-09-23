@@ -28,6 +28,22 @@ export const DOCUMENT_STATUSES = [
 
 export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
 
+export const DOCUMENT_CLASSIFICATIONS = [
+    "standard",
+    "restricted",
+    "confidential",
+    "secret",
+] as const;
+
+export type DocumentClassification = (typeof DOCUMENT_CLASSIFICATIONS)[number];
+
+export const DOCUMENT_CLASSIFICATION_LABELS: Record<DocumentClassification, string> = {
+    standard: "Standard",
+    restricted: "Restricted",
+    confidential: "Confidential",
+    secret: "Secret",
+};
+
 export type DocumentListItem = {
     id: number;
     name: string;
@@ -35,6 +51,7 @@ export type DocumentListItem = {
     status: DocumentStatus;
     progress: number;
     error_message: string | null;
+    classification: DocumentClassification;
     created_at: string;
     converted?: boolean;
 };
@@ -67,6 +84,42 @@ export const DOCUMENT_STATUS_RANK: Record<DocumentStatus, number> = {
 
 export function isDocumentStatus(value: string): value is DocumentStatus {
     return (DOCUMENT_STATUSES as readonly string[]).includes(value);
+}
+
+export function isDocumentClassification(
+    value: string,
+): value is DocumentClassification {
+    return (DOCUMENT_CLASSIFICATIONS as readonly string[]).includes(value);
+}
+
+export function allowedUploadClassifications(
+    canRestricted: boolean,
+    canConfidential: boolean,
+    canSecret: boolean,
+): DocumentClassification[] {
+    const allowed: DocumentClassification[] = ["standard"];
+    if (canRestricted || canConfidential || canSecret) {
+        allowed.push("restricted");
+    }
+    if (canConfidential || canSecret) {
+        allowed.push("confidential");
+    }
+    if (canSecret) {
+        allowed.push("secret");
+    }
+    return allowed;
+}
+
+export function normalizeDocumentItem(
+    item: Omit<DocumentListItem, "classification"> & {classification?: string},
+): DocumentListItem {
+    const classification = item.classification ?? "standard";
+    return {
+        ...item,
+        classification: isDocumentClassification(classification)
+            ? classification
+            : "standard",
+    };
 }
 
 export function isDocumentUpdateNewer(

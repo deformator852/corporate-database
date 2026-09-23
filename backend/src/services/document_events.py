@@ -19,6 +19,7 @@ def document_event(document: Document) -> DocumentEvent:
         "status": document.status,
         "progress": document.progress,
         "error_message": document.error_message,
+        "classification": document.classification,
         "created_at": created_at,
     }
 

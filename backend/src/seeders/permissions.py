@@ -26,6 +26,21 @@ DOCUMENT_PERMISSIONS = (
     ("documents.list", "List documents", "View the list of documents"),
     ("documents.create", "Create document", "Upload a new document"),
     ("documents.delete", "Delete document", "Delete a document"),
+    (
+        "documents.restricted",
+        "Restricted documents",
+        "Access restricted documents and their search results",
+    ),
+    (
+        "documents.confidential",
+        "Confidential documents",
+        "Access confidential documents and their search results",
+    ),
+    (
+        "documents.secret",
+        "Secret documents",
+        "Access secret documents and their search results",
+    ),
 )
 
 ALL_PERMISSIONS = (

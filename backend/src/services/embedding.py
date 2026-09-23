@@ -19,3 +19,20 @@ class EmbeddingModel:
             normalize_embeddings=True,
         )
         return [vector.tolist() for vector in vectors]
+
+    def embed_query(self, text: str) -> list[float]:
+        vectors = self._loaded().encode(
+            [f"query: {text}"],
+            normalize_embeddings=True,
+        )
+        return vectors[0].tolist()
+
+
+_embedder: EmbeddingModel | None = None
+
+
+def get_embedding_model() -> EmbeddingModel:
+    global _embedder
+    if _embedder is None:
+        _embedder = EmbeddingModel()
+    return _embedder

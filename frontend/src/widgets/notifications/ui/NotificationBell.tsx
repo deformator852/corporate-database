@@ -4,6 +4,7 @@ import {useCallback, useEffect, useRef, useState} from "react";
 import {Button} from "@/components/ui/button";
 import {Popover, PopoverContent, PopoverTrigger} from "@/components/ui/popover";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
+import {connectSocket} from "@/shared/lib/ws";
 import {
     clearNotifications,
     getNotificationsPage,
@@ -78,11 +79,10 @@ export function NotificationBell() {
     }, []);
 
     useEffect(() => {
-        const socket = new WebSocket(notificationsSocketUrl());
-        socket.addEventListener("message", (event) => {
+        return connectSocket(notificationsSocketUrl(), (raw) => {
             let payload: unknown;
             try {
-                payload = JSON.parse(event.data);
+                payload = JSON.parse(raw);
             } catch {
                 return;
             }
@@ -91,9 +91,6 @@ export function NotificationBell() {
             }
             setLoad((current) => mergeIncoming(current, payload));
         });
-        return () => {
-            socket.close();
-        };
     }, []);
 
     const unreadKey =

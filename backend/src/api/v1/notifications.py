@@ -17,7 +17,7 @@ from schemas.notification import (
     NotificationListResponseSchema,
     NotificationReadSchema,
 )
-from security import security
+from security import get_ws_payload
 from services.notification import NotificationService
 from services.notification_hub import hub
 
@@ -86,11 +86,11 @@ async def clear_notifications(
 @router.websocket("/ws")
 async def notification_events(
     websocket: WebSocket,
-    payload=security.WS_AUTH_REQUIRED,
+    payload=Depends(get_ws_payload),
 ) -> None:
     try:
         user_id = int(payload.sub)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         await websocket.close(code=4401)
         return
     await hub.connect(user_id, websocket)

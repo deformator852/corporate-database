@@ -35,7 +35,7 @@ export function ChatComposer({value, disabled, onChange, onSubmit}: ChatComposer
 
     return (
         <form
-            className="flex items-end gap-2 border-t border-border p-3"
+            className="flex shrink-0 items-end gap-2 border-t border-border p-3"
             aria-label="Send a message"
             onSubmit={handleSubmit}
         >
@@ -48,7 +48,7 @@ export function ChatComposer({value, disabled, onChange, onSubmit}: ChatComposer
                 rows={2}
                 value={value}
                 disabled={disabled}
-                placeholder="Message"
+                placeholder="Ask about your documents"
                 className="max-h-40 min-h-12 resize-none"
                 onChange={(event) => onChange(event.target.value)}
                 onKeyDown={handleKeyDown}

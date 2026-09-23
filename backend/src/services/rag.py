@@ -1,4 +1,5 @@
 import os
+from collections.abc import Sequence
 from typing import NoReturn
 from uuid import NAMESPACE_URL, uuid5
 
@@ -11,7 +12,10 @@ from qdrant_client.http.models import (
     Distance,
     FieldCondition,
     Filter,
+    IsEmptyCondition,
+    MatchAny,
     MatchValue,
+    PayloadField,
     PointStruct,
     VectorParams,
 )
@@ -108,6 +112,7 @@ class Rag:
         document_id: int,
         name: str,
         filename: str,
+        classification: str,
         chunks: list[str],
         vectors: list[list[float]],
     ) -> None:
@@ -122,6 +127,7 @@ class Rag:
                     "text": chunk,
                     "name": name,
                     "filename": filename,
+                    "classification": classification,
                 },
             )
             for index, (chunk, vector) in enumerate(zip(chunks, vectors, strict=True))
@@ -156,6 +162,84 @@ class Rag:
             _raise_from_unexpected(exc)
         except (RequestError, ResponseHandlingException) as exc:
             _raise_unavailable(exc)
+
+    async def search(
+        self,
+        vector: list[float],
+        *,
+        allowed_classifications: Sequence[str],
+        limit: int = 8,
+    ) -> list[dict[str, object]]:
+        if not allowed_classifications or limit < 1:
+            return []
+        query_filter = self._classification_filter(allowed_classifications)
+        try:
+            if not await self.client.collection_exists(COLLECTION_NAME):
+                return []
+            result = await self.client.query_points(
+                collection_name=COLLECTION_NAME,
+                query=vector,
+                query_filter=query_filter,
+                limit=limit,
+                with_payload=True,
+            )
+        except UnexpectedResponse as exc:
+            if exc.status_code == 404:
+                return []
+            _raise_from_unexpected(exc)
+        except (RequestError, ResponseHandlingException) as exc:
+            _raise_unavailable(exc)
+        hits = getattr(result, "points", result)
+        payloads: list[dict[str, object]] = []
+        for hit in hits:
+            payload = getattr(hit, "payload", None)
+            if isinstance(payload, dict):
+                payloads.append(payload)
+        return payloads
+
+    async def payloads_for_document(self, document_id: int) -> list[dict[str, object]]:
+        try:
+            if not await self.client.collection_exists(COLLECTION_NAME):
+                return []
+            records, _offset = await self.client.scroll(
+                collection_name=COLLECTION_NAME,
+                scroll_filter=Filter(
+                    must=[
+                        FieldCondition(
+                            key="document_id",
+                            match=MatchValue(value=document_id),
+                        )
+                    ]
+                ),
+                limit=256,
+                with_payload=True,
+                with_vectors=False,
+            )
+        except UnexpectedResponse as exc:
+            if exc.status_code == 404:
+                return []
+            _raise_from_unexpected(exc)
+        except (RequestError, ResponseHandlingException) as exc:
+            _raise_unavailable(exc)
+        payloads: list[dict[str, object]] = []
+        for record in records:
+            payload = getattr(record, "payload", None)
+            if isinstance(payload, dict):
+                payloads.append(payload)
+        payloads.sort(key=_chunk_index)
+        return payloads
+
+    def _classification_filter(self, allowed_classifications: Sequence[str]) -> Filter:
+        allowed = list(allowed_classifications)
+        should: list[FieldCondition | IsEmptyCondition] = [
+            FieldCondition(
+                key="classification",
+                match=MatchAny(any=allowed),
+            )
+        ]
+        if "standard" in allowed:
+            should.append(IsEmptyCondition(is_empty=PayloadField(key="classification")))
+        return Filter(should=should)
 
     async def _create_if_absent(self) -> None:
         try:
@@ -214,3 +298,12 @@ class Rag:
             f"and {distance.value} distance; expected size {self.vector_size} "
             f"and {VECTOR_DISTANCE.value} distance."
         )
+
+
+def _chunk_index(payload: dict[str, object]) -> int:
+    raw = payload.get("chunk_index")
+    if isinstance(raw, int) and not isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str) and raw.isdigit():
+        return int(raw)
+    return 0

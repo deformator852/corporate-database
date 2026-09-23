@@ -3,6 +3,7 @@ import {useSearchParams} from "react-router";
 
 import {can} from "@/shared/lib/api/me";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
+import {connectSocket} from "@/shared/lib/ws";
 import {
     documentsSocketUrl,
     getDocumentsPage,
@@ -11,6 +12,7 @@ import {
     DOCUMENTS_PER_PAGE,
     isDocumentStatus,
     isDocumentUpdateNewer,
+    normalizeDocumentItem,
     type DocumentListItem,
     type DocumentListPage,
 } from "@pages/documents/model/documents";
@@ -73,22 +75,20 @@ export function Documents() {
         if (!canList) {
             return;
         }
-        const socket = new WebSocket(documentsSocketUrl());
-        socket.addEventListener("message", (event) => {
+        return connectSocket(documentsSocketUrl(), (raw) => {
             let payload: unknown;
             try {
-                payload = JSON.parse(event.data);
+                payload = JSON.parse(raw);
             } catch {
                 return;
             }
             if (!isDocumentEvent(payload)) {
                 return;
             }
-            setLoad((current) => mergeDocument(current, payload, page));
+            setLoad((current) =>
+                mergeDocument(current, normalizeDocumentItem(payload), page),
+            );
         });
-        return () => {
-            socket.close();
-        };
     }, [canList, page]);
 
     const goToPage = (nextPage: number) => {
@@ -126,7 +126,11 @@ export function Documents() {
                     <DocumentUploadForm
                         onUploaded={(document) => {
                             setLoad((current) =>
-                                mergeDocument(current, document, page),
+                                mergeDocument(
+                                    current,
+                                    normalizeDocumentItem(document),
+                                    page,
+                                ),
                             );
                         }}
                     />

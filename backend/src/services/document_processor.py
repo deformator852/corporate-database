@@ -70,6 +70,7 @@ class DocumentProcessor:
                 document_id=document.id,
                 name=document.name,
                 filename=document.filename,
+                classification=document.classification,
                 chunks=chunks,
                 vectors=vectors,
             )

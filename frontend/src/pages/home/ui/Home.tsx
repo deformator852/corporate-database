@@ -54,11 +54,11 @@ function Home() {
     }
 
     return (
-        <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
             <h1 className="sr-only">Assistant</h1>
             <section
                 aria-label="Assistant chat"
-                className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10"
+                className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10"
             >
                 <header className="flex shrink-0 items-center border-b border-border px-4 py-3">
                     <p className="text-sm font-medium">Assistant</p>

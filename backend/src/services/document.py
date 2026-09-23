@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from exceptions import AppError
 from models.document import Document, DocumentStatus
 from schemas.document import DocumentUploadSchema
+from services.document_access import classifications_for_user
 from services.office import convert_doc_to_docx
 from services.rag import Rag
 from services.storage import ObjectStorage
@@ -69,11 +70,16 @@ class DocumentService:
         self.queue = queue or CeleryDocumentQueue()
 
     async def list_documents(
-        self, page: int = 1, per_page: int = 20
+        self, user_id: int, page: int = 1, per_page: int = 20
     ) -> tuple[list[Document], int]:
-        total = await self.session.scalar(select(func.count()).select_from(Document))
+        allowed = await self._allowed(user_id)
+        visible = Document.classification.in_(allowed)
+        total = await self.session.scalar(
+            select(func.count()).select_from(Document).where(visible)
+        )
         documents = await self.session.scalars(
             select(Document)
+            .where(visible)
             .order_by(Document.created_at.desc(), Document.id.desc())
             .offset((page - 1) * per_page)
             .limit(per_page)
@@ -95,6 +101,10 @@ class DocumentService:
             )
 
         try:
+            classification = data.classification.value
+            allowed = await self._allowed(user_id)
+            if classification not in allowed:
+                raise AppError("forbidden", "Insufficient permissions", status_code=403)
             content = await data.file.read(MAX_BYTES + 1)
             if not content:
                 raise AppError("invalid", "The file is empty.", status_code=400)
@@ -118,6 +128,7 @@ class DocumentService:
                 status=DocumentStatus.QUEUED,
                 progress=0,
                 object_key=object_key,
+                classification=classification,
                 user_id=user_id,
             )
             self.session.add(document)
@@ -152,11 +163,14 @@ class DocumentService:
         finally:
             await data.file.close()
 
-    async def delete_document(self, document_id: int) -> None:
+    async def delete_document(self, document_id: int, user_id: int) -> None:
         document = await self.session.scalar(
             select(Document).where(Document.id == document_id)
         )
         if document is None:
+            raise AppError("not_found", "Document not found", status_code=404)
+        allowed = await self._allowed(user_id)
+        if document.classification not in allowed:
             raise AppError("not_found", "Document not found", status_code=404)
         rag = Rag()
         try:
@@ -166,6 +180,9 @@ class DocumentService:
             await self.session.commit()
         finally:
             await rag.client.close()
+
+    async def _allowed(self, user_id: int) -> tuple[str, ...]:
+        return await classifications_for_user(self.session, user_id)
 
     async def _delete_row(self, document: Document) -> None:
         await self.session.delete(document)

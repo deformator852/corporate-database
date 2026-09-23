@@ -25,8 +25,9 @@ from schemas.document import (
     DocumentUploadSchema,
 )
 from schemas.error import ErrorSchema
-from security import security
+from security import get_ws_payload
 from services.document import DocumentService
+from services.document_access import classifications_for_user
 from services.document_hub import hub
 
 router = APIRouter(
@@ -44,14 +45,16 @@ ERROR_RESPONSES = {
     "",
     response_model=DocumentListResponseSchema,
     responses=ERROR_RESPONSES,
-    dependencies=[Depends(require_permission("documents.list"))],
 )
 async def list_documents(
     page: Annotated[int, Query(ge=1)] = 1,
     per_page: Annotated[int, Query(ge=1, le=100)] = 20,
+    user: User = Depends(require_permission("documents.list")),
     service: DocumentService = Depends(get_document_service),
 ) -> DocumentListResponseSchema:
-    documents, total = await service.list_documents(page=page, per_page=per_page)
+    documents, total = await service.list_documents(
+        user.id, page=page, per_page=per_page
+    )
     return DocumentListResponseSchema.from_page(
         documents,
         page=page,
@@ -88,32 +91,35 @@ async def upload_document(
         404: {"model": ErrorSchema},
         503: {"model": ErrorSchema},
     },
-    dependencies=[Depends(require_permission("documents.delete"))],
 )
 async def delete_document(
     document_id: int,
+    user: User = Depends(require_permission("documents.delete")),
     service: DocumentService = Depends(get_document_service),
 ) -> Response:
-    await service.delete_document(document_id)
+    await service.delete_document(document_id, user.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.websocket("/ws")
 async def document_events(
     websocket: WebSocket,
-    payload=security.WS_AUTH_REQUIRED,
+    payload=Depends(get_ws_payload),
 ) -> None:
     try:
         user_id = int(payload.sub)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         await websocket.close(code=4401)
         return
     async with AsyncSessionLocal() as session:
         allowed = await _can_list_documents(session, user_id)
+        classifications = (
+            await classifications_for_user(session, user_id) if allowed else ()
+        )
     if not allowed:
         await websocket.close(code=4403)
         return
-    await hub.connect(websocket)
+    await hub.connect(websocket, classifications)
     try:
         while True:
             await websocket.receive_text()

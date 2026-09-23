@@ -1,4 +1,5 @@
 import {zodResolver} from "@hookform/resolvers/zod";
+import {cn} from "cn";
 import {CircleAlert, FileUp} from "lucide-react";
 import {useRef, useState, type DragEvent} from "react";
 import {useForm} from "react-hook-form";
@@ -6,10 +7,13 @@ import {useForm} from "react-hook-form";
 import {Button} from "@/components/ui/button";
 import {Field, FieldError, FieldGroup, FieldLabel} from "@/components/ui/field";
 import {Input} from "@/components/ui/input";
+import {can} from "@/shared/lib/api/me";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
 import {uploadDocument} from "@pages/documents/api/documents";
 import {
     DOCUMENT_ACCEPT,
+    DOCUMENT_CLASSIFICATION_LABELS,
+    allowedUploadClassifications,
     fileStem,
     type DocumentListItem,
 } from "@pages/documents/model/documents";
@@ -39,11 +43,18 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
         resolver: zodResolver(documentUploadSchema),
         defaultValues: {
             name: "",
+            classification: "standard",
         },
     });
 
     const file = watch("file");
     const nameRegister = register("name");
+    const classificationRegister = register("classification");
+    const classifications = allowedUploadClassifications(
+        can("documents.restricted"),
+        can("documents.confidential"),
+        can("documents.secret"),
+    );
 
     function assignFile(next: File | undefined) {
         if (next == null) {
@@ -82,8 +93,12 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
     async function onSubmit(data: DocumentUploadFormData) {
         setSuccess(null);
         try {
-            const accepted = await uploadDocument(data.name, data.file);
-            reset({name: ""});
+            const accepted = await uploadDocument(
+                data.name,
+                data.file,
+                data.classification,
+            );
+            reset({name: "", classification: "standard"});
             if (fileInputRef.current) {
                 fileInputRef.current.value = "";
             }
@@ -134,6 +149,38 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
                         {...nameRegister}
                     />
                     <FieldError id={nameErrorId} errors={[errors.name]} />
+                </Field>
+
+                <Field data-invalid={!!errors.classification || undefined}>
+                    <FieldLabel htmlFor="document-classification">Access</FieldLabel>
+                    <select
+                        id="document-classification"
+                        disabled={isSubmitting}
+                        aria-invalid={!!errors.classification || undefined}
+                        aria-describedby={
+                            errors.classification
+                                ? "document-classification-error"
+                                : undefined
+                        }
+                        className={cn(
+                            "h-8 w-full min-w-0 cursor-pointer rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none transition-colors md:text-sm",
+                            "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+                            "disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50",
+                            "aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20",
+                            "dark:bg-input/30 dark:disabled:bg-input/80",
+                        )}
+                        {...classificationRegister}
+                    >
+                        {classifications.map((value) => (
+                            <option key={value} value={value}>
+                                {DOCUMENT_CLASSIFICATION_LABELS[value]}
+                            </option>
+                        ))}
+                    </select>
+                    <FieldError
+                        id="document-classification-error"
+                        errors={[errors.classification]}
+                    />
                 </Field>
 
                 <Field data-invalid={!!errors.file || undefined}>

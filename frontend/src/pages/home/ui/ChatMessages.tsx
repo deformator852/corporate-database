@@ -11,9 +11,9 @@ type ChatMessagesProps = {
 
 function bubbleClass(role: ChatMessage["role"]) {
     if (role === "user") {
-        return "ml-auto bg-primary text-primary-foreground";
+        return "ml-auto max-w-[min(100%,36rem)] bg-primary text-primary-foreground";
     }
-    return "mr-auto bg-muted text-foreground";
+    return "mr-auto w-full max-w-[min(100%,48rem)] bg-muted text-foreground";
 }
 
 export function ChatMessages({messages, status, error, onRetry}: ChatMessagesProps) {
@@ -30,9 +30,9 @@ export function ChatMessages({messages, status, error, onRetry}: ChatMessagesPro
     if (messages.length === 0 && status === "idle") {
         return (
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-6 py-10 text-center">
-                <p className="text-base font-medium">Ask the assistant</p>
+                <p className="text-base font-medium">Ask about your documents</p>
                 <p className="max-w-sm text-sm text-muted-foreground">
-                    Questions about this workspace go here. Send a message to start.
+                    Answers come only from files you are allowed to access.
                 </p>
             </div>
         );
@@ -45,12 +45,12 @@ export function ChatMessages({messages, status, error, onRetry}: ChatMessagesPro
             aria-live="polite"
             aria-relevant="additions"
             aria-label="Conversation"
-            className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain px-4 py-4"
+            className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4"
         >
             {messages.map((message) => (
                 <p
                     key={message.id}
-                    className={`max-w-[min(100%,36rem)] rounded-2xl px-3.5 py-2.5 text-sm break-words whitespace-pre-wrap ${bubbleClass(message.role)}`}
+                    className={`rounded-2xl px-3.5 py-2.5 text-sm break-words whitespace-pre-wrap ${bubbleClass(message.role)}`}
                 >
                     <span className="sr-only">
                         {message.role === "user" ? "You: " : "Assistant: "}

@@ -1,6 +1,7 @@
 import {api} from "@/shared/lib/api/client";
 import {
     DOCUMENTS_PER_PAGE,
+    normalizeDocumentItem,
     type DocumentListItem,
     type DocumentListPage,
 } from "@pages/documents/model/documents";
@@ -12,16 +13,21 @@ export async function getDocumentsPage(
     const {data} = await api.get<DocumentListPage>("/documents", {
         params: {page, per_page: perPage},
     });
-    return data;
+    return {
+        ...data,
+        items: data.items.map(normalizeDocumentItem),
+    };
 }
 
 export async function uploadDocument(
     name: string,
     file: File,
+    classification: DocumentListItem["classification"],
 ): Promise<DocumentListItem> {
     const body = new FormData();
     body.append("name", name);
     body.append("file", file);
+    body.append("classification", classification);
     const {data} = await api.post<DocumentListItem>("/documents", body);
     return data;
 }
