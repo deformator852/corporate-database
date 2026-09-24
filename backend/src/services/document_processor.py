@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import Awaitable, Callable
 
+from chonkie import RecursiveChunker
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,7 +9,6 @@ from database import AsyncSessionLocal
 from exceptions import AppError
 from models.document import Document, DocumentStatus
 from models.notification import Notification, NotificationType
-from services.chunker import TextChunker
 from services.document_events import DocumentEventPublisher
 from services.embedding import EmbeddingModel
 from services.notification import NotificationService
@@ -18,7 +18,22 @@ from services.rag import Rag
 from services.storage import ObjectStorage
 
 EMBED_BATCH_SIZE = 8
+CHUNK_SIZE = 800
+CHUNK_OVERLAP = 150
 _DONE = {DocumentStatus.COMPLETED, DocumentStatus.FAILED}
+
+
+def _split_text(chunker: RecursiveChunker, text: str) -> list[str]:
+    pieces = [piece for piece in chunker.chunk(text) if piece.text.strip()]
+    chunks: list[str] = []
+    for index, piece in enumerate(pieces):
+        start = piece.start_index
+        if index:
+            start = max(0, piece.start_index - CHUNK_OVERLAP)
+        chunk = text[start : piece.end_index].strip()
+        if chunk:
+            chunks.append(chunk)
+    return chunks
 
 
 class DocumentProcessor:
@@ -27,7 +42,7 @@ class DocumentProcessor:
         session: AsyncSession,
         storage: ObjectStorage,
         parser: DocumentParser,
-        chunker: TextChunker,
+        chunker: RecursiveChunker,
         embedder: EmbeddingModel,
         rag: Rag,
         events: DocumentEventPublisher,
@@ -52,7 +67,7 @@ class DocumentProcessor:
             await self._set(document, DocumentStatus.PARSING, 15)
             text = await asyncio.to_thread(self.parser.parse, content, document.filename)
             await self._set(document, DocumentStatus.CHUNKING, 30)
-            chunks = self.chunker.split(text)
+            chunks = _split_text(self.chunker, text)
             if not chunks:
                 raise AppError("invalid", "The document has no text.", status_code=400)
             await self._set(document, DocumentStatus.EMBEDDING, 35)
@@ -201,7 +216,7 @@ async def _with_processor(
 ) -> None:
     storage = ObjectStorage()
     parser = DocumentParser()
-    chunker = TextChunker()
+    chunker = RecursiveChunker(tokenizer="character", chunk_size=CHUNK_SIZE)
     embedder = EmbeddingModel()
     rag = Rag()
     events = DocumentEventPublisher()
