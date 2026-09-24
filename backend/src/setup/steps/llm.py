@@ -165,6 +165,10 @@ class LlmStep:
                 style="yellow",
             )
         )
+        console.print(
+            "A larger LLM usually gives better answers from the documents "
+            "that search already found. It does not change retrieval ranking."
+        )
         tag = _choose(console, _installed())
         _pull(console, tag)
         upsert_env(ENV_PATH, "LLM_MODEL", tag)

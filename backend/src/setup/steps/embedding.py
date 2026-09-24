@@ -182,6 +182,10 @@ class EmbeddingStep:
                 style="yellow",
             )
         )
+        console.print(
+            "A larger embedding model usually finds more relevant documents. "
+            "It needs more disk and RAM."
+        )
         selected = _choose(console)
         upsert_env(ENV_PATH, "EMBEDING_MODEL", selected.key)
         console.print(f"Wrote EMBEDING_MODEL={selected.key} to {ENV_PATH}")
