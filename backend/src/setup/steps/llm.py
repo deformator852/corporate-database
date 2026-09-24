@@ -166,6 +166,6 @@ class LlmStep:
             )
         )
         tag = _choose(console, _installed())
+        _pull(console, tag)
         upsert_env(ENV_PATH, "LLM_MODEL", tag)
         console.print(f"Wrote LLM_MODEL={tag} to {ENV_PATH}")
-        _pull(console, tag)

@@ -8,7 +8,7 @@ from .step import Step
 from .steps import SETUP_STEPS
 
 
-def run(steps: Sequence[Step], done: str) -> None:
+def run(steps: Sequence[Step], done: str, *, footer: str | None = None) -> None:
     console = Console()
     console.print(
         Panel(
@@ -23,7 +23,9 @@ def run(steps: Sequence[Step], done: str) -> None:
     for step in steps:
         console.rule(step.title)
         step.run(console)
-    console.print(f"[green]{done}[/] Restart the API process if it is running.")
+    console.print(f"[green]{done}[/]")
+    if footer:
+        console.print(footer)
 
 
 def main() -> None:
