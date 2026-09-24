@@ -2,13 +2,14 @@ from datetime import datetime
 from typing import Self
 
 from fastapi import UploadFile
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from models.document import Document, DocumentClassification
+from schemas.model_config import MODEL_CONFIG, ORM_MODEL_CONFIG, UPLOAD_MODEL_CONFIG
 
 
 class DocumentListItemSchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ORM_MODEL_CONFIG
 
     id: int
     name: str
@@ -25,6 +26,8 @@ class DocumentListItemSchema(BaseModel):
 
 
 class DocumentListResponseSchema(BaseModel):
+    model_config = MODEL_CONFIG
+
     items: list[DocumentListItemSchema]
     page: int
     per_page: int
@@ -51,7 +54,7 @@ class DocumentListResponseSchema(BaseModel):
 
 
 class DocumentUploadSchema(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = UPLOAD_MODEL_CONFIG
 
     name: str = Field(min_length=1, max_length=200)
     classification: DocumentClassification = DocumentClassification.STANDARD

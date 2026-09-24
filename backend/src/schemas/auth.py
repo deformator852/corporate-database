@@ -1,18 +1,21 @@
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 from models.user import User
 from schemas.email import Email
+from schemas.model_config import MODEL_CONFIG, ORM_MODEL_CONFIG
 
 
 class LoginSchema(BaseModel):
+    model_config = MODEL_CONFIG
+
     email: Email
     password: str
 
 
 class SessionUserSchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ORM_MODEL_CONFIG
 
     id: int
     first_name: str

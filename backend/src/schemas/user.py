@@ -1,14 +1,15 @@
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from models.user import User
 from schemas.email import Email
+from schemas.model_config import MODEL_CONFIG, ORM_MODEL_CONFIG
 from schemas.role import RoleRefSchema
 
 
 class UserListItemSchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ORM_MODEL_CONFIG
 
     id: int
     first_name: str
@@ -33,6 +34,8 @@ class UserListItemSchema(BaseModel):
 
 
 class UserListResponseSchema(BaseModel):
+    model_config = MODEL_CONFIG
+
     items: list[UserListItemSchema]
     page: int
     per_page: int
@@ -67,6 +70,8 @@ class UserListResponseSchema(BaseModel):
 
 
 class UserWriteSchema(BaseModel):
+    model_config = MODEL_CONFIG
+
     first_name: str = Field(min_length=2, max_length=100)
     last_name: str = Field(min_length=2, max_length=100)
     email: Email

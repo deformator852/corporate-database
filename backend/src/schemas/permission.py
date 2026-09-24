@@ -1,13 +1,14 @@
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 from models.rbac.permission import Permission
+from schemas.model_config import MODEL_CONFIG, ORM_MODEL_CONFIG
 from schemas.role import RoleRefSchema
 
 
 class PermissionListItemSchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ORM_MODEL_CONFIG
 
     key: str
     name: str
@@ -31,6 +32,8 @@ class PermissionListItemSchema(BaseModel):
 
 
 class PermissionListResponseSchema(BaseModel):
+    model_config = MODEL_CONFIG
+
     items: list[PermissionListItemSchema]
     page: int
     per_page: int

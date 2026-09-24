@@ -1,13 +1,14 @@
 from datetime import datetime
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 from models.notification import Notification, NotificationType
+from schemas.model_config import MODEL_CONFIG, ORM_MODEL_CONFIG
 
 
 class NotificationSchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ORM_MODEL_CONFIG
 
     id: int
     type: NotificationType
@@ -21,6 +22,8 @@ class NotificationSchema(BaseModel):
 
 
 class NotificationListResponseSchema(BaseModel):
+    model_config = MODEL_CONFIG
+
     items: list[NotificationSchema]
     page: int
     per_page: int
@@ -52,4 +55,6 @@ class NotificationListResponseSchema(BaseModel):
 
 
 class NotificationReadSchema(BaseModel):
+    model_config = MODEL_CONFIG
+
     ids: list[int] = Field(min_length=1, max_length=200)

@@ -1,24 +1,29 @@
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from models.rbac.constants import ADMIN_ROLE_KEY
 from models.rbac.role import Role
 from schemas.key import key_from_name
+from schemas.model_config import MODEL_CONFIG, ORM_MODEL_CONFIG
 
 
 class RoleRefSchema(BaseModel):
+    model_config = MODEL_CONFIG
+
     key: str
     name: str
 
 
 class PermissionRefSchema(BaseModel):
+    model_config = MODEL_CONFIG
+
     key: str
     name: str
 
 
 class RoleListItemSchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ORM_MODEL_CONFIG
 
     key: str
     name: str
@@ -44,6 +49,8 @@ class RoleListItemSchema(BaseModel):
 
 
 class RoleListResponseSchema(BaseModel):
+    model_config = MODEL_CONFIG
+
     items: list[RoleListItemSchema]
     page: int
     per_page: int
@@ -70,6 +77,8 @@ class RoleListResponseSchema(BaseModel):
 
 
 class RoleWriteSchema(BaseModel):
+    model_config = MODEL_CONFIG
+
     description: str = ""
     permission_keys: list[str] = Field(default_factory=list)
 
