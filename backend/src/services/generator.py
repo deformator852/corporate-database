@@ -27,7 +27,6 @@ _SYSTEM = (
 class OllamaGenerator:
     def __init__(self, client: AsyncClient | None = None) -> None:
         self.client = client or AsyncClient(host=llm_host(), timeout=_TIMEOUT)
-        self.model = llm_model()
 
     async def complete(
         self,
@@ -46,7 +45,7 @@ class OllamaGenerator:
         approx_tokens = max(len(context) // 3, 256)
         try:
             response = await self.client.chat(
-                model=self.model,
+                model=llm_model(),
                 messages=payload,
                 think=False,
                 options={

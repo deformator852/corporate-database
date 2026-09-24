@@ -26,5 +26,24 @@ class ChatRequestSchema(BaseModel):
         return self
 
 
-class ChatResponseSchema(BaseModel):
+class ChatAskSchema(ChatRequestSchema):
+    type: Literal["ask"]
+
+
+class ChatCancelSchema(BaseModel):
+    type: Literal["cancel"]
+
+
+class ChatAnswerSchema(BaseModel):
+    type: Literal["answer"]
     content: str
+
+
+class ChatCancelledSchema(BaseModel):
+    type: Literal["cancelled"]
+
+
+class ChatSocketErrorSchema(BaseModel):
+    type: Literal["error"]
+    code: str
+    message: str

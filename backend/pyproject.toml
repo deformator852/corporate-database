@@ -21,10 +21,15 @@ dependencies = [
     "python-dotenv>=1.2.3",
     "python-multipart>=0.0.32",
     "qdrant-client>=1.19.1",
+    "rich>=15.0.0",
     "sentence-transformers>=6.0.1",
     "sqlalchemy>=2.0.54",
     "uvicorn[standard]>=0.53.0",
 ]
+
+[project.scripts]
+setup = "setup.app:main"
+configure = "configure:main"
 
 [tool.uv]
 package = true

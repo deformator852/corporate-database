@@ -207,10 +207,9 @@ export function NotificationBell() {
             >
                 <Bell />
                 {unreadCount > 0 ? (
-                    <span
-                        className="absolute top-1.5 right-1.5 size-2 rounded-full bg-destructive"
-                        aria-hidden
-                    />
+                    <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] leading-none font-medium text-white">
+                        {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
                 ) : null}
             </PopoverTrigger>
             <PopoverContent aria-label="Notifications">

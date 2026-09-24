@@ -1,25 +1,28 @@
 import os
+from pathlib import Path
 from urllib.parse import quote
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 
 from exceptions import AppError
 
-load_dotenv()
+ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(ENV_FILE)
 
 DOCUMENT_EVENTS_EXCHANGE = "document.events"
 NOTIFICATION_EVENTS_EXCHANGE = "notification.events"
 
-_E5_SIZES = {
-    "e5-small": 384,
-    "e5-base": 768,
-    "e5-large": 1024,
-}
-
-_E5_IDS = {
+EMBEDING_MODEL_ENV_TO_HUGGINGFACE_ID = {
     "multilingual-e5-small": "intfloat/multilingual-e5-small",
     "multilingual-e5-base": "intfloat/multilingual-e5-base",
     "multilingual-e5-large": "intfloat/multilingual-e5-large",
+}
+
+# Substring in the resolved model id → Qdrant vector dimension.
+EMBEDDING_MODEL_VARIANT_VECTOR_SIZE = {
+    "e5-small": 384,
+    "e5-base": 768,
+    "e5-large": 1024,
 }
 
 
@@ -36,12 +39,12 @@ def _require(name: str) -> str:
 
 def embedding_model_id() -> str:
     raw = _require("EMBEDING_MODEL")
-    return _E5_IDS.get(raw, raw)
+    return EMBEDING_MODEL_ENV_TO_HUGGINGFACE_ID.get(raw, raw)
 
 
 def embedding_vector_size() -> int:
     model = embedding_model_id().lower()
-    for suffix, size in _E5_SIZES.items():
+    for suffix, size in EMBEDDING_MODEL_VARIANT_VECTOR_SIZE.items():
         if suffix in model:
             return size
     raise AppError(
@@ -88,4 +91,13 @@ def llm_host() -> str:
 
 
 def llm_model() -> str:
-    return _require("LLM_MODEL")
+    value = (
+        dotenv_values(ENV_FILE).get("LLM_MODEL") or os.getenv("LLM_MODEL") or ""
+    ).strip()
+    if not value:
+        raise AppError(
+            "misconfigured",
+            "LLM_MODEL is not configured.",
+            status_code=500,
+        )
+    return value

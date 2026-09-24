@@ -1,8 +1,12 @@
-import {useState} from "react";
+import {useEffect, useRef, useState} from "react";
 
-import {getApiErrorMessage} from "@/shared/lib/api/errors";
-import {sendChatMessage} from "@pages/home/api/chat";
-import type {ChatMessage, ChatStatus} from "@pages/home/model/chat";
+import {connectChatSocket, type ChatSocket} from "@pages/home/api/chat";
+import {
+    ChatCancelledError,
+    ChatRequestError,
+    type ChatMessage,
+    type ChatStatus,
+} from "@pages/home/model/chat";
 import {ChatComposer} from "@pages/home/ui/ChatComposer";
 import {ChatMessages} from "@pages/home/ui/ChatMessages";
 
@@ -11,16 +15,32 @@ function nextId() {
 }
 
 function Home() {
+    const socketRef = useRef<ChatSocket | null>(null);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [draft, setDraft] = useState("");
     const [status, setStatus] = useState<ChatStatus>("idle");
     const [error, setError] = useState<string | null>(null);
 
+    useEffect(() => {
+        const socket = connectChatSocket();
+        socketRef.current = socket;
+        return () => {
+            socket.close();
+            socketRef.current = null;
+        };
+    }, []);
+
     async function send(history: ChatMessage[]) {
+        const socket = socketRef.current;
+        if (socket == null) {
+            setError("Could not send the message.");
+            setStatus("error");
+            return;
+        }
         setStatus("pending");
         setError(null);
         try {
-            const content = await sendChatMessage(
+            const content = await socket.send(
                 history.map(({role, content}) => ({role, content})),
             );
             setMessages((current) => [
@@ -29,7 +49,16 @@ function Home() {
             ]);
             setStatus("idle");
         } catch (caught) {
-            setError(getApiErrorMessage(caught, "Could not send the message."));
+            if (caught instanceof ChatCancelledError) {
+                setStatus("idle");
+                setError(null);
+                return;
+            }
+            const message =
+                caught instanceof ChatRequestError
+                    ? caught.message
+                    : "Could not send the message.";
+            setError(message);
             setStatus("error");
         }
     }
@@ -44,6 +73,10 @@ function Home() {
         setMessages(history);
         setDraft("");
         void send(history);
+    }
+
+    function handleCancel() {
+        socketRef.current?.cancel();
     }
 
     function handleRetry() {
@@ -71,9 +104,10 @@ function Home() {
                 />
                 <ChatComposer
                     value={draft}
-                    disabled={status === "pending"}
+                    pending={status === "pending"}
                     onChange={setDraft}
                     onSubmit={handleSubmit}
+                    onCancel={handleCancel}
                 />
             </section>
         </div>

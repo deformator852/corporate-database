@@ -12,10 +12,7 @@ from models.rbac import role_permissions, role_users
 from models.user import User
 from security import security
 from services.auth import AuthService
-from services.chat import ChatService
 from services.document import DocumentService
-from services.embedding import EmbeddingModel, get_embedding_model
-from services.generator import OllamaGenerator
 from services.notification import NotificationService
 from services.permission import PermissionService
 from services.role import RoleService
@@ -56,19 +53,6 @@ def get_document_service(
     storage: ObjectStorage = Depends(get_storage),
 ) -> DocumentService:
     return DocumentService(session, storage)
-
-
-def get_generator() -> OllamaGenerator:
-    return OllamaGenerator()
-
-
-def get_chat_service(
-    session: AsyncSession = Depends(get_db),
-    embedder: EmbeddingModel = Depends(get_embedding_model),
-    generator: OllamaGenerator = Depends(get_generator),
-    storage: ObjectStorage = Depends(get_storage),
-) -> ChatService:
-    return ChatService(session, embedder, generator, storage)
 
 
 async def get_current_user(

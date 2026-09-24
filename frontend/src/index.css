@@ -220,10 +220,10 @@
   .app-header__inner {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: var(--stack-gap);
     min-height: var(--header-height);
-    width: min(100% - 2 * var(--gutter), var(--layout-max));
-    margin-inline: auto;
+    width: 100%;
     padding-inline: var(--gutter);
   }
 
@@ -294,16 +294,6 @@
   }
 
   /* AppLayout: header + sidebar + main */
-  .app-layout__header-inner {
-    justify-content: space-between;
-  }
-
-  .app-layout__brand {
-    font-size: 0.9375rem;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-  }
-
   .app-layout__body {
     display: flex;
     flex: 1 1 auto;
@@ -407,39 +397,6 @@
     .app-layout__content {
       --layout-max: 90rem;
     }
-  }
-
-  .theme-switcher {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    min-width: 0;
-  }
-
-  .theme-switcher__label {
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--muted-foreground);
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-  }
-
-  .theme-switcher__select {
-    min-height: 2rem;
-    max-width: 10rem;
-    padding-inline: 0.625rem;
-    border: 1px solid var(--border);
-    border-radius: calc(var(--radius) - 2px);
-    background-color: var(--background);
-    color: var(--foreground);
-    font-size: 0.8125rem;
-    cursor: pointer;
-  }
-
-  .theme-switcher__select:focus-visible {
-    outline: 3px solid color-mix(in oklch, var(--ring) 50%, transparent);
-    outline-offset: 1px;
-    border-color: var(--ring);
   }
 
   [data-theme="slate"] .app-header {
