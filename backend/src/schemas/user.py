@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Self
 
 from pydantic import BaseModel, Field, field_validator
@@ -113,3 +114,36 @@ class UserUpdateSchema(UserWriteSchema):
         return value
 
     _fits = field_validator("password")(_password_fits)
+
+
+class UserDetailSchema(BaseModel):
+    """User page: profile plus a summary of their audit history."""
+
+    model_config = MODEL_CONFIG
+
+    id: int
+    first_name: str
+    last_name: str
+    email: Email
+    roles: list[RoleRefSchema]
+    created_at: datetime
+    last_sign_in_at: datetime | None
+    actions_total: int
+
+    @classmethod
+    def from_user(
+        cls, user: User, *, actions_total: int, last_sign_in_at: datetime | None
+    ) -> Self:
+        return cls(
+            id=user.id,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            email=user.email,
+            roles=sorted(
+                (RoleRefSchema(key=role.key, name=role.name) for role in user.roles),
+                key=lambda role: role.name,
+            ),
+            created_at=user.created_at,
+            last_sign_in_at=last_sign_in_at,
+            actions_total=actions_total,
+        )

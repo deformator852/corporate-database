@@ -18,7 +18,11 @@ export function chatSocketUrl(): string {
 }
 
 export type ChatSocket = {
-    send: (messages: Pick<ChatMessage, "role" | "content">[]) => Promise<string>;
+    /** Resolves with the full answer; `onDelta` receives pieces as they arrive. */
+    send: (
+        messages: Pick<ChatMessage, "role" | "content">[],
+        onDelta?: (piece: string) => void,
+    ) => Promise<string>;
     cancel: () => void;
     close: () => void;
 };
@@ -30,6 +34,7 @@ export function connectChatSocket(): ChatSocket {
     let pending: {
         resolve: (content: string) => void;
         reject: (error: Error) => void;
+        onDelta?: (piece: string) => void;
     } | null = null;
 
     const failPending = (message: string, code = "unavailable") => {
@@ -60,6 +65,10 @@ export function connectChatSocket(): ChatSocket {
             if (!isChatServerMessage(parsed) || pending == null) {
                 return;
             }
+            if (parsed.type === "delta") {
+                pending.onDelta?.(parsed.content);
+                return;
+            }
             finish(parsed);
         });
         next.addEventListener("close", (event) => {
@@ -78,7 +87,7 @@ export function connectChatSocket(): ChatSocket {
         });
     };
 
-    const finish = (message: ChatServerMessage) => {
+    const finish = (message: Exclude<ChatServerMessage, {type: "delta"}>) => {
         if (pending == null) {
             return;
         }
@@ -100,7 +109,7 @@ export function connectChatSocket(): ChatSocket {
     timer = window.setTimeout(open, 0);
 
     return {
-        send(messages) {
+        send(messages, onDelta) {
             const body: ChatAskMessage = {
                 type: "ask",
                 messages: messages.slice(-CHAT_HISTORY),
@@ -113,7 +122,7 @@ export function connectChatSocket(): ChatSocket {
                 return Promise.reject(new ChatRequestError("invalid", FALLBACK));
             }
             return new Promise<string>((resolve, reject) => {
-                pending = {resolve, reject};
+                pending = {resolve, reject, onDelta};
                 void waitUntilOpen(target).then(
                     () => {
                         if (socket !== target || target.readyState !== WebSocket.OPEN) {

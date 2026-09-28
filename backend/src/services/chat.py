@@ -1,14 +1,15 @@
 import asyncio
 
-from sqlalchemy import select
+from sqlalchemy import func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from exceptions import AppError
 from models.document import Document, DocumentStatus
+from models.document_text import DocumentText
 from schemas.chat import ChatMessageSchema
 from services.document_access import retrieval_classifications, user_permission_keys
 from services.embedding import EmbeddingModel
-from services.generator import OllamaGenerator
+from services.generator import OllamaGenerator, OnDelta
 from services.parser import DocumentParser
 from services.rag import Rag
 from services.storage import ObjectStorage
@@ -45,13 +46,17 @@ class ChatService:
         self.parser = DocumentParser()
 
     async def reply(
-        self, user_id: int, messages: list[ChatMessageSchema]
+        self,
+        user_id: int,
+        messages: list[ChatMessageSchema],
+        on_delta: OnDelta | None = None,
     ) -> tuple[str, list[dict[str, object]]]:
-        """Answer text and the documents it was built from."""
+        """Answer text and the documents it was built from. Generated text also
+        streams to `on_delta` as it arrives."""
         keys = await user_permission_keys(self.session, user_id)
         allowed = retrieval_classifications(keys)
         if not allowed:
-            return await self.generator.complete(messages, []), []
+            return await self.generator.complete(messages, [], on_delta), []
         query = messages[-1].content
         rag = Rag()
         try:
@@ -68,7 +73,7 @@ class ChatService:
             await rag.client.close()
         if documents and _wants_full_document(query):
             return _dump(documents), documents
-        return await self.generator.complete(messages, documents), documents
+        return await self.generator.complete(messages, documents, on_delta), documents
 
     async def _documents_for_reply(
         self,
@@ -121,26 +126,35 @@ class ChatService:
     async def _named_document_ids(
         self, query: str, allowed: tuple[str, ...]
     ) -> list[int]:
-        needle = query.casefold()
-        documents = await self.session.scalars(
-            select(Document).where(
+        # Documents whose name or filename appears in the question. Postgres
+        # compares and returns ids only, instead of loading every document.
+        needle = literal(query.lower())
+        ids = await self.session.scalars(
+            select(Document.id).where(
                 Document.classification.in_(allowed),
                 Document.status == DocumentStatus.COMPLETED,
+                or_(
+                    func.strpos(needle, func.lower(Document.name)) > 0,
+                    func.strpos(needle, func.lower(Document.filename)) > 0,
+                ),
             )
         )
-        return [
-            document.id
-            for document in documents
-            if document.filename.casefold() in needle
-            or document.name.casefold() in needle
-        ]
+        return list(ids)
 
     async def _document_text(self, document: Document, rag: Rag) -> str:
+        text = await self.session.scalar(
+            select(DocumentText.text).where(DocumentText.document_id == document.id)
+        )
+        if text is not None:
+            return _cap(text)
         try:
+            # Processed before texts were stored: parse once and keep it.
             raw = await asyncio.to_thread(self.storage.get, document.object_key)
             text = await asyncio.to_thread(
                 self.parser.parse, raw, document.filename
             )
+            await self.session.merge(DocumentText(document_id=document.id, text=text))
+            await self.session.commit()
         except AppError:
             payloads = await rag.payloads_for_document(document.id)
             text = "\n".join(
@@ -148,9 +162,13 @@ class ChatService:
                 for payload in payloads
                 if str(payload.get("text") or "").strip()
             )
-        if len(text) > _MAX_CHARS:
-            return text[:_MAX_CHARS].rstrip() + "\n…"
-        return text
+        return _cap(text)
+
+
+def _cap(text: str) -> str:
+    if len(text) > _MAX_CHARS:
+        return text[:_MAX_CHARS].rstrip() + "\n…"
+    return text
 
 
 def _dump(documents: list[dict[str, object]]) -> str:

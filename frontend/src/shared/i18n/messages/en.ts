@@ -266,6 +266,24 @@ export const en = {
     "audit.details.roles": "Roles: {{value}}",
     "audit.details.permissions": "Permissions: {{value}}",
     "audit.details.access": "Access: {{value}}",
+
+    "userDetail.back": "Back",
+    "userDetail.loading": "Loading user…",
+    "userDetail.loadErrorTitle": "Could not load this user",
+    "userDetail.loadError": "Could not load this user.",
+    "userDetail.notFound": "This user no longer exists",
+    "userDetail.roles": "Roles",
+    "userDetail.noRoles": "No roles",
+    "userDetail.memberSince": "Account created",
+    "userDetail.lastSignIn": "Last sign-in",
+    "userDetail.never": "Never",
+    "userDetail.actionsTotal": "Actions recorded",
+    "userDetail.historyTitle": "Activity",
+    "userDetail.loadingMore": "Loading older actions…",
+    "userDetail.loadMoreError": "Could not load more actions.",
+    "userDetail.end": "This is the first recorded action.",
+    "userDetail.empty": "No actions recorded yet.",
+    "userDetail.openAria": "Open {{name}}",
 } as const;
 
 export type MessageKey = keyof typeof en;

@@ -7,3 +7,9 @@ async def seed_qdrant() -> None:
         await rag.ensure_collection()
     finally:
         await rag.client.close()
+
+
+if __name__ == "__main__":
+    import asyncio
+
+    asyncio.run(seed_qdrant())

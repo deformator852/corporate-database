@@ -1,5 +1,5 @@
 import {useEffect, useMemo, useState} from "react";
-import {useSearchParams} from "react-router";
+import {Link, useLocation, useSearchParams} from "react-router";
 
 import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
@@ -13,20 +13,19 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import {cn} from "cn";
-import {useI18n, type TranslateFn} from "@/shared/i18n/I18nProvider";
-import {documentClassificationKey} from "@/shared/i18n/keys";
+import {useI18n} from "@/shared/i18n/I18nProvider";
 import {localeIntlTag} from "@/shared/i18n/messages";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
-import type {DocumentClassification} from "@pages/documents/model/documents";
+import {can} from "@/shared/lib/api/me";
 import {getAuditPage} from "@pages/audit/api/audit";
 import {
     AUDIT_ACTIONS,
     AUDIT_PER_PAGE,
     auditActionKey,
-    isKnownAction,
-    type AuditEntry,
     type AuditListPage,
 } from "@pages/audit/model/audit";
+import {actionLabel, describe} from "@pages/audit/model/format";
+import type {UserDetailLinkState} from "@pages/users/detail/model/user";
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -36,47 +35,6 @@ function parsePage(value: string | null): number {
         return 1;
     }
     return page;
-}
-
-function actionLabel(t: TranslateFn, action: string): string {
-    return isKnownAction(action) ? t(auditActionKey(action)) : action;
-}
-
-function list(value: unknown): string[] {
-    return Array.isArray(value) ? value.map(String) : [];
-}
-
-function accessLabel(t: TranslateFn, value: unknown): string {
-    return t(documentClassificationKey(String(value) as DocumentClassification));
-}
-
-/** Short human summary of the structured `details` of an entry. */
-function describe(t: TranslateFn, entry: AuditEntry): string {
-    const {details} = entry;
-    const parts: string[] = [];
-    if (details.password_changed === true) {
-        parts.push(t("audit.details.passwordChanged"));
-    }
-    const roles = list(details.roles);
-    if (roles.length > 0) {
-        parts.push(t("audit.details.roles", {value: roles.join(", ")}));
-    }
-    const permissions = list(details.permissions);
-    if (permissions.length > 0) {
-        parts.push(t("audit.details.permissions", {value: permissions.join(", ")}));
-    }
-    if (typeof details.classification === "string") {
-        parts.push(t("audit.details.access", {value: accessLabel(t, details.classification)}));
-    }
-    if (Array.isArray(details.documents)) {
-        const documents = details.documents as {name?: unknown; classification?: unknown}[];
-        parts.push(
-            documents
-                .map((doc) => `${String(doc.name)} (${accessLabel(t, doc.classification)})`)
-                .join(", "),
-        );
-    }
-    return parts.join(" · ");
 }
 
 type LoadState =
@@ -163,6 +121,10 @@ export function AuditLog() {
     const total = data?.total ?? 0;
     const pages = data?.pages ?? 0;
     const perPage = data?.per_page ?? AUDIT_PER_PAGE;
+    const canOpenUser = can("users.view");
+    const location = useLocation();
+    // The user page's Back link returns here with the same filters.
+    const linkState: UserDetailLinkState = {from: location.pathname + location.search};
     const from = total === 0 ? 0 : (page - 1) * perPage + 1;
     const to = total === 0 ? 0 : (page - 1) * perPage + items.length;
 
@@ -256,7 +218,20 @@ export function AuditLog() {
                                                     {timeFormat.format(new Date(entry.created_at))}
                                                 </TableCell>
                                                 <TableCell className="max-w-48 truncate">
-                                                    {entry.actor_email ?? t("common.noDataDash")}
+                                                    {canOpenUser && entry.actor_id != null ? (
+                                                        <Link
+                                                            to={`/users/${entry.actor_id}`}
+                                                            state={linkState}
+                                                            className="font-medium underline-offset-4 hover:underline"
+                                                            aria-label={t("userDetail.openAria", {
+                                                                name: entry.actor_email ?? "",
+                                                            })}
+                                                        >
+                                                            {entry.actor_email}
+                                                        </Link>
+                                                    ) : (
+                                                        entry.actor_email ?? t("common.noDataDash")
+                                                    )}
                                                 </TableCell>
                                                 <TableCell
                                                     className={cn(

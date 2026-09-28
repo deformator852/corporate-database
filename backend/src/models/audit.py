@@ -51,4 +51,8 @@ class AuditLog(Base):
     __table_args__ = (
         # Login throttling reads recent failures by email and by IP.
         Index("ix_audit_logs_action_created_at", "action", "created_at"),
+        # A user's history, newest first (user activity page).
+        Index("ix_audit_logs_actor_id_created_at", "actor_id", "created_at", "id"),
+        # Failed sign-ins on an account, and login throttling by email.
+        Index("ix_audit_logs_actor_email", "actor_email"),
     )

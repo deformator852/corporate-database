@@ -16,6 +16,7 @@ from qdrant_client.http.models import (
     MatchAny,
     MatchValue,
     PayloadField,
+    PayloadSchemaType,
     PointStruct,
     VectorParams,
 )
@@ -27,6 +28,13 @@ load_dotenv()
 
 COLLECTION_NAME = "documents"
 VECTOR_DISTANCE = Distance.COSINE
+# Payload fields every search or delete filters on. Without an index Qdrant
+# checks each candidate point's payload, which slows down as documents grow.
+PAYLOAD_INDEXES = {
+    "classification": PayloadSchemaType.KEYWORD,
+    "document_id": PayloadSchemaType.INTEGER,
+}
+_indexes_ready = False
 
 
 def _int_env(name: str) -> int:
@@ -99,6 +107,7 @@ class Rag:
                     await self._create_if_absent()
                 try:
                     await self._require_compatible()
+                    await self._ensure_indexes()
                     return
                 except UnexpectedResponse as exc:
                     if exc.status_code == 404:
@@ -247,6 +256,20 @@ class Rag:
             should.append(IsEmptyCondition(is_empty=PayloadField(key="classification")))
         return Filter(should=should)
 
+    async def _ensure_indexes(self) -> None:
+        # Creating an existing index is a no-op; once per process is enough.
+        global _indexes_ready
+        if _indexes_ready:
+            return
+        for field_name, schema in PAYLOAD_INDEXES.items():
+            await self.client.create_payload_index(
+                collection_name=COLLECTION_NAME,
+                field_name=field_name,
+                field_schema=schema,
+                wait=True,
+            )
+        _indexes_ready = True
+
     async def _create_if_absent(self) -> None:
         try:
             await self.client.create_collection(
@@ -272,7 +295,9 @@ class Rag:
         if self._vectors_match(info.config.params.vectors):
             return
         if (info.points_count or 0) == 0:
+            global _indexes_ready
             await self.client.delete_collection(COLLECTION_NAME)
+            _indexes_ready = False
             await self._create_if_absent()
             return
         self._raise_vector_conflict(info.config.params.vectors)

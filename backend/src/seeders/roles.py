@@ -5,6 +5,9 @@ from sqlalchemy.orm import selectinload
 from models.rbac.constants import ADMIN_ROLE_KEY
 from models.rbac.permission import Permission
 from models.rbac.role import Role
+from seeders.permissions import ALL_PERMISSIONS
+
+CATALOG_KEYS = frozenset(key for key, _name, _description in ALL_PERMISSIONS)
 
 ROLE_DEFINITIONS = {
     ADMIN_ROLE_KEY: {
@@ -16,7 +19,13 @@ ROLE_DEFINITIONS = {
 
 
 async def seed_roles(session: AsyncSession) -> None:
-    permissions = list(await session.scalars(select(Permission)))
+    # Catalog only: a permission dropped from the catalog must not stay on the
+    # admin role, or the permission seeder can never delete it.
+    permissions = [
+        permission
+        for permission in await session.scalars(select(Permission))
+        if permission.key in CATALOG_KEYS
+    ]
     permissions_by_key = {permission.key: permission for permission in permissions}
     roles = {
         role.key: role
@@ -76,3 +85,16 @@ async def _delete_unassigned_roles(session: AsyncSession) -> None:
         if role.key == ADMIN_ROLE_KEY or role.users:
             continue
         await session.delete(role)
+
+
+if __name__ == "__main__":
+    import asyncio
+
+    from database import AsyncSessionLocal
+
+    async def main() -> None:
+        async with AsyncSessionLocal() as session:
+            await seed_roles(session)
+            await session.commit()
+
+    asyncio.run(main())

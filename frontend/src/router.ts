@@ -9,6 +9,7 @@ import {RolesList} from "@pages/roles/list/ui/RolesList";
 import {PermissionsList} from "@pages/permissions/list/ui/PermissionsList";
 import {Documents} from "@pages/documents/ui/Documents";
 import {AuditLog} from "@pages/audit/ui/AuditLog";
+import {UserDetail} from "@pages/users/detail/ui/UserDetail";
 import {extensions, mergeByKey} from "./extensions";
 
 const pageRoutes: RouteObject[] = [
@@ -35,6 +36,10 @@ const pageRoutes: RouteObject[] = [
     {
         path: "audit",
         Component: AuditLog,
+    },
+    {
+        path: "users/:userId",
+        Component: UserDetail,
     },
 ];
 

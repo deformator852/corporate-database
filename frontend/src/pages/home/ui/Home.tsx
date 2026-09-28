@@ -22,6 +22,8 @@ function Home() {
     const [draft, setDraft] = useState("");
     const [status, setStatus] = useState<ChatStatus>("idle");
     const [error, setError] = useState<string | null>(null);
+    // Answer text received so far while it is being generated.
+    const [streaming, setStreaming] = useState<string | null>(null);
 
     useEffect(() => {
         const socket = connectChatSocket();
@@ -41,17 +43,28 @@ function Home() {
         }
         setStatus("pending");
         setError(null);
-        try {
-            const content = await socket.send(
-                history.map(({role, content}) => ({role, content})),
-            );
+        let partial = "";
+        const appendAnswer = (content: string) =>
             setMessages((current) => [
                 ...current,
                 {id: nextId(), role: "assistant", content},
             ]);
+        try {
+            const content = await socket.send(
+                history.map(({role, content}) => ({role, content})),
+                (piece) => {
+                    partial += piece;
+                    setStreaming(partial);
+                },
+            );
+            appendAnswer(content);
             setStatus("idle");
         } catch (caught) {
             if (caught instanceof ChatCancelledError) {
+                // Keep what was already written before Stop.
+                if (partial.trim()) {
+                    appendAnswer(partial.trim());
+                }
                 setStatus("idle");
                 setError(null);
                 return;
@@ -62,6 +75,8 @@ function Home() {
                     : t("chat.errorSend");
             setError(message);
             setStatus("error");
+        } finally {
+            setStreaming(null);
         }
     }
 
@@ -100,6 +115,7 @@ function Home() {
                 </header>
                 <ChatMessages
                     messages={messages}
+                    streaming={streaming}
                     status={status}
                     error={error}
                     onRetry={handleRetry}

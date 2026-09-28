@@ -1,5 +1,6 @@
 from .audit import AuditAction, AuditLog
 from .document import Document, DocumentClassification, DocumentStatus
+from .document_text import DocumentText
 from .notification import Notification, NotificationType
 from .rbac import Permission, Role
 from .revoked_token import RevokedToken
@@ -11,6 +12,7 @@ __all__ = [
     "Document",
     "DocumentClassification",
     "DocumentStatus",
+    "DocumentText",
     "Notification",
     "NotificationType",
     "Permission",

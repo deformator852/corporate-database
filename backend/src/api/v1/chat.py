@@ -14,6 +14,7 @@ from schemas.chat import (
     ChatAskSchema,
     ChatCancelSchema,
     ChatCancelledSchema,
+    ChatDeltaSchema,
     ChatSocketErrorSchema,
 )
 from security import get_ws_payload
@@ -150,11 +151,12 @@ async def _on_client_message(
         )
         return reply
     return asyncio.create_task(
-        _generate(user_id, incoming, ip, embedder, generator, storage)
+        _generate(websocket, user_id, incoming, ip, embedder, generator, storage)
     )
 
 
 async def _generate(
+    websocket: WebSocket,
     user_id: int,
     ask: ChatAskSchema,
     ip: str | None,
@@ -164,7 +166,13 @@ async def _generate(
 ) -> str:
     async with AsyncSessionLocal() as session:
         service = ChatService(session, embedder, generator, storage)
-        content, documents = await service.reply(user_id, ask.messages)
+
+        async def send_delta(piece: str) -> None:
+            await websocket.send_json(
+                ChatDeltaSchema(type="delta", content=piece).model_dump()
+            )
+
+        content, documents = await service.reply(user_id, ask.messages, send_delta)
         if documents:
             # Who read which documents through the assistant; not the question.
             actor = await session.get(User, user_id)

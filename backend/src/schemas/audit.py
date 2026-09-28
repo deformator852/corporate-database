@@ -43,3 +43,19 @@ class AuditListResponseSchema(BaseModel):
             total=total,
             pages=pages,
         )
+
+
+class AuditCursorPageSchema(BaseModel):
+    """Infinite-scroll page: pass `next_cursor` back as `before`."""
+
+    model_config = MODEL_CONFIG
+
+    items: list[AuditEntrySchema]
+    next_cursor: int | None
+
+    @classmethod
+    def from_entries(cls, entries: list[AuditLog], next_cursor: int | None) -> Self:
+        return cls(
+            items=[AuditEntrySchema.model_validate(entry) for entry in entries],
+            next_cursor=next_cursor,
+        )

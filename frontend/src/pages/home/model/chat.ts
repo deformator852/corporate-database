@@ -30,6 +30,7 @@ export type ChatCancelMessage = {
 };
 
 export type ChatServerMessage =
+    | {type: "delta"; content: string}
     | {type: "answer"; content: string}
     | {type: "cancelled"}
     | {type: "error"; code: string; message: string};
@@ -51,7 +52,7 @@ export function isChatServerMessage(value: unknown): value is ChatServerMessage 
         code?: unknown;
         message?: unknown;
     };
-    if (payload.type === "answer") {
+    if (payload.type === "answer" || payload.type === "delta") {
         return typeof payload.content === "string";
     }
     if (payload.type === "cancelled") {

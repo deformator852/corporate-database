@@ -1,11 +1,11 @@
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 
 import httpx
 from ollama import AsyncClient, RequestError, ResponseError
 
 from exceptions import AppError
 from schemas.chat import ChatMessageSchema
-from settings import LANGUAGES, language, llm_host, llm_model
+from settings import LANGUAGES, language, llm_host, llm_model, llm_num_ctx
 
 _HISTORY = 6
 _HISTORY_CHARS = 1500
@@ -25,15 +25,34 @@ _SYSTEM = (
 )
 
 
+OnDelta = Callable[[str], Awaitable[None]]
+
+# Rough chars per token for budgeting (Latin ~4, Cyrillic ~2.5).
+_CHARS_PER_TOKEN = 3
+# Room for the system prompt and chat history.
+_PROMPT_OVERHEAD_TOKENS = 1536
+
+
 class OllamaGenerator:
     def __init__(self, client: AsyncClient | None = None) -> None:
         self.client = client or AsyncClient(host=llm_host(), timeout=_TIMEOUT)
+
+    async def warm_up(self) -> None:
+        """Loads the model with the same num_ctx chat uses, so the first
+        question does not wait for it."""
+        await self.client.generate(
+            model=llm_model(), prompt="", options={"num_ctx": llm_num_ctx()}
+        )
 
     async def complete(
         self,
         messages: Sequence[ChatMessageSchema],
         documents: Sequence[dict[str, object]],
+        on_delta: OnDelta | None = None,
     ) -> str:
+        """Full answer; each piece also goes to `on_delta` as it is generated."""
+        num_ctx = llm_num_ctx()
+        num_predict = num_ctx // 4
         payload = [
             {
                 "role": "system",
@@ -41,23 +60,32 @@ class OllamaGenerator:
             },
             *_history(messages),
         ]
-        context = _context(documents)
+        budget = (num_ctx - num_predict - _PROMPT_OVERHEAD_TOKENS) * _CHARS_PER_TOKEN
+        context = _context(documents, budget)
         if context:
             payload[-1]["content"] = (
                 f"Documents:\n{context}\n\nQuestion:\n{payload[-1]['content']}"
             )
-        approx_tokens = max(len(context) // 3, 256)
+        parts: list[str] = []
         try:
-            response = await self.client.chat(
+            stream = await self.client.chat(
                 model=llm_model(),
                 messages=payload,
                 think=False,
+                stream=True,
                 options={
                     "temperature": 0.2,
-                    "num_predict": min(8192, max(256, approx_tokens + 64)),
-                    "num_ctx": min(32768, max(2048, approx_tokens + 1024)),
+                    "num_predict": num_predict,
+                    "num_ctx": num_ctx,
                 },
             )
+            async for chunk in stream:
+                piece = chunk.message.content or ""
+                if not piece:
+                    continue
+                parts.append(piece)
+                if on_delta is not None:
+                    await on_delta(piece)
         except ResponseError as exc:
             if exc.status_code == 404:
                 raise AppError(
@@ -76,7 +104,7 @@ class OllamaGenerator:
                 "Could not reach the chat model.",
                 status_code=503,
             ) from exc
-        content = (response.message.content or "").strip()
+        content = "".join(parts).strip()
         if not content:
             raise AppError(
                 "unavailable",
@@ -98,9 +126,12 @@ def _history(messages: Sequence[ChatMessageSchema]) -> list[dict[str, str]]:
     return payload
 
 
-def _context(documents: Sequence[dict[str, object]]) -> str:
-    parts: list[str] = []
-    for index, document in enumerate(documents, start=1):
+def _context(documents: Sequence[dict[str, object]], budget: int) -> str:
+    """Documents for the prompt, within `budget` characters. Past num_ctx
+    Ollama silently drops the start of the prompt (the instructions), so the
+    documents are cut instead, each to an equal share."""
+    named: list[tuple[str, str]] = []
+    for document in documents:
         text = str(document.get("text") or "").strip()
         if not text:
             continue
@@ -108,5 +139,13 @@ def _context(documents: Sequence[dict[str, object]]) -> str:
             str(document.get("filename") or document.get("name") or "Document").strip()
             or "Document"
         )
+        named.append((name, text))
+    if not named:
+        return ""
+    share = budget // len(named)
+    parts: list[str] = []
+    for index, (name, text) in enumerate(named, start=1):
+        if len(text) > share:
+            text = text[:share].rstrip() + "\n…"
         parts.append(f"[{index}] {name}\n{text}")
     return "\n\n".join(parts)

@@ -5,6 +5,8 @@ import {useI18n} from "@/shared/i18n/I18nProvider";
 
 type ChatMessagesProps = {
     messages: ChatMessage[];
+    /** Partial answer while it is generated; null before the first piece. */
+    streaming: string | null;
     status: ChatStatus;
     error: string | null;
     onRetry: () => void;
@@ -17,7 +19,13 @@ function bubbleClass(role: ChatMessage["role"]) {
     return "mr-auto w-full max-w-[min(100%,48rem)] bg-muted text-foreground";
 }
 
-export function ChatMessages({messages, status, error, onRetry}: ChatMessagesProps) {
+export function ChatMessages({
+    messages,
+    streaming,
+    status,
+    error,
+    onRetry,
+}: ChatMessagesProps) {
     const {t} = useI18n();
     const scrollerRef = useRef<HTMLDivElement>(null);
 
@@ -27,7 +35,7 @@ export function ChatMessages({messages, status, error, onRetry}: ChatMessagesPro
             return;
         }
         scroller.scrollTop = scroller.scrollHeight;
-    }, [messages, status, error]);
+    }, [messages, streaming, status, error]);
 
     if (messages.length === 0 && status === "idle") {
         return (
@@ -61,7 +69,22 @@ export function ChatMessages({messages, status, error, onRetry}: ChatMessagesPro
                 </p>
             ))}
 
-            {status === "pending" ? (
+            {status === "pending" && streaming ? (
+                // Hidden from the live region: screen readers get the finished
+                // answer once, not every piece.
+                <p
+                    aria-hidden
+                    className={`rounded-2xl px-3.5 py-2.5 text-sm break-words whitespace-pre-wrap ${bubbleClass("assistant")}`}
+                >
+                    {streaming}
+                    <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse rounded-sm bg-muted-foreground align-middle" />
+                </p>
+            ) : null}
+            {status === "pending" && streaming ? (
+                <span className="sr-only">{t("chat.writing")}</span>
+            ) : null}
+
+            {status === "pending" && !streaming ? (
                 <p
                     className="mr-auto flex max-w-[min(100%,36rem)] items-center gap-1 rounded-2xl bg-muted px-3.5 py-2.5 text-sm text-muted-foreground"
                     aria-label={t("chat.writing")}

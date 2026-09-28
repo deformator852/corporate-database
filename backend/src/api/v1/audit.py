@@ -32,3 +32,4 @@ async def list_audit(
     return AuditListResponseSchema.from_page(
         entries, page=page, per_page=per_page, total=total
     )
+

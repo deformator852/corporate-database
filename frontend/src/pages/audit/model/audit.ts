@@ -49,3 +49,9 @@ export type AuditListPage = {
     total: number;
     pages: number;
 };
+
+/** Infinite-scroll page: pass `next_cursor` as `before`; null means the end. */
+export type AuditCursorPage = {
+    items: AuditEntry[];
+    next_cursor: number | null;
+};

@@ -1,6 +1,6 @@
 import {useEffect, useState} from "react";
 import {Pencil, Plus, Trash2} from "lucide-react";
-import {useSearchParams} from "react-router";
+import {Link, useLocation, useSearchParams} from "react-router";
 
 import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
@@ -22,6 +22,7 @@ import {
     type UserListItem,
     type UserListPage,
 } from "@pages/users/list/model/users";
+import type {UserDetailLinkState} from "@pages/users/detail/model/user";
 import {DeleteUserDialog} from "@pages/users/list/ui/DeleteUserDialog";
 import {UserFormDialog} from "@pages/users/list/ui/UserFormDialog";
 
@@ -43,6 +44,10 @@ type LoadState =
 
 export function UsersList() {
     const {t} = useI18n();
+    const canViewUser = can("users.view");
+    const location = useLocation();
+    // The user page's Back link returns to this page of the list.
+    const linkState: UserDetailLinkState = {from: location.pathname + location.search};
     const [searchParams, setSearchParams] = useSearchParams();
     const page = parsePage(searchParams.get("page"));
     const [reloadKey, setReloadKey] = useState(0);
@@ -202,7 +207,20 @@ export function UsersList() {
                                     items.map((user) => (
                                         <TableRow key={user.id}>
                                             <TableCell className="px-4 font-medium">
-                                                {fullName(user)}
+                                                {canViewUser ? (
+                                                    <Link
+                                                        to={`/users/${user.id}`}
+                                                        state={linkState}
+                                                        className="underline-offset-4 hover:underline"
+                                                        aria-label={t("userDetail.openAria", {
+                                                            name: fullName(user),
+                                                        })}
+                                                    >
+                                                        {fullName(user)}
+                                                    </Link>
+                                                ) : (
+                                                    fullName(user)
+                                                )}
                                             </TableCell>
                                             <TableCell className="text-muted-foreground">
                                                 {user.email}

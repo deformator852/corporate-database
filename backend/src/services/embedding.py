@@ -14,6 +14,9 @@ class EmbeddingModel:
             self._model = SentenceTransformer(self._spec.hf_id)
         return self._model, self._spec
 
+    def warm_up(self) -> None:
+        self._loaded()
+
     def embed_passages(self, texts: list[str]) -> list[list[float]]:
         model, spec = self._loaded()
         prefixed = [f"{spec.passage_prefix}{text}" for text in texts]

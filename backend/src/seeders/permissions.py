@@ -7,6 +7,11 @@ from models.rbac.permission import Permission
 
 USER_PERMISSIONS = (
     ("users.list", "List users", "View the list of users"),
+    (
+        "users.view",
+        "View user",
+        "Open a user's page: profile and history of their actions",
+    ),
     ("users.create", "Create user", "Create a new user"),
     ("users.update", "Update user", "Update an existing user"),
     ("users.delete", "Delete user", "Delete a user"),
@@ -97,3 +102,16 @@ async def _delete_unused_permissions(
             continue
         await session.delete(permission)
     await session.flush()
+
+
+if __name__ == "__main__":
+    import asyncio
+
+    from database import AsyncSessionLocal
+
+    async def main() -> None:
+        async with AsyncSessionLocal() as session:
+            await seed_permissions(session)
+            await session.commit()
+
+    asyncio.run(main())

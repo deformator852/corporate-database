@@ -123,6 +123,23 @@ def llm_host() -> str:
     return (os.getenv("LLM_HOST") or "http://127.0.0.1:11434").strip()
 
 
+def llm_num_ctx() -> int:
+    """Fixed LLM context size in tokens. Ollama reloads the model whenever
+    num_ctx changes between requests, so it must not vary per question."""
+    raw = (os.getenv("LLM_NUM_CTX") or "16384").strip()
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise AppError(
+            "misconfigured", "LLM_NUM_CTX must be a number.", status_code=500
+        ) from exc
+    if value < 4096:
+        raise AppError(
+            "misconfigured", "LLM_NUM_CTX must be at least 4096.", status_code=500
+        )
+    return value
+
+
 def llm_model() -> str:
     value = (
         dotenv_values(ENV_FILE).get("LLM_MODEL") or os.getenv("LLM_MODEL") or ""

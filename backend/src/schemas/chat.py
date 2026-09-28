@@ -49,6 +49,16 @@ class ChatAnswerSchema(BaseModel):
     content: str
 
 
+class ChatDeltaSchema(BaseModel):
+    """A piece of the answer while it is generated; `answer` follows with the
+    full text."""
+
+    model_config = MODEL_CONFIG
+
+    type: Literal["delta"]
+    content: str
+
+
 class ChatCancelledSchema(BaseModel):
     model_config = MODEL_CONFIG
 

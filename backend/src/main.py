@@ -1,7 +1,9 @@
 import asyncio
+import logging
 import os
 from contextlib import asynccontextmanager
 
+from authx.exceptions import JWTDecodeError
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -15,12 +17,31 @@ from schemas.error import ErrorSchema
 from security import security
 from services.document_events import consume_document_events
 from services.document_hub import hub
+from services.embedding import get_embedding_model
+from services.generator import OllamaGenerator
 from services.notification_events import consume_notification_events
 from services.notification_hub import dispatch_notification
 
 
+logger = logging.getLogger(__name__)
+
+
+async def warm_up() -> None:
+    """Loads the embedding model and the LLM in the background, so the first
+    question after a restart does not wait for them."""
+    try:
+        await asyncio.to_thread(get_embedding_model().warm_up)
+    except Exception:
+        logger.warning("Embedding model warm-up failed", exc_info=True)
+    try:
+        await OllamaGenerator().warm_up()
+    except Exception:
+        logger.warning("LLM warm-up failed", exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    warm_up_task = asyncio.create_task(warm_up())
     document_task = asyncio.create_task(consume_document_events(hub.broadcast))
     notification_task = asyncio.create_task(
         consume_notification_events(dispatch_notification)
@@ -28,9 +49,10 @@ async def lifespan(_app: FastAPI):
     try:
         yield
     finally:
+        warm_up_task.cancel()
         document_task.cancel()
         notification_task.cancel()
-        for task in (document_task, notification_task):
+        for task in (warm_up_task, document_task, notification_task):
             try:
                 await task
             except asyncio.CancelledError:
@@ -78,6 +100,14 @@ security.handle_errors(app)
 for plugin in plugins():
     if hasattr(plugin, "setup"):
         plugin.setup(app)
+
+
+# authx answers an undecodable token (bad signature, e.g. after JWT_SECRET_KEY
+# changed) with 422; clients sign in again only on 401.
+@app.exception_handler(JWTDecodeError)
+async def invalid_token_handler(_request: Request, _exc: JWTDecodeError) -> JSONResponse:
+    body = ErrorSchema(code="unauthorized", message="Not authenticated")
+    return JSONResponse(status_code=401, content=body.model_dump())
 
 
 @app.exception_handler(AppError)

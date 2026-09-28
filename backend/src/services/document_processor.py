@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import AsyncSessionLocal
 from exceptions import AppError
 from models.document import Document, DocumentStatus
+from models.document_text import DocumentText
 from models.notification import Notification, NotificationType
 from services.document_events import DocumentEventPublisher
 from services.embedding import EmbeddingModel
@@ -66,6 +67,8 @@ class DocumentProcessor:
             await self.rag.delete_document(document.id)
             await self._set(document, DocumentStatus.PARSING, 15)
             text = await asyncio.to_thread(self.parser.parse, content, document.filename)
+            # Chat reads this instead of re-parsing the file per question.
+            await self.session.merge(DocumentText(document_id=document.id, text=text))
             await self._set(document, DocumentStatus.CHUNKING, 30)
             chunks = _split_text(self.chunker, text)
             if not chunks:
