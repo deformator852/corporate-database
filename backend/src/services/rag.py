@@ -21,7 +21,7 @@ from qdrant_client.http.models import (
 )
 
 from exceptions import AppError
-from settings import embedding_model
+from settings import embedding_model, qdrant_api_key
 
 load_dotenv()
 
@@ -56,7 +56,13 @@ def _qdrant_client() -> AsyncQdrantClient:
             "Qdrant host is not configured.",
             status_code=500,
         )
-    return AsyncQdrantClient(host=host, port=_int_env("QDRANT_PORT"))
+    # Plain HTTP on loopback/the compose network; the key still gates access.
+    return AsyncQdrantClient(
+        host=host,
+        port=_int_env("QDRANT_PORT"),
+        api_key=qdrant_api_key(),
+        https=False,
+    )
 
 
 def _raise_unavailable(exc: Exception) -> NoReturn:

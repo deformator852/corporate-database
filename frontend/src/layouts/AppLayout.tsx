@@ -1,7 +1,10 @@
-import {Database} from "lucide-react";
+import {Database, LogOut} from "lucide-react";
+import {useState} from "react";
 import {Outlet, useLocation} from "react-router";
 
+import {Button} from "@/components/ui/button";
 import {useSessionStore} from "@/shared/auth/session-store";
+import {signOut} from "@/shared/lib/api/me";
 import type {SessionUser} from "@/shared/auth/types";
 import {useI18n} from "@/shared/i18n/I18nProvider";
 import {ThemeSwitcher} from "@/theme/ThemeSwitcher";
@@ -41,6 +44,7 @@ export default function AppLayout() {
                             aria-hidden
                         />
                         <HeaderUser user={user} />
+                        <SignOutButton />
                     </div>
                 </div>
             </header>
@@ -60,6 +64,30 @@ export default function AppLayout() {
                 </main>
             </div>
         </div>
+    );
+}
+
+function SignOutButton() {
+    const {t} = useI18n();
+    const [pending, setPending] = useState(false);
+
+    return (
+        <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="ml-1"
+            aria-label={t("auth.signOut")}
+            title={t("auth.signOut")}
+            disabled={pending}
+            onClick={() => {
+                setPending(true);
+                // Session state is cleared even if the request fails.
+                void signOut().catch(() => undefined);
+            }}
+        >
+            <LogOut />
+        </Button>
     );
 }
 

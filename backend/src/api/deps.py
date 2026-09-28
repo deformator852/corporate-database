@@ -1,7 +1,7 @@
 from collections.abc import Callable
 
 from authx.schema import TokenPayload
-from fastapi import Depends
+from fastapi import Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,7 +10,8 @@ from exceptions import AppError
 from models import Permission, Role
 from models.rbac import role_permissions, role_users
 from models.user import User
-from security import security
+from security import security, user_session_valid
+from services.audit import AuditService
 from services.auth import AuthService
 from services.document import DocumentService
 from services.notification import NotificationService
@@ -34,8 +35,17 @@ def get_permission_service(
     return PermissionService(session)
 
 
-def get_auth_service(session: AsyncSession = Depends(get_db)) -> AuthService:
-    return AuthService(session)
+def get_audit_service(
+    request: Request, session: AsyncSession = Depends(get_db)
+) -> AuditService:
+    return AuditService(session, request.client.host if request.client else None)
+
+
+def get_auth_service(
+    session: AsyncSession = Depends(get_db),
+    audit: AuditService = Depends(get_audit_service),
+) -> AuthService:
+    return AuthService(session, audit)
 
 
 def get_notification_service(
@@ -65,7 +75,7 @@ async def get_current_user(
         raise AppError("unauthorized", "Not authenticated", status_code=401) from exc
 
     user = await session.get(User, user_id)
-    if user is None:
+    if not user_session_valid(user, payload):
         raise AppError("unauthorized", "Not authenticated", status_code=401)
     return user
 

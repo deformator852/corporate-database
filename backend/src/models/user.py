@@ -1,4 +1,6 @@
-from sqlalchemy import CheckConstraint, String
+from datetime import datetime
+
+from sqlalchemy import CheckConstraint, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -17,6 +19,10 @@ class User(TimestampMixin, Base):
         back_populates="users",
     )
     password: Mapped[str]
+    # Tokens issued before this moment are rejected (password change).
+    sessions_valid_after: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
 
     __table_args__ = (
         CheckConstraint("length(first_name) BETWEEN 2 AND 100"),

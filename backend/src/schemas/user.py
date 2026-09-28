@@ -6,6 +6,7 @@ from models.user import User
 from schemas.email import Email
 from schemas.model_config import MODEL_CONFIG, ORM_MODEL_CONFIG
 from schemas.role import RoleRefSchema
+from services.password import MAX_PASSWORD_BYTES, password_fits
 
 
 class UserListItemSchema(BaseModel):
@@ -86,8 +87,19 @@ class UserWriteSchema(BaseModel):
         return cleaned
 
 
+def _password_fits(value: str | None) -> str | None:
+    if value is not None and not password_fits(value):
+        raise ValueError(
+            f"Password is too long (max {MAX_PASSWORD_BYTES} bytes; "
+            "non-Latin letters take 2 bytes each)"
+        )
+    return value
+
+
 class UserCreateSchema(UserWriteSchema):
     password: str = Field(min_length=8, max_length=100)
+
+    _fits = field_validator("password")(_password_fits)
 
 
 class UserUpdateSchema(UserWriteSchema):
@@ -99,3 +111,5 @@ class UserUpdateSchema(UserWriteSchema):
         if value == "":
             return None
         return value
+
+    _fits = field_validator("password")(_password_fits)

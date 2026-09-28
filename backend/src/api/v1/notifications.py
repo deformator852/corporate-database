@@ -6,11 +6,11 @@ from fastapi import (
     Query,
     Response,
     WebSocket,
-    WebSocketDisconnect,
     status,
 )
 
 from api.deps import get_current_user, get_notification_service
+from api.ws import hold
 from models.user import User
 from schemas.error import ErrorSchema
 from schemas.notification import (
@@ -95,7 +95,6 @@ async def notification_events(
         return
     await hub.connect(user_id, websocket)
     try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
+        await hold(websocket, payload)
+    finally:
         hub.disconnect(user_id, websocket)

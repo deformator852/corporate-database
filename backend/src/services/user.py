@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +11,8 @@ from models.rbac.constants import ADMIN_ROLE_KEY
 from models.rbac.role import Role
 from models.user import User
 from schemas.user import UserCreateSchema, UserUpdateSchema
+from services.document_access import user_permission_keys
+from services.grant import ensure_can_grant, ensure_can_manage, role_keys
 from services.password import hash_password
 
 
@@ -31,26 +35,36 @@ class UserService:
 
     async def get_user(self, user_id: int) -> User | None:
         return await self.session.scalar(
-            select(User).where(User.id == user_id).options(selectinload(User.roles))
+            select(User)
+            .where(User.id == user_id)
+            .options(selectinload(User.roles).selectinload(Role.permissions))
         )
 
-    async def create_user(self, data: UserCreateSchema) -> User:
+    async def create_user(self, data: UserCreateSchema, *, actor_id: int) -> User:
+        actor_keys = await user_permission_keys(self.session, actor_id)
         await self._ensure_email_available(data.email)
+        roles = await self._roles_by_keys(data.role_keys)
+        ensure_can_grant(actor_keys, role_keys(roles))
         user = User(
             first_name=data.first_name,
             last_name=data.last_name,
             email=data.email,
             password=hash_password(data.password),
-            roles=await self._roles_by_keys(data.role_keys),
+            roles=roles,
         )
         self.session.add(user)
         await self._flush_user(user)
         return user
 
-    async def update_user(self, user_id: int, data: UserUpdateSchema) -> User:
+    async def update_user(
+        self, user_id: int, data: UserUpdateSchema, *, actor_id: int
+    ) -> User:
+        actor_keys = await user_permission_keys(self.session, actor_id)
         user = await self._require_user(user_id)
+        ensure_can_manage(actor_keys, role_keys(user.roles))
         await self._ensure_email_available(data.email, exclude_id=user.id)
         next_roles = await self._roles_by_keys(data.role_keys)
+        ensure_can_grant(actor_keys, role_keys(next_roles))
         await self._guard_last_admin(user, next_roles)
         user.first_name = data.first_name
         user.last_name = data.last_name
@@ -58,10 +72,13 @@ class UserService:
         user.roles = next_roles
         if data.password is not None:
             user.password = hash_password(data.password)
+            # Signs the user out everywhere, e.g. after a lost laptop.
+            user.sessions_valid_after = datetime.now(UTC)
         await self._flush_user(user)
         return user
 
-    async def delete_user(self, user_id: int, *, actor_id: int) -> None:
+    async def delete_user(self, user_id: int, *, actor_id: int) -> User:
+        actor_keys = await user_permission_keys(self.session, actor_id)
         user = await self._require_user(user_id)
         if user.id == actor_id:
             raise AppError(
@@ -69,8 +86,10 @@ class UserService:
                 "You cannot delete your own account",
                 status_code=409,
             )
+        ensure_can_manage(actor_keys, role_keys(user.roles))
         await self._guard_last_admin(user, [])
         await self.session.delete(user)
+        return user
 
     async def _require_user(self, user_id: int) -> User:
         user = await self.get_user(user_id)
@@ -97,7 +116,11 @@ class UserService:
         if not unique_keys:
             return []
         roles = list(
-            await self.session.scalars(select(Role).where(Role.key.in_(unique_keys)))
+            await self.session.scalars(
+                select(Role)
+                .where(Role.key.in_(unique_keys))
+                .options(selectinload(Role.permissions))
+            )
         )
         if len(roles) != len(unique_keys):
             raise AppError(

@@ -8,6 +8,7 @@ import {
     type ChatMessage,
     type ChatServerMessage,
 } from "@pages/home/model/chat";
+import {reconnectDelay} from "@/shared/lib/ws";
 
 const FALLBACK = "Could not send the message.";
 
@@ -61,12 +62,16 @@ export function connectChatSocket(): ChatSocket {
             }
             finish(parsed);
         });
-        next.addEventListener("close", () => {
+        next.addEventListener("close", (event) => {
             failPending(FALLBACK);
             if (closed || socket !== next) {
                 return;
             }
-            timer = window.setTimeout(open, 2000);
+            void reconnectDelay(event.code).then((delay) => {
+                if (delay !== null && !closed) {
+                    timer = window.setTimeout(open, delay);
+                }
+            });
         });
         next.addEventListener("error", () => {
             next.close();

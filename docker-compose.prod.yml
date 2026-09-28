@@ -1,0 +1,23 @@
+name: corporate-database-prod
+
+# HTTPS reverse proxy. Build the frontend first (cd frontend && npm run build)
+# and run the backend with:
+#   uvicorn main:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips 127.0.0.1
+services:
+  proxy:
+    image: caddy:2.11.4-alpine
+    restart: unless-stopped
+    # Host network: reaches the backend on 127.0.0.1 and listens on 80/443.
+    network_mode: host
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./frontend/dist:/srv/frontend:ro
+      - ./deploy/certs:/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

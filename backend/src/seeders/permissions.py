@@ -44,11 +44,20 @@ DOCUMENT_PERMISSIONS = (
     ),
 )
 
+AUDIT_PERMISSIONS = (
+    (
+        "audit.list",
+        "View audit log",
+        "View who signed in and changed users, roles and documents",
+    ),
+)
+
 ALL_PERMISSIONS = (
     USER_PERMISSIONS
     + ROLE_PERMISSIONS
     + PERMISSION_PERMISSIONS
     + DOCUMENT_PERMISSIONS
+    + AUDIT_PERMISSIONS
     + tuple(
         permission
         for plugin in plugins()

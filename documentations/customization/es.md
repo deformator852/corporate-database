@@ -200,6 +200,14 @@ def sync() -> None:
 Llámela con `sync.delay()` desde su endpoint. Use un `name` con el prefijo de su
 extensión para evitar colisiones.
 
+### Registro de auditoría
+
+Registre sus propias acciones con `AuditService` desde
+`Depends(get_audit_service)` (`api.deps`):
+`audit.record("crm.export", actor=user, target_label=...)`. Aparecen en la
+página del registro con el nombre de la acción tal cual. Nunca registre
+contraseñas, tokens ni otros secretos.
+
 ## Frontend
 
 Un archivo `frontend/src/custom/<name>/index.tsx` exporta por defecto un
@@ -337,7 +345,7 @@ Estos módulos mantienen compatibilidad hacia atrás, y los cambios
 incompatibles se indican en las notas de la versión:
 
 - Backend: `database`, `models`, `api.deps`, `exceptions`, `settings`,
-  `extensions`, `worker`
+  `extensions`, `worker`, `services.audit`
 - Frontend: `@/extensions`, `@/shared/*`, `@/components/ui/*`
 
 Todo lo demás (servicios, partes internas de las páginas del núcleo) puede

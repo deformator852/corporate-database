@@ -13,6 +13,10 @@ class DocumentHub:
         await websocket.accept()
         self._clients[websocket] = frozenset(classifications)
 
+    def update(self, websocket: WebSocket, classifications: Iterable[str]) -> None:
+        if websocket in self._clients:
+            self._clients[websocket] = frozenset(classifications)
+
     def disconnect(self, websocket: WebSocket) -> None:
         self._clients.pop(websocket, None)
 

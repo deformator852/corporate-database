@@ -204,6 +204,14 @@ def sync() -> None:
 Appelez-la avec `sync.delay()` depuis votre endpoint. Préfixez son `name` avec le
 nom de votre extension pour éviter les collisions.
 
+### Journal d'audit
+
+Enregistrez vos propres actions avec `AuditService` depuis
+`Depends(get_audit_service)` (`api.deps`) :
+`audit.record("crm.export", actor=user, target_label=...)`. Elles apparaissent
+dans la page du journal sous le nom brut de l'action. N'enregistrez jamais de
+mots de passe, de jetons ou d'autres secrets.
+
 ## Frontend
 
 Un fichier `frontend/src/custom/<name>/index.tsx` exporte par défaut une
@@ -343,7 +351,7 @@ Ces modules restent rétrocompatibles, et les changements incompatibles sont
 signalés dans les notes de version :
 
 - Backend : `database`, `models`, `api.deps`, `exceptions`, `settings`,
-  `extensions`, `worker`
+  `extensions`, `worker`, `services.audit`
 - Frontend : `@/extensions`, `@/shared/*`, `@/components/ui/*`
 
 Tout le reste (services, parties internes des pages du noyau) peut changer d'une

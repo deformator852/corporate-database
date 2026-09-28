@@ -9,10 +9,14 @@ export function createUserFormSchema(t: TranslateFn, mode: "create" | "edit") {
         .min(2, t("validation.userNameMin"))
         .max(100, t("validation.roleNameMax"));
 
+    // bcrypt reads at most 72 bytes; Cyrillic letters take 2 each.
     const passwordSchema = z
         .string()
         .min(8, t("validation.passwordMin"))
-        .max(100, t("validation.passwordMax"));
+        .refine(
+            (value) => new TextEncoder().encode(value).length <= 72,
+            t("validation.passwordMax"),
+        );
 
     return z
         .object({

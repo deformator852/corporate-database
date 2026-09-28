@@ -1,0 +1,33 @@
+# HTTPS entry point: serves the built frontend and proxies /api (HTTP and
+# WebSocket) to the backend. Settings come from backend/.env:
+#   SITE_ADDRESS  host name users open, e.g. corpdb.company.local
+#   TLS           "internal" (Caddy's own CA; install its root on clients) or
+#                 "/certs/fullchain.pem /certs/privkey.pem" (company certificate
+#                 placed in deploy/certs/)
+#   BACKEND       where uvicorn listens, default 127.0.0.1:8000
+{$SITE_ADDRESS:localhost} {
+	tls {$TLS:internal}
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+		# Inline styles: UI components position popovers with style attributes.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		-Server
+	}
+
+	handle /api/* {
+		# Adds X-Forwarded-For/Proto; run uvicorn with --proxy-headers.
+		reverse_proxy {$BACKEND:127.0.0.1:8000}
+	}
+
+	handle {
+		root * /srv/frontend
+		try_files {path} /index.html
+		file_server
+	}
+}

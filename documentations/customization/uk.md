@@ -197,6 +197,13 @@ def sync() -> None:
 Викликайте її через `sync.delay()` зі свого ендпоінта. Давайте `name` з префіксом
 свого розширення, щоб уникнути збігів.
 
+### Журнал дій
+
+Записуйте власні дії через `AuditService` з `Depends(get_audit_service)`
+(`api.deps`): `audit.record("crm.export", actor=user, target_label=...)`. Вони
+з'являються на сторінці журналу дій під своєю назвою дії. Ніколи не записуйте
+паролі, токени чи інші секрети.
+
 ## Frontend
 
 Файл `frontend/src/custom/<name>/index.tsx` експортує за замовчуванням
@@ -328,7 +335,7 @@ export default {
 примітках до релізу:
 
 - Backend: `database`, `models`, `api.deps`, `exceptions`, `settings`,
-  `extensions`, `worker`
+  `extensions`, `worker`, `services.audit`
 - Frontend: `@/extensions`, `@/shared/*`, `@/components/ui/*`
 
 Усе інше (сервіси, внутрішні частини сторінок ядра) може змінюватися між

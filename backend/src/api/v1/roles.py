@@ -2,7 +2,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response, status
 
-from api.deps import get_role_service, require_permission
+from api.deps import get_audit_service, get_role_service, require_permission
+from models.audit import AuditAction
+from models.user import User
 from schemas.error import ErrorSchema
 from schemas.role import (
     RoleCreateSchema,
@@ -10,6 +12,7 @@ from schemas.role import (
     RoleListResponseSchema,
     RoleWriteSchema,
 )
+from services.audit import AuditService
 from services.role import RoleService
 
 router = APIRouter(
@@ -52,13 +55,22 @@ async def list_roles(
         **ERROR_RESPONSES,
         409: {"model": ErrorSchema},
     },
-    dependencies=[Depends(require_permission("roles.create"))],
 )
 async def create_role(
     payload: RoleCreateSchema,
+    actor: User = Depends(require_permission("roles.create")),
     service: RoleService = Depends(get_role_service),
+    audit: AuditService = Depends(get_audit_service),
 ) -> RoleListItemSchema:
-    role = await service.create_role(payload)
+    role = await service.create_role(payload, actor_id=actor.id)
+    audit.record(
+        AuditAction.ROLE_CREATE,
+        actor=actor,
+        target_type="role",
+        target_id=role.key,
+        target_label=role.name,
+        details={"permissions": sorted(p.key for p in role.permissions)},
+    )
     return RoleListItemSchema.from_role(role)
 
 
@@ -70,14 +82,23 @@ async def create_role(
         404: {"model": ErrorSchema},
         409: {"model": ErrorSchema},
     },
-    dependencies=[Depends(require_permission("roles.update"))],
 )
 async def update_role(
     key: str,
     payload: RoleWriteSchema,
+    actor: User = Depends(require_permission("roles.update")),
     service: RoleService = Depends(get_role_service),
+    audit: AuditService = Depends(get_audit_service),
 ) -> RoleListItemSchema:
-    role = await service.update_role(key, payload)
+    role = await service.update_role(key, payload, actor_id=actor.id)
+    audit.record(
+        AuditAction.ROLE_UPDATE,
+        actor=actor,
+        target_type="role",
+        target_id=role.key,
+        target_label=role.name,
+        details={"permissions": sorted(p.key for p in role.permissions)},
+    )
     return RoleListItemSchema.from_role(role)
 
 
@@ -89,11 +110,19 @@ async def update_role(
         404: {"model": ErrorSchema},
         409: {"model": ErrorSchema},
     },
-    dependencies=[Depends(require_permission("roles.delete"))],
 )
 async def delete_role(
     key: str,
+    actor: User = Depends(require_permission("roles.delete")),
     service: RoleService = Depends(get_role_service),
+    audit: AuditService = Depends(get_audit_service),
 ) -> Response:
-    await service.delete_role(key)
+    role = await service.delete_role(key, actor_id=actor.id)
+    audit.record(
+        AuditAction.ROLE_DELETE,
+        actor=actor,
+        target_type="role",
+        target_id=key,
+        target_label=role.name,
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

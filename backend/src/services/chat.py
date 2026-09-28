@@ -46,11 +46,12 @@ class ChatService:
 
     async def reply(
         self, user_id: int, messages: list[ChatMessageSchema]
-    ) -> str:
+    ) -> tuple[str, list[dict[str, object]]]:
+        """Answer text and the documents it was built from."""
         keys = await user_permission_keys(self.session, user_id)
         allowed = retrieval_classifications(keys)
         if not allowed:
-            return await self.generator.complete(messages, [])
+            return await self.generator.complete(messages, []), []
         query = messages[-1].content
         rag = Rag()
         try:
@@ -66,8 +67,8 @@ class ChatService:
         finally:
             await rag.client.close()
         if documents and _wants_full_document(query):
-            return _dump(documents)
-        return await self.generator.complete(messages, documents)
+            return _dump(documents), documents
+        return await self.generator.complete(messages, documents), documents
 
     async def _documents_for_reply(
         self,
@@ -107,6 +108,7 @@ class ChatService:
             loaded.append(
                 {
                     "document_id": document.id,
+                    "classification": document.classification,
                     "name": document.name,
                     "filename": document.filename,
                     "text": text,

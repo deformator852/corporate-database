@@ -63,7 +63,7 @@ api.interceptors.response.use(
     },
 );
 
-function refreshSession(): Promise<void> {
+export function refreshSession(): Promise<void> {
     if (refreshRequest == null) {
         refreshRequest = api
             .post("/auth/refresh")

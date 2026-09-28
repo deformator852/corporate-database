@@ -9,6 +9,8 @@ from models.rbac.permission import Permission
 from models.rbac.role import Role
 from schemas.key import key_from_name
 from schemas.role import RoleCreateSchema, RoleWriteSchema
+from services.document_access import user_permission_keys
+from services.grant import ensure_can_grant, ensure_can_manage, role_keys
 
 
 class RoleService:
@@ -32,7 +34,10 @@ class RoleService:
         )
         return list(roles), total or 0
 
-    async def create_role(self, data: RoleCreateSchema) -> Role:
+    async def create_role(self, data: RoleCreateSchema, *, actor_id: int) -> Role:
+        ensure_can_grant(
+            await user_permission_keys(self.session, actor_id), data.permission_keys
+        )
         key = key_from_name(data.name)
         await self._ensure_available(key=key, name=data.name)
         role = Role(
@@ -45,14 +50,26 @@ class RoleService:
         await self._flush_role(role)
         return role
 
-    async def update_role(self, key: str, data: RoleWriteSchema) -> Role:
+    async def update_role(
+        self, key: str, data: RoleWriteSchema, *, actor_id: int
+    ) -> Role:
+        actor_keys = await user_permission_keys(self.session, actor_id)
         role = await self._require_role(key)
+        ensure_can_manage(actor_keys, role_keys([role]))
+        ensure_can_grant(actor_keys, data.permission_keys)
+        permissions = await self._permissions_by_keys(data.permission_keys)
+        if key == ADMIN_ROLE_KEY and {p.key for p in permissions} != role_keys([role]):
+            raise AppError(
+                "conflict",
+                "The Admin role always has every permission",
+                status_code=409,
+            )
         role.description = data.description
-        role.permissions = await self._permissions_by_keys(data.permission_keys)
+        role.permissions = permissions
         await self._flush_role(role)
         return role
 
-    async def delete_role(self, key: str) -> None:
+    async def delete_role(self, key: str, *, actor_id: int) -> Role:
         if key == ADMIN_ROLE_KEY:
             raise AppError(
                 "conflict",
@@ -60,7 +77,11 @@ class RoleService:
                 status_code=409,
             )
         role = await self._require_role(key)
+        ensure_can_manage(
+            await user_permission_keys(self.session, actor_id), role_keys([role])
+        )
         await self.session.delete(role)
+        return role
 
     async def _require_role(self, key: str) -> Role:
         role = await self.session.scalar(

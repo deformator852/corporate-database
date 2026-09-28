@@ -2,7 +2,7 @@ from fastapi import APIRouter
 
 from extensions import plugins
 
-from . import auth, chat, documents, notifications, permissions, roles, users
+from . import audit, auth, chat, documents, notifications, permissions, roles, users
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -17,3 +17,4 @@ api_router.include_router(permissions.router)
 api_router.include_router(chat.router)
 api_router.include_router(documents.router)
 api_router.include_router(notifications.router)
+api_router.include_router(audit.router)

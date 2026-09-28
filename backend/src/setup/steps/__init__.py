@@ -3,6 +3,7 @@
 from .embedding import EmbeddingStep
 from .language import LanguageStep
 from .llm import LlmStep
+from .credentials import SecretsStep
 from .storage import StorageStep
 
-SETUP_STEPS = [StorageStep(), LanguageStep(), LlmStep(), EmbeddingStep()]
+SETUP_STEPS = [SecretsStep(), StorageStep(), LanguageStep(), LlmStep(), EmbeddingStep()]

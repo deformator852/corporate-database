@@ -75,7 +75,9 @@ FSD: `pages/<feature>/{ui,api,model,schema}`, `widgets/`, `shared/`, `layouts/`.
 
 App routes hang off `/api/v1` (`backend/src/api/v1/`). One `APIRouter` per resource, `prefix` + `tags` matching the resource name.
 
-Auth is cookies, not Bearer: `my_token`, `my_refresh`; CSRF cookie `csrf_access_token` as `X-CSRF-TOKEN` on POST/PUT/PATCH/DELETE. Never put the access token in a query string. WebSockets authenticate with `get_ws_payload` (cookie `my_token`).
+Auth is cookies, not Bearer: `my_token`, `my_refresh`; CSRF cookie `csrf_access_token` as `X-CSRF-TOKEN` on POST/PUT/PATCH/DELETE. Never put the access token in a query string. WebSockets authenticate with `get_ws_payload` (cookie `my_token`, same-origin `Origin` required) and stay open through `api/ws.py` (`hold`), which re-checks the session every minute and closes with 4401 when the token expires or is revoked (the client refreshes and reconnects) or 4403 when access is lost.
+
+Sessions: `POST /auth/logout` revokes both tokens (`revoked_tokens`, sha256 of the token); refresh tokens rotate on every use; a password change sets `users.sessions_valid_after`, signing the user out everywhere. `/auth/login` is throttled from the audit log (5 failures per email, 20 per IP, per 15 minutes). Passwords are at most 72 bytes (bcrypt).
 
 HTTP guards: `Depends(get_current_user)` or `Depends(require_permission("resource.action"))`. `require_permission` is OR across its keys. No custom auth decorators.
 
@@ -90,17 +92,27 @@ REST shape:
 
 ## Errors
 
-Raise `AppError(code, message, status_code)`. Wire to `{code, message}`. Codes: `unauthorized` 401, `forbidden` 403, `invalid` 400, `not_found` 404, `conflict` 409, `unavailable` 503, `misconfigured` 500. `code` is for branching; show `message` inline next to the action. No toasts.
+Raise `AppError(code, message, status_code)`. Wire to `{code, message}`. Codes: `unauthorized` 401, `forbidden` 403, `invalid` 400, `not_found` 404, `conflict` 409, `rate_limited` 429, `unavailable` 503, `misconfigured` 500. `code` is for branching; show `message` inline next to the action. No toasts.
 
 ## RBAC
 
 Boolean permission keys `resource.action` from `/auth/me`. Frontend `can("users.list")`. No CASL. Permissions are a seeder catalog (no create/update/delete API). Seeder upserts catalog keys and deletes leftovers not assigned to any role; run `seed_permissions` before and after `seed_roles`. Role/permission **name and key are immutable after create** (`key_from_name` / `keyFromName`). Last admin user/role cannot be removed.
+
+No escalation: an actor may only grant permissions they hold, and may only update or delete users and roles whose permissions they hold (`services/grant.py`). The Admin role always has every permission.
+
+## Audit log
+
+Every sign-in (and failure), sign-out, user/role create/update/delete, document upload/delete, and chat answer that used documents is recorded in `audit_logs`. Record in the router after the service call with `AuditService` from `Depends(get_audit_service)` (same session, commits with the action); action names are `AuditAction` values (`resource.verb`). Never record passwords, tokens, or chat question text. The log is append-only: no update or delete API. Viewing needs `audit.list` (`/audit` page).
 
 Document ACL (hierarchical): `standard` < `restricted` < `confidential` < `secret`. Higher permission includes lower. Same rules for list, delete, and RAG/chat retrieval. Postgres is source of truth; Qdrant payload is a duplicate for filters.
 
 ## Naming and layers
 
 Python: one service per entity, singular (`UserService`). FastAPI routers stay thin; logic in services. Pydantic classes keep the `Schema` suffix; filenames are `user.py`, not `user_schema.py`. Inject with `Depends`, including `Form()` schemas for multipart.
+
+## Deployment and secrets
+
+`uv run setup` generates weak or missing secrets (JWT, DB, RabbitMQ, Qdrant, MinIO) into `backend/.env`; compose re-applies DB and RabbitMQ passwords on restart. Every compose port binds to `127.0.0.1`. Production traffic goes through `deploy/Caddyfile` (`docker-compose.prod.yml`): HTTPS, security headers and CSP (no inline scripts in `index.html`), with uvicorn behind it on `--proxy-headers`. `/docs` and `/openapi.json` exist only with `API_DOCS=true`.
 
 ## Documents, RAG, chat
 

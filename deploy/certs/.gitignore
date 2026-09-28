@@ -1,0 +1,3 @@
+# Company TLS certificate and key go here; never commit them.
+*
+!.gitignore

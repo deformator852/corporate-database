@@ -1,3 +1,37 @@
+import {useSessionStore} from "@/shared/auth/session-store";
+import {refreshSession} from "@/shared/lib/api/client";
+import {isUnauthorized} from "@/shared/lib/api/errors";
+
+// Server close codes (backend/src/api/ws.py).
+export const CLOSE_SESSION_ENDED = 4401;
+export const CLOSE_FORBIDDEN = 4403;
+const RETRY_MS = 2000;
+const FORBIDDEN_RETRY_MS = 30_000;
+
+/**
+ * Delay before reconnecting after `code`. On an ended session it first
+ * refreshes the access token; if that fails the user is signed out and
+ * null is returned (stop reconnecting).
+ */
+export async function reconnectDelay(code: number): Promise<number | null> {
+    if (code === CLOSE_FORBIDDEN) {
+        return FORBIDDEN_RETRY_MS;
+    }
+    if (code !== CLOSE_SESSION_ENDED) {
+        return RETRY_MS;
+    }
+    try {
+        await refreshSession();
+        return 0;
+    } catch (error) {
+        if (isUnauthorized(error)) {
+            useSessionStore.getState().clear();
+            return null;
+        }
+        return RETRY_MS;
+    }
+}
+
 export function connectSocket(
     url: string,
     onMessage: (data: string) => void,
@@ -17,11 +51,15 @@ export function connectSocket(
                 onMessage(event.data);
             }
         });
-        next.addEventListener("close", () => {
+        next.addEventListener("close", (event) => {
             if (closed || socket !== next) {
                 return;
             }
-            timer = window.setTimeout(open, 2000);
+            void reconnectDelay(event.code).then((delay) => {
+                if (delay !== null && !closed) {
+                    timer = window.setTimeout(open, delay);
+                }
+            });
         });
         next.addEventListener("error", () => {
             next.close();

@@ -7,14 +7,15 @@ from fastapi import (
     Query,
     Response,
     WebSocket,
-    WebSocketDisconnect,
     status,
 )
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.deps import get_document_service, require_permission
+from api.deps import get_audit_service, get_document_service, require_permission
+from api.ws import hold
 from database import AsyncSessionLocal
+from models.audit import AuditAction
 from models.rbac import role_permissions, role_users
 from models.rbac.permission import Permission
 from models.user import User
@@ -26,6 +27,7 @@ from schemas.document import (
 )
 from schemas.error import ErrorSchema
 from security import get_ws_payload
+from services.audit import AuditService
 from services.document import DocumentService
 from services.document_access import classifications_for_user
 from services.document_hub import hub
@@ -77,8 +79,20 @@ async def upload_document(
     payload: Annotated[DocumentUploadSchema, Form()],
     user: User = Depends(require_permission("documents.create")),
     service: DocumentService = Depends(get_document_service),
+    audit: AuditService = Depends(get_audit_service),
 ) -> DocumentUploadResponseSchema:
     document, converted = await service.accept_upload(payload, user.id)
+    audit.record(
+        AuditAction.DOCUMENT_UPLOAD,
+        actor=user,
+        target_type="document",
+        target_id=document.id,
+        target_label=document.name,
+        details={
+            "filename": document.filename,
+            "classification": document.classification,
+        },
+    )
     item = DocumentListItemSchema.from_document(document)
     return DocumentUploadResponseSchema(**item.model_dump(), converted=converted)
 
@@ -96,8 +110,20 @@ async def delete_document(
     document_id: int,
     user: User = Depends(require_permission("documents.delete")),
     service: DocumentService = Depends(get_document_service),
+    audit: AuditService = Depends(get_audit_service),
 ) -> Response:
-    await service.delete_document(document_id, user.id)
+    document = await service.delete_document(document_id, user.id)
+    audit.record(
+        AuditAction.DOCUMENT_DELETE,
+        actor=user,
+        target_type="document",
+        target_id=document_id,
+        target_label=document.name,
+        details={
+            "filename": document.filename,
+            "classification": document.classification,
+        },
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -111,20 +137,32 @@ async def document_events(
     except (TypeError, ValueError):
         await websocket.close(code=4401)
         return
-    async with AsyncSessionLocal() as session:
-        allowed = await _can_list_documents(session, user_id)
-        classifications = (
-            await classifications_for_user(session, user_id) if allowed else ()
-        )
-    if not allowed:
+    classifications = await _event_classifications(user_id)
+    if classifications is None:
         await websocket.close(code=4403)
         return
     await hub.connect(websocket, classifications)
+
+    async def recheck() -> bool:
+        # Permissions may change while the socket is open.
+        current = await _event_classifications(user_id)
+        if current is None:
+            return False
+        hub.update(websocket, current)
+        return True
+
     try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
+        await hold(websocket, payload, recheck)
+    finally:
         hub.disconnect(websocket)
+
+
+async def _event_classifications(user_id: int) -> tuple[str, ...] | None:
+    """Classifications whose events the user may receive; None without access."""
+    async with AsyncSessionLocal() as session:
+        if not await _can_list_documents(session, user_id):
+            return None
+        return await classifications_for_user(session, user_id)
 
 
 async def _can_list_documents(session: AsyncSession, user_id: int) -> bool:

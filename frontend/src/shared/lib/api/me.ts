@@ -7,6 +7,15 @@ export async function getMe(): Promise<SessionUser> {
     return data;
 }
 
+export async function signOut(): Promise<void> {
+    // Revokes both tokens server side; clearing local state happens regardless.
+    try {
+        await api.post("/auth/logout");
+    } finally {
+        useSessionStore.getState().clear();
+    }
+}
+
 export function can(permission: string, user = useSessionStore.getState().user) {
     return user?.permissions.includes(permission) ?? false;
 }

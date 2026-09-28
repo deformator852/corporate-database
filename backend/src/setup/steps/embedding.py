@@ -89,7 +89,13 @@ def _rag_points() -> int | None:
         return None
     try:
         port = int(raw_port)
-        client = QdrantClient(host=host, port=port, timeout=2)
+        client = QdrantClient(
+            host=host,
+            port=port,
+            api_key=env_value(ENV_PATH, "QDRANT_API_KEY"),
+            https=False,
+            timeout=2,
+        )
         if not client.collection_exists(_COLLECTION):
             return 0
         info = client.get_collection(_COLLECTION)

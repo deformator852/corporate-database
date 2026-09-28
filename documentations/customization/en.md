@@ -194,6 +194,13 @@ def sync() -> None:
 Call it with `sync.delay()` from your endpoint. Use a `name` prefixed with your
 extension to avoid collisions.
 
+### Audit log
+
+Record your own actions with `AuditService` from `Depends(get_audit_service)`
+(`api.deps`): `audit.record("crm.export", actor=user, target_label=...)`. They
+appear on the Audit log page under their raw action name. Never record
+passwords, tokens or other secrets.
+
 ## Frontend
 
 A file `frontend/src/custom/<name>/index.tsx` default-exports an `Extension`
@@ -326,7 +333,7 @@ These modules are kept backward compatible, and breaking changes are listed in
 release notes:
 
 - Backend: `database`, `models`, `api.deps`, `exceptions`, `settings`,
-  `extensions`, `worker`
+  `extensions`, `worker`, `services.audit`
 - Frontend: `@/extensions`, `@/shared/*`, `@/components/ui/*`
 
 Anything else (services, internal parts of core pages) may change between

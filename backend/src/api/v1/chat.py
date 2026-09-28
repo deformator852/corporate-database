@@ -4,8 +4,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from pydantic import Field, TypeAdapter, ValidationError
 
+from api.ws import RECHECK_SECONDS, seconds_left, still_allowed
 from database import AsyncSessionLocal
 from exceptions import AppError
+from models.audit import AuditAction
+from models.user import User
 from schemas.chat import (
     ChatAnswerSchema,
     ChatAskSchema,
@@ -14,6 +17,7 @@ from schemas.chat import (
     ChatSocketErrorSchema,
 )
 from security import get_ws_payload
+from services.audit import AuditService
 from services.chat import ChatService
 from services.embedding import EmbeddingModel, get_embedding_model
 from services.generator import OllamaGenerator
@@ -40,6 +44,7 @@ async def chat_socket(
         await websocket.close(code=4401)
         return
     await websocket.accept()
+    ip = websocket.client.host if websocket.client else None
     embedder = get_embedding_model()
     generator = OllamaGenerator()
     storage = ObjectStorage()
@@ -51,12 +56,20 @@ async def chat_socket(
             if reply is not None:
                 wait.add(reply)
             done, _pending = await asyncio.wait(
-                wait, return_when=asyncio.FIRST_COMPLETED
+                wait,
+                timeout=max(0.0, min(RECHECK_SECONDS, seconds_left(payload))),
+                return_when=asyncio.FIRST_COMPLETED,
             )
+            if not done:
+                if not await _session_ok(websocket, payload):
+                    return
+                continue
             if receive in done:
                 try:
                     raw = receive.result()
                 except WebSocketDisconnect:
+                    return
+                if not await _session_ok(websocket, payload):
                     return
                 receive = asyncio.create_task(websocket.receive_text())
                 reply = await _on_client_message(
@@ -64,6 +77,7 @@ async def chat_socket(
                     user_id,
                     raw,
                     reply,
+                    ip,
                     embedder,
                     generator,
                     storage,
@@ -83,11 +97,22 @@ async def chat_socket(
                 pass
 
 
+async def _session_ok(websocket: WebSocket, payload) -> bool:
+    """Closes the socket once the session expires or is revoked. Checked on
+    every client message and at least once a minute while idle."""
+    code = await still_allowed(websocket, payload)
+    if code is None:
+        return True
+    await websocket.close(code=code)
+    return False
+
+
 async def _on_client_message(
     websocket: WebSocket,
     user_id: int,
     raw: str,
     reply: asyncio.Task[str] | None,
+    ip: str | None,
     embedder: EmbeddingModel,
     generator: OllamaGenerator,
     storage: ObjectStorage,
@@ -125,20 +150,42 @@ async def _on_client_message(
         )
         return reply
     return asyncio.create_task(
-        _generate(user_id, incoming, embedder, generator, storage)
+        _generate(user_id, incoming, ip, embedder, generator, storage)
     )
 
 
 async def _generate(
     user_id: int,
     ask: ChatAskSchema,
+    ip: str | None,
     embedder: EmbeddingModel,
     generator: OllamaGenerator,
     storage: ObjectStorage,
 ) -> str:
     async with AsyncSessionLocal() as session:
         service = ChatService(session, embedder, generator, storage)
-        return await service.reply(user_id, ask.messages)
+        content, documents = await service.reply(user_id, ask.messages)
+        if documents:
+            # Who read which documents through the assistant; not the question.
+            actor = await session.get(User, user_id)
+            AuditService(session, ip).record(
+                AuditAction.CHAT_ANSWER,
+                actor=actor,
+                target_type="document",
+                target_label=", ".join(str(d["name"]) for d in documents),
+                details={
+                    "documents": [
+                        {
+                            "id": d["document_id"],
+                            "name": d["name"],
+                            "classification": d["classification"],
+                        }
+                        for d in documents
+                    ]
+                },
+            )
+            await session.commit()
+        return content
 
 
 async def _finish_reply(websocket: WebSocket, reply: asyncio.Task[str]) -> None:

@@ -202,6 +202,14 @@ def sync() -> None:
 Uç noktanızdan `sync.delay()` ile çağırın. Çakışmaları önlemek için `name`
 değerine eklentinizin önekini verin.
 
+### Denetim kaydı
+
+Kendi işlemlerinizi `Depends(get_audit_service)` (`api.deps`) ile alınan
+`AuditService` ile kaydedin:
+`audit.record("crm.export", actor=user, target_label=...)`. Denetim kaydı
+sayfasında işlem adıyla görünürler. Parola, belirteç veya başka gizli bilgi
+asla kaydetmeyin.
+
 ## Frontend
 
 `frontend/src/custom/<name>/index.tsx` dosyası varsayılan olarak bir `Extension`
@@ -340,7 +348,7 @@ Bu modüller geriye dönük uyumlu tutulur ve uyumsuz değişiklikler sürüm
 notlarında belirtilir:
 
 - Backend: `database`, `models`, `api.deps`, `exceptions`, `settings`,
-  `extensions`, `worker`
+  `extensions`, `worker`, `services.audit`
 - Frontend: `@/extensions`, `@/shared/*`, `@/components/ui/*`
 
 Geri kalan her şey (servisler, çekirdek sayfaların iç kısımları) sürümler arasında

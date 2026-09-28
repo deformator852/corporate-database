@@ -83,6 +83,10 @@ def embedding_model() -> EmbeddingSpec:
     return spec
 
 
+def qdrant_api_key() -> str:
+    return _require("QDRANT_API_KEY")
+
+
 def rabbitmq_url() -> str:
     user = quote(_require("RABBITMQ_USER"), safe="")
     password = quote(_require("RABBITMQ_PASSWORD"), safe="")

@@ -165,7 +165,7 @@ class DocumentService:
         finally:
             await data.file.close()
 
-    async def delete_document(self, document_id: int, user_id: int) -> None:
+    async def delete_document(self, document_id: int, user_id: int) -> Document:
         document = await self.session.scalar(
             select(Document).where(Document.id == document_id)
         )
@@ -182,6 +182,7 @@ class DocumentService:
             await self.session.commit()
         finally:
             await rag.client.close()
+        return document
 
     async def _allowed(self, user_id: int) -> tuple[str, ...]:
         return await classifications_for_user(self.session, user_id)
