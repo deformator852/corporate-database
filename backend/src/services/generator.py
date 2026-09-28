@@ -5,7 +5,7 @@ from ollama import AsyncClient, RequestError, ResponseError
 
 from exceptions import AppError
 from schemas.chat import ChatMessageSchema
-from settings import llm_host, llm_model
+from settings import LANGUAGES, language, llm_host, llm_model
 
 _HISTORY = 6
 _HISTORY_CHARS = 1500
@@ -18,9 +18,10 @@ _SYSTEM = (
     "Provide information only about the documents in the user message. Do not "
     "answer questions that are not about those documents. If the documents "
     "are missing or do not contain the answer, say you do not have relevant "
-    "documents. Reply in the same language as the question. If the user asked "
-    "for the full document, reproduce it completely. Otherwise answer "
-    "concisely. Do not invent sources."
+    "documents. Always reply in {language}, whatever the language of the "
+    "question or documents. If the user asked for the full document, "
+    "reproduce it completely as written. Otherwise answer concisely. Do not "
+    "invent sources."
 )
 
 
@@ -34,7 +35,10 @@ class OllamaGenerator:
         documents: Sequence[dict[str, object]],
     ) -> str:
         payload = [
-            {"role": "system", "content": _SYSTEM},
+            {
+                "role": "system",
+                "content": _SYSTEM.format(language=LANGUAGES[language()]),
+            },
             *_history(messages),
         ]
         context = _context(documents)

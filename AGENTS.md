@@ -59,6 +59,10 @@ Skip these for non-coding questions.
 
 Do not commit, push, or add dependencies unless asked. Prefer clarity over cleverness. Do not invent JWT claims.
 
+## Customization boundary
+
+Users customize through `backend/src/custom/` and `frontend/src/custom/` (see `documentations/customization/`). Never add, edit, or delete files there in core changes; upstream must ship nothing under them. Keep the extension hooks (`backend/src/extensions.py`, `frontend/src/extensions.ts`) and the stable modules listed there backward compatible; call out breaking changes. When a hook changes, update all five language files in `documentations/customization/`. Core Alembic migrations stay on the default branch; use `alembic upgrade heads`.
+
 ## Frontend routes
 
 SPA in `frontend/src/router.ts`. Vite proxies `/api` (HTTP + WS) to `http://127.0.0.1:8000`.
@@ -99,5 +103,7 @@ Document ACL (hierarchical): `standard` < `restricted` < `confidential` < `secre
 Python: one service per entity, singular (`UserService`). FastAPI routers stay thin; logic in services. Pydantic classes keep the `Schema` suffix; filenames are `user.py`, not `user_schema.py`. Inject with `Depends`, including `Form()` schemas for multipart.
 
 ## Documents, RAG, chat
+
+MinIO: the backend uses a least-privilege app user (`MINIO_ACCESS_KEY`: get/put/delete objects in `MINIO_BUCKET` only), never root. The bucket, policy and user are created by the `minio-init` compose service; the app must not create or list buckets. Object keys are `documents/<uuid>` with no filename. Uploads pass `services/upload_check.py` (content matches extension, zip size limits) before conversion or storage.
 
 Pipeline: upload (convert `.doc` → `.docx` if needed) → Postgres row + MinIO in the same request → Celery → parse → chunk → embed `EMBEDING_MODEL` → Qdrant. Queue failures notify; HTTP upload errors stay on the form. Chat is a WebSocket on the chat router (`/ws`), same cookie auth as other sockets. Client and server exchange typed JSON (`ask` / `answer` / `error`); `{code, message}` on errors. Client may send `cancel` while a reply is running; the server stops generation and replies `cancelled`. Send the last 4–6 messages; embed/search only the latest user question. Load full matching files from MinIO when answering. No LangChain. LLM via `LLM_HOST` and `LLM_MODEL` only. Chat is read-only: it must not create, change, or delete data, and it answers only about documents the user may see.

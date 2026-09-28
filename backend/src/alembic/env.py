@@ -6,6 +6,9 @@ from alembic import context
 
 from database import Base, DATABASE_URL
 import models
+from extensions import plugins
+
+plugins()  # registers custom models
 
 config = context.config
 config.set_main_option("sqlalchemy.url", DATABASE_URL)

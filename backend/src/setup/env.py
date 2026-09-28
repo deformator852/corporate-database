@@ -45,6 +45,7 @@ def env_value(path: Path, key: str) -> str | None:
 _MINIMAL_ENV = """\
 QDRANT_HOST=localhost
 QDRANT_PORT=6333
+APP_LANGUAGE=en
 EMBEDING_MODEL=multilingual-e5-base
 LLM_HOST=http://127.0.0.1:11434
 LLM_MODEL=llama3.1:8b

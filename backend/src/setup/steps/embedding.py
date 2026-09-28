@@ -10,7 +10,10 @@ from rich.panel import Panel
 from rich.prompt import IntPrompt
 from rich.table import Table
 
+from settings import EMBEDDING_MODELS, LANGUAGES
+
 from ..env import ENV_PATH, env_value, upsert_env
+from .language import current_language
 
 _GIB = 1024**3
 _COLLECTION = "documents"
@@ -19,43 +22,52 @@ _COLLECTION = "documents"
 @dataclass(frozen=True, slots=True)
 class EmbeddingOption:
     key: str
-    hf_id: str
     summary: str
-    dims: int
     disk_bytes: int
     ram_min: str
     ram_recommended: str
 
+    @property
+    def hf_id(self) -> str:
+        return EMBEDDING_MODELS[self.key].hf_id
 
-OPTIONS: tuple[EmbeddingOption, ...] = (
-    EmbeddingOption(
-        "multilingual-e5-small",
-        "intfloat/multilingual-e5-small",
-        "Fastest, 384-d",
-        384,
-        int(0.47 * _GIB),
-        "2 GB",
-        "4 GB",
+    @property
+    def dims(self) -> int:
+        return EMBEDDING_MODELS[self.key].dims
+
+
+def _small(key: str, gib: float) -> EmbeddingOption:
+    return EmbeddingOption(key, "Light", int(gib * _GIB), "2 GB", "4 GB")
+
+
+def _medium(key: str, gib: float) -> EmbeddingOption:
+    return EmbeddingOption(key, "Balanced (default)", int(gib * _GIB), "4 GB", "8 GB")
+
+
+def _large(key: str, gib: float) -> EmbeddingOption:
+    return EmbeddingOption(key, "Best quality", int(gib * _GIB), "8 GB", "16 GB")
+
+
+_E5_SMALL = _small("multilingual-e5-small", 2.1)
+_E5_BASE = _medium("multilingual-e5-base", 5.0)
+_BGE_M3 = _large("bge-m3", 4.3)
+
+# APP_LANGUAGE → light, balanced, best. Disk is the full Hugging Face snapshot.
+OPTIONS: dict[str, tuple[EmbeddingOption, ...]] = {
+    "en": (
+        _small("bge-small-en", 0.4),
+        _medium("bge-base-en", 1.2),
+        _large("bge-large-en", 3.7),
     ),
-    EmbeddingOption(
-        "multilingual-e5-base",
-        "intfloat/multilingual-e5-base",
-        "Default, 768-d",
-        768,
-        int(1.1 * _GIB),
-        "4 GB",
-        "8 GB",
+    "fr": (
+        _E5_SMALL,
+        _medium("solon-base", 1.1),
+        _large("solon-large", 2.1),
     ),
-    EmbeddingOption(
-        "multilingual-e5-large",
-        "intfloat/multilingual-e5-large",
-        "Best quality, 1024-d",
-        1024,
-        int(2.2 * _GIB),
-        "8 GB",
-        "16 GB",
-    ),
-)
+    "es": (_E5_SMALL, _E5_BASE, _BGE_M3),
+    "uk": (_E5_SMALL, _E5_BASE, _BGE_M3),
+    "tr": (_E5_SMALL, _E5_BASE, _BGE_M3),
+}
 
 
 def _fmt_bytes(n: int) -> str:
@@ -97,10 +109,11 @@ def _download(console: Console, option: EmbeddingOption) -> None:
         console.print(f"[red]Could not download {option.key}: {exc}[/]")
 
 
-def _choose(console: Console) -> EmbeddingOption:
+def _choose(console: Console, language: str) -> EmbeddingOption:
+    options = OPTIONS[language]
     current = env_value(ENV_PATH, "EMBEDING_MODEL")
     free = shutil.disk_usage("/").free
-    table = Table(title="Embedding models")
+    table = Table(title=f"Embedding models for {LANGUAGES[language]}")
     table.add_column("#", justify="right")
     table.add_column("Model")
     table.add_column("Disk")
@@ -110,7 +123,7 @@ def _choose(console: Console) -> EmbeddingOption:
     table.add_column("Downloaded")
     table.add_column("Notes")
     default = 2
-    for index, option in enumerate(OPTIONS, start=1):
+    for index, option in enumerate(options, start=1):
         if option.key == current:
             default = index
         table.add_row(
@@ -127,8 +140,8 @@ def _choose(console: Console) -> EmbeddingOption:
     console.print(f"Free disk: {_fmt_bytes(free)}")
     while True:
         choice = IntPrompt.ask("Choice", default=default, console=console)
-        if 1 <= choice <= len(OPTIONS):
-            selected = OPTIONS[choice - 1]
+        if 1 <= choice <= len(options):
+            selected = options[choice - 1]
             if (
                 selected.disk_bytes * 11 // 10 > free
                 and not _cached(selected.hf_id)
@@ -139,7 +152,7 @@ def _choose(console: Console) -> EmbeddingOption:
                     f"only {_fmt_bytes(free)} is free.[/]"
                 )
             return selected
-        console.print(f"Enter a number from 1 to {len(OPTIONS)}.")
+        console.print(f"Enter a number from 1 to {len(options)}.")
 
 
 def _lock(console: Console, message: str, current: str | None) -> None:
@@ -186,7 +199,7 @@ class EmbeddingStep:
             "A larger embedding model usually finds more relevant documents. "
             "It needs more disk and RAM."
         )
-        selected = _choose(console)
+        selected = _choose(console, current_language())
         upsert_env(ENV_PATH, "EMBEDING_MODEL", selected.key)
         console.print(f"Wrote EMBEDING_MODEL={selected.key} to {ENV_PATH}")
         _download(console, selected)

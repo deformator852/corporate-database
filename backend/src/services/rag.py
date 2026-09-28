@@ -21,7 +21,7 @@ from qdrant_client.http.models import (
 )
 
 from exceptions import AppError
-from settings import embedding_vector_size
+from settings import embedding_model
 
 load_dotenv()
 
@@ -84,7 +84,7 @@ def _raise_from_unexpected(exc: UnexpectedResponse) -> NoReturn:
 class Rag:
     def __init__(self, client: AsyncQdrantClient | None = None) -> None:
         self.client = client or _qdrant_client()
-        self.vector_size = embedding_vector_size()
+        self.vector_size = embedding_model().dims
 
     async def ensure_collection(self) -> None:
         try:

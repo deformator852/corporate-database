@@ -60,15 +60,25 @@ services:
       retries: 10
 
   minio:
-    image: quay.io/minio/minio:latest
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     restart: unless-stopped
-    command: server /data --console-address ":9001"
+    # Loopback only: the API is for the local backend, the console for you.
     ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    env_file:
+      - ./backend/.env
+    # Pass only the root credentials; MINIO_ACCESS_KEY/MINIO_SECRET_KEY in .env
+    # belong to the app user and MinIO would read them as legacy root keys.
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        : "$${MINIO_ROOT_PASSWORD:?is empty; run uv run setup in backend/}"
+        exec env -i PATH="$$PATH" \
+          MINIO_ROOT_USER="$$MINIO_ROOT_USER" \
+          MINIO_ROOT_PASSWORD="$$MINIO_ROOT_PASSWORD" \
+          minio server /data --console-address ":9001"
     volumes:
       - minio_data:/data
     healthcheck:
@@ -80,6 +90,36 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+
+  # Creates the bucket and the least-privilege app user from backend/.env.
+  # Idempotent; runs on every `docker compose up`.
+  minio-init:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    env_file:
+      - ./backend/.env
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        set -euo pipefail
+        : "$${MINIO_SECRET_KEY:?is empty; run uv run setup in backend/}"
+        export MC_CONFIG_DIR=/tmp/mc
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null
+        mc mb --ignore-existing "local/$$MINIO_BUCKET" >/dev/null
+        mc anonymous set none "local/$$MINIO_BUCKET" >/dev/null
+        cat > /tmp/policy.json <<POLICY
+        {"Version": "2012-10-17", "Statement": [{"Effect": "Allow",
+          "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+          "Resource": ["arn:aws:s3:::$$MINIO_BUCKET/*"]}]}
+        POLICY
+        mc admin policy create local corporate-app /tmp/policy.json >/dev/null
+        mc admin user add local "$$MINIO_ACCESS_KEY" "$$MINIO_SECRET_KEY" >/dev/null
+        mc admin policy attach local corporate-app --user "$$MINIO_ACCESS_KEY" >/dev/null
+        echo "MinIO ready: bucket $$MINIO_BUCKET, app user $$MINIO_ACCESS_KEY"
 
   ollama:
     image: ollama/ollama:latest

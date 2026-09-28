@@ -10,18 +10,18 @@ import { applyTheme, readStoredTheme } from "./apply-theme";
 import {
   DEFAULT_THEME,
   THEME_STORAGE_KEY,
-  type Theme,
+  type ThemeOption,
 } from "./themes";
 
 type ThemeContextValue = {
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
+  theme: ThemeOption;
+  setTheme: (theme: ThemeOption) => void;
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(() => {
+  const [theme, setThemeState] = useState<ThemeOption>(() => {
     if (typeof document === "undefined") {
       return DEFAULT_THEME;
     }
@@ -31,12 +31,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return initial;
   });
 
-  const setTheme = useCallback((next: Theme) => {
+  const setTheme = useCallback((next: ThemeOption) => {
     applyTheme(next);
     setThemeState(next);
 
     try {
-      localStorage.setItem(THEME_STORAGE_KEY, next);
+      localStorage.setItem(THEME_STORAGE_KEY, next.id);
     } catch {
       // Ignore persistence failures.
     }

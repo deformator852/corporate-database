@@ -29,6 +29,7 @@
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
   --chart-1: oklch(0.87 0 0);
@@ -51,50 +52,6 @@
   --warning-foreground: oklch(0.28 0.06 55);
   --info: oklch(0.5 0.1 230);
   --info-foreground: oklch(0.985 0 0);
-}
-
-/*
-  Slate theme — cool neutrals + accessible blue.
-  Primary: actions/links. Neutrals: text/surfaces. Semantic: status only.
-*/
-[data-theme="slate"] {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --border: #e2e8f0;
-  --card: #ffffff;
-  --card-foreground: #0f172a;
-  --popover: #ffffff;
-  --popover-foreground: #0f172a;
-  --primary: #1d4ed8;
-  --primary-foreground: #ffffff;
-  --secondary: #f1f5f9;
-  --secondary-foreground: #1e293b;
-  --muted: #f1f5f9;
-  --muted-foreground: #475569;
-  --accent: #eff6ff;
-  --accent-foreground: #1e3a8a;
-  --destructive: #b91c1c;
-  --input: #cbd5e1;
-  --ring: #1d4ed8;
-  --chart-1: #1d4ed8;
-  --chart-2: #0369a1;
-  --chart-3: #15803d;
-  --chart-4: #b45309;
-  --chart-5: #334155;
-  --sidebar: #f1f5f9;
-  --sidebar-foreground: #334155;
-  --sidebar-primary: #1d4ed8;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #eff6ff;
-  --sidebar-accent-foreground: #1e3a8a;
-  --sidebar-border: #e2e8f0;
-  --sidebar-ring: #1d4ed8;
-  --success: #15803d;
-  --success-foreground: #ffffff;
-  --warning: #b45309;
-  --warning-foreground: #ffffff;
-  --info: #0369a1;
-  --info-foreground: #ffffff;
 }
 
 @layer base {
@@ -399,20 +356,17 @@
     }
   }
 
-  [data-theme="slate"] .app-header {
-    background-color: var(--card);
-    backdrop-filter: none;
+  /* Dark themes: header shares the sidebar surface; active link gets an accent edge. */
+  :is([data-theme="slate"], [data-theme="midnight"]) .app-header {
+    background-color: color-mix(in srgb, var(--sidebar) 88%, transparent);
   }
 
-  [data-theme="slate"] .app-layout__nav-link {
-    border-inline-start: 3px solid transparent;
-    border-radius: calc(var(--radius) - 2px);
+  :is([data-theme="slate"], [data-theme="midnight"]) .app-layout__nav-link {
+    border-inline-start: 2px solid transparent;
   }
 
-  [data-theme="slate"] .app-layout__nav-link--active {
-    background-color: var(--accent);
+  :is([data-theme="slate"], [data-theme="midnight"]) .app-layout__nav-link--active {
     border-inline-start-color: var(--primary);
-    color: var(--accent-foreground);
   }
 }
 
@@ -436,6 +390,7 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -481,6 +436,7 @@
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.205 0 0);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
@@ -497,4 +453,98 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+/*
+  Slate — dark graphite-slate surfaces, indigo accents. Applied with the .dark
+  class (see theme/themes.ts); :root raises specificity above .dark.
+  All text pairs are WCAG AA (4.5:1+).
+*/
+:root[data-theme="slate"] {
+  --radius: 0.5rem;
+  --background: #1c2230;
+  --foreground: #e5e9f0;
+  --card: #252c3b;
+  --card-foreground: #e5e9f0;
+  --popover: #283041;
+  --popover-foreground: #e5e9f0;
+  --primary: #818cf8;
+  --primary-foreground: #1e1b4b;
+  --secondary: #2a3242;
+  --secondary-foreground: #e5e9f0;
+  --muted: #2a3242;
+  --muted-foreground: #a3adbf;
+  --accent: #2e3648;
+  --accent-foreground: #f1f5f9;
+  --destructive: #f87171;
+  --destructive-foreground: #1f0707;
+  --border: #323a4b;
+  --input: #3a4356;
+  --ring: #818cf8;
+  --chart-1: #818cf8;
+  --chart-2: #38bdf8;
+  --chart-3: #34d399;
+  --chart-4: #fbbf24;
+  --chart-5: #f472b6;
+  --sidebar: #161b26;
+  --sidebar-foreground: #cbd5e1;
+  --sidebar-primary: #2b3250;
+  --sidebar-primary-foreground: #c7d2fe;
+  --sidebar-accent: #222938;
+  --sidebar-accent-foreground: #f1f5f9;
+  --sidebar-border: #262d3c;
+  --sidebar-ring: #818cf8;
+  --success: #4ade80;
+  --success-foreground: #052e16;
+  --warning: #fbbf24;
+  --warning-foreground: #422006;
+  --info: #7dd3fc;
+  --info-foreground: #0c1a2e;
+}
+
+/*
+  Midnight — dark navy surfaces, teal accents. Applied with the .dark class
+  (see theme/themes.ts); :root raises specificity above .dark.
+  All text pairs are WCAG AA (4.5:1+).
+*/
+:root[data-theme="midnight"] {
+  --radius: 0.625rem;
+  --background: #0b1120;
+  --foreground: #e2e8f0;
+  --card: #111a2e;
+  --card-foreground: #e2e8f0;
+  --popover: #131d33;
+  --popover-foreground: #e2e8f0;
+  --primary: #2dd4bf;
+  --primary-foreground: #042f2e;
+  --secondary: #1b2740;
+  --secondary-foreground: #e2e8f0;
+  --muted: #1b2740;
+  --muted-foreground: #94a3b8;
+  --accent: #1e2a44;
+  --accent-foreground: #f1f5f9;
+  --destructive: #f87171;
+  --destructive-foreground: #1f0707;
+  --border: #1f2a40;
+  --input: #2a3754;
+  --ring: #2dd4bf;
+  --chart-1: #2dd4bf;
+  --chart-2: #60a5fa;
+  --chart-3: #a78bfa;
+  --chart-4: #fbbf24;
+  --chart-5: #f472b6;
+  --sidebar: #080d1a;
+  --sidebar-foreground: #cbd5e1;
+  --sidebar-primary: #123a3f;
+  --sidebar-primary-foreground: #5eead4;
+  --sidebar-accent: #131d33;
+  --sidebar-accent-foreground: #f1f5f9;
+  --sidebar-border: #1a2439;
+  --sidebar-ring: #2dd4bf;
+  --success: #34d399;
+  --success-foreground: #022c22;
+  --warning: #fbbf24;
+  --warning-foreground: #422006;
+  --info: #60a5fa;
+  --info-foreground: #0b1120;
 }

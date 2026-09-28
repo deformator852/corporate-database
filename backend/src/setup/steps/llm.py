@@ -15,7 +15,10 @@ from rich.progress import (
 from rich.prompt import IntPrompt, Prompt
 from rich.table import Table
 
+from settings import LANGUAGES
+
 from ..env import ENV_PATH, env_value, upsert_env
+from .language import current_language
 
 _GIB = 1024**3
 
@@ -29,11 +32,19 @@ class LlmOption:
     ram_recommended: str
 
 
-OPTIONS: tuple[LlmOption, ...] = (
-    LlmOption("llama3.1:8b", "English, 8B", int(4.9 * _GIB), "8 GB", "16 GB"),
-    LlmOption("llama3.2:3b", "Smaller and faster", int(2.0 * _GIB), "4 GB", "8 GB"),
-    LlmOption("qwen2.5:7b", "Multilingual", int(4.7 * _GIB), "8 GB", "16 GB"),
-)
+_LLAMA = LlmOption("llama3.1:8b", "8B, strong in EN/ES/FR", int(4.9 * _GIB), "8 GB", "16 GB")
+_GEMMA_4B = LlmOption("gemma3:4b", "4B, light, 140+ languages", int(3.3 * _GIB), "6 GB", "8 GB")
+_GEMMA_12B = LlmOption("gemma3:12b", "12B, best quality, 140+ languages", int(8.1 * _GIB), "12 GB", "16 GB")
+_QWEN = LlmOption("qwen3:8b", "8B, 119 languages", int(5.2 * _GIB), "8 GB", "16 GB")
+
+# APP_LANGUAGE → models that answer well in that language.
+OPTIONS: dict[str, tuple[LlmOption, ...]] = {
+    "en": (_LLAMA, _GEMMA_12B, _QWEN),
+    "es": (_LLAMA, _GEMMA_12B, _QWEN),
+    "fr": (_LLAMA, _GEMMA_12B, _QWEN),
+    "uk": (_GEMMA_4B, _GEMMA_12B, _QWEN),
+    "tr": (_GEMMA_4B, _GEMMA_12B, _QWEN),
+}
 
 
 def _fmt_bytes(n: int) -> str:
@@ -85,10 +96,11 @@ def _pull(console: Console, tag: str) -> None:
         console.print(f"Pull it later: ollama pull {tag}")
 
 
-def _choose(console: Console, installed: set[str]) -> str:
+def _choose(console: Console, installed: set[str], language: str) -> str:
+    options = OPTIONS[language]
     current = env_value(ENV_PATH, "LLM_MODEL")
     free = shutil.disk_usage("/").free
-    table = Table(title="LLM models")
+    table = Table(title=f"LLM models for {LANGUAGES[language]}")
     table.add_column("#", justify="right")
     table.add_column("Model")
     table.add_column("Disk")
@@ -97,7 +109,7 @@ def _choose(console: Console, installed: set[str]) -> str:
     table.add_column("Downloaded")
     table.add_column("Notes")
     default = 1
-    for index, option in enumerate(OPTIONS, start=1):
+    for index, option in enumerate(options, start=1):
         if option.tag == current:
             default = index
         table.add_row(
@@ -110,8 +122,8 @@ def _choose(console: Console, installed: set[str]) -> str:
             option.summary + ("  (current)" if option.tag == current else ""),
             style="green" if option.tag == current else None,
         )
-    other = len(OPTIONS) + 1
-    catalog = {option.tag for option in OPTIONS}
+    other = len(options) + 1
+    catalog = {option.tag for option in options}
     table.add_row(
         str(other),
         "Other",
@@ -131,8 +143,8 @@ def _choose(console: Console, installed: set[str]) -> str:
 
     while True:
         choice = IntPrompt.ask("Choice", default=default, console=console)
-        if 1 <= choice <= len(OPTIONS):
-            selected = OPTIONS[choice - 1]
+        if 1 <= choice <= len(options):
+            selected = options[choice - 1]
             if (
                 selected.disk_bytes * 11 // 10 > free
                 and selected.tag not in installed
@@ -169,7 +181,7 @@ class LlmStep:
             "A larger LLM usually gives better answers from the documents "
             "that search already found. It does not change retrieval ranking."
         )
-        tag = _choose(console, _installed())
+        tag = _choose(console, _installed(), current_language())
         _pull(console, tag)
         upsert_env(ENV_PATH, "LLM_MODEL", tag)
         console.print(f"Wrote LLM_MODEL={tag} to {ENV_PATH}")

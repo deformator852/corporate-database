@@ -1,6 +1,5 @@
 import io
 import uuid
-from pathlib import Path
 
 from minio import Minio
 from minio.error import S3Error
@@ -27,22 +26,12 @@ class ObjectStorage:
         )
         self.bucket = bucket or minio_bucket()
 
-    def ensure_bucket(self) -> None:
-        try:
-            if not self.client.bucket_exists(self.bucket):
-                self.client.make_bucket(self.bucket)
-        except S3Error as exc:
-            raise AppError(
-                "unavailable",
-                "Could not reach object storage.",
-                status_code=503,
-            ) from exc
-
-    def make_key(self, filename: str) -> str:
-        return f"documents/{uuid.uuid4()}/{Path(filename).name}"
+    def make_key(self) -> str:
+        # No filename: bucket listings must not reveal document names.
+        return f"documents/{uuid.uuid4()}"
 
     def put(self, *, key: str, content: bytes, content_type: str) -> None:
-        self.ensure_bucket()
+        # The bucket is created by minio-init; the app user cannot create or list buckets.
         try:
             self.client.put_object(
                 self.bucket,

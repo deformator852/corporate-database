@@ -5,13 +5,19 @@ import {tr} from "./tr";
 import {uk} from "./uk";
 
 export type {MessageKey};
+/** Keys added by src/custom extensions. */
+export type CustomMessageKey = `custom.${string}`;
 export {en};
 
 export const LOCALES = ["en", "es", "uk", "tr", "fr"] as const;
 export type Locale = (typeof LOCALES)[number];
 
 export const DEFAULT_LOCALE: Locale = "en";
-export const LOCALE_STORAGE_KEY = "ui-locale";
+
+// APP_LANGUAGE from backend/.env, injected by vite.config.ts; set by `uv run setup`.
+export const LOCALE: Locale = isLocale(import.meta.env.APP_LANGUAGE)
+    ? import.meta.env.APP_LANGUAGE
+    : DEFAULT_LOCALE;
 
 export const messages: Record<Locale, Record<MessageKey, string>> = {
     en,
@@ -21,7 +27,11 @@ export const messages: Record<Locale, Record<MessageKey, string>> = {
     fr,
 };
 
-export function isLocale(value: string | null): value is Locale {
+export type MessageOverrides = Partial<
+    Record<Locale, Partial<Record<MessageKey | CustomMessageKey, string>>>
+>;
+
+export function isLocale(value: string | undefined): value is Locale {
     return LOCALES.includes(value as Locale);
 }
 

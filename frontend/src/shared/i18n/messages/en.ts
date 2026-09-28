@@ -9,16 +9,11 @@ export const en = {
     "nav.roles": "Roles",
     "nav.permissions": "Permissions",
 
-    "language.label": "Language",
-    "language.en": "English",
-    "language.es": "Spanish",
-    "language.uk": "Ukrainian",
-    "language.tr": "Turkish",
-    "language.fr": "French",
 
     "theme.label": "Theme",
     "theme.neutral": "Neutral",
     "theme.slate": "Slate",
+    "theme.midnight": "Midnight",
 
     "common.tryAgain": "Try again",
     "common.cancel": "Cancel",

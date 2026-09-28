@@ -90,7 +90,9 @@ export function connectChatSocket(): ChatSocket {
         current.resolve(message.content);
     };
 
-    open();
+    // Deferred so an immediate close() (React StrictMode remount) cancels it
+    // instead of aborting a socket mid-handshake.
+    timer = window.setTimeout(open, 0);
 
     return {
         send(messages) {

@@ -1,12 +1,13 @@
 from celery import Celery
 
+from extensions import task_modules
 from settings import rabbitmq_url
 
 celery = Celery(
     "corporate",
     broker=rabbitmq_url(),
     backend="rpc://",
-    include=["tasks.document"],
+    include=["tasks.document", *task_modules()],
 )
 celery.conf.update(
     task_serializer="json",

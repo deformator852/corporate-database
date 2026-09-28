@@ -9,6 +9,7 @@ load_dotenv()
 
 from api.v1.router import api_router
 from exceptions import AppError
+from extensions import plugins
 from schemas.error import ErrorSchema
 from security import security
 from services.document_events import consume_document_events
@@ -42,6 +43,9 @@ app = FastAPI(
 )
 app.include_router(api_router)
 security.handle_errors(app)
+for plugin in plugins():
+    if hasattr(plugin, "setup"):
+        plugin.setup(app)
 
 
 @app.exception_handler(AppError)

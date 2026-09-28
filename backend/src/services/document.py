@@ -14,6 +14,7 @@ from services.document_access import classifications_for_user
 from services.office import convert_doc_to_docx
 from services.rag import Rag
 from services.storage import ObjectStorage
+from services.upload_check import check_upload
 
 ALLOWED_SUFFIXES = frozenset(
     {
@@ -110,6 +111,7 @@ class DocumentService:
                 raise AppError("invalid", "The file is empty.", status_code=400)
             if len(content) > MAX_BYTES:
                 raise AppError("invalid", "The file is too large.", status_code=400)
+            check_upload(content, suffix)
 
             converted = suffix == DOC_SUFFIX
             filename = Path(original_name).name
@@ -119,7 +121,7 @@ class DocumentService:
                 suffix = ".docx"
 
             content_type = CONTENT_TYPES.get(suffix, "application/octet-stream")
-            object_key = self.storage.make_key(filename)
+            object_key = self.storage.make_key()
             document = Document(
                 name=data.name,
                 filename=filename,

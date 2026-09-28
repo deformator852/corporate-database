@@ -1,9 +1,15 @@
 from fastapi import APIRouter
 
+from extensions import plugins
+
 from . import auth, chat, documents, notifications, permissions, roles, users
 
 api_router = APIRouter(prefix="/api/v1")
 
+# First, so a custom route with the same method + path wins over core.
+for plugin in plugins():
+    if hasattr(plugin, "router"):
+        api_router.include_router(plugin.router)
 api_router.include_router(auth.router)
 api_router.include_router(users.router)
 api_router.include_router(roles.router)

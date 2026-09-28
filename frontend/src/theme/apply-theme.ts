@@ -1,15 +1,16 @@
-import { DEFAULT_THEME, isTheme, type Theme } from "./themes";
+import {DEFAULT_THEME, findTheme, type ThemeOption} from "./themes";
 
-export function applyTheme(theme: Theme) {
+export function applyTheme(theme: ThemeOption) {
   const root = document.documentElement;
-  root.dataset.theme = theme;
-  root.style.colorScheme = "light";
+  root.dataset.theme = theme.id;
+  root.classList.toggle("dark", theme.dark === true);
+  root.style.colorScheme = theme.dark ? "dark" : "light";
 }
 
-export function readStoredTheme(storageKey: string): Theme {
+export function readStoredTheme(storageKey: string): ThemeOption {
   try {
-    const stored = localStorage.getItem(storageKey);
-    if (isTheme(stored)) {
+    const stored = findTheme(localStorage.getItem(storageKey));
+    if (stored) {
       return stored;
     }
   } catch {

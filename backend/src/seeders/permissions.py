@@ -1,6 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from extensions import plugins
 from models.rbac.association import role_permissions
 from models.rbac.permission import Permission
 
@@ -48,6 +49,11 @@ ALL_PERMISSIONS = (
     + ROLE_PERMISSIONS
     + PERMISSION_PERMISSIONS
     + DOCUMENT_PERMISSIONS
+    + tuple(
+        permission
+        for plugin in plugins()
+        for permission in getattr(plugin, "PERMISSIONS", ())
+    )
 )
 
 

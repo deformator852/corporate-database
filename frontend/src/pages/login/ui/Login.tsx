@@ -1,7 +1,6 @@
 import {Database} from "lucide-react";
 import {Card, CardContent, CardDescription, CardHeader, CardTitle,} from "@/components/ui/card";
 import {useI18n} from "@/shared/i18n/I18nProvider";
-import {LanguageSwitcher} from "@/shared/i18n/LanguageSwitcher";
 import {ThemeSwitcher} from "@/theme/ThemeSwitcher";
 import {LoginForm} from "@pages/login/ui/LoginForm.tsx";
 
@@ -10,7 +9,6 @@ export default function Login() {
     return (
         <div className="relative flex min-h-svh flex-col items-center justify-center bg-muted/30 px-4 py-10">
             <div className="absolute top-4 right-4 flex items-center gap-0.5">
-                <LanguageSwitcher />
                 <ThemeSwitcher/>
             </div>
             <div className="mb-8 flex flex-col items-center gap-3 text-center">

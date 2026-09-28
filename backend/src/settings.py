@@ -1,4 +1,5 @@
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote
 
@@ -12,17 +13,40 @@ load_dotenv(ENV_FILE)
 DOCUMENT_EVENTS_EXCHANGE = "document.events"
 NOTIFICATION_EVENTS_EXCHANGE = "notification.events"
 
-EMBEDING_MODEL_ENV_TO_HUGGINGFACE_ID = {
-    "multilingual-e5-small": "intfloat/multilingual-e5-small",
-    "multilingual-e5-base": "intfloat/multilingual-e5-base",
-    "multilingual-e5-large": "intfloat/multilingual-e5-large",
+# APP_LANGUAGE → name used in the LLM system prompt.
+LANGUAGES = {
+    "en": "English",
+    "es": "Spanish",
+    "uk": "Ukrainian",
+    "tr": "Turkish",
+    "fr": "French",
 }
+DEFAULT_LANGUAGE = "en"
 
-# Substring in the resolved model id → Qdrant vector dimension.
-EMBEDDING_MODEL_VARIANT_VECTOR_SIZE = {
-    "e5-small": 384,
-    "e5-base": 768,
-    "e5-large": 1024,
+
+@dataclass(frozen=True, slots=True)
+class EmbeddingSpec:
+    hf_id: str
+    dims: int
+    query_prefix: str = ""
+    passage_prefix: str = ""
+
+
+_E5 = {"query_prefix": "query: ", "passage_prefix": "passage: "}
+_BGE_EN = {"query_prefix": "Represent this sentence for searching relevant passages: "}
+_SOLON = {"query_prefix": "query : "}
+
+# EMBEDING_MODEL value → model spec.
+EMBEDDING_MODELS = {
+    "multilingual-e5-small": EmbeddingSpec("intfloat/multilingual-e5-small", 384, **_E5),
+    "multilingual-e5-base": EmbeddingSpec("intfloat/multilingual-e5-base", 768, **_E5),
+    "multilingual-e5-large": EmbeddingSpec("intfloat/multilingual-e5-large", 1024, **_E5),
+    "bge-small-en": EmbeddingSpec("BAAI/bge-small-en-v1.5", 384, **_BGE_EN),
+    "bge-base-en": EmbeddingSpec("BAAI/bge-base-en-v1.5", 768, **_BGE_EN),
+    "bge-large-en": EmbeddingSpec("BAAI/bge-large-en-v1.5", 1024, **_BGE_EN),
+    "solon-base": EmbeddingSpec("OrdalieTech/Solon-embeddings-base-0.1", 768, **_SOLON),
+    "solon-large": EmbeddingSpec("OrdalieTech/Solon-embeddings-large-0.1", 1024, **_SOLON),
+    "bge-m3": EmbeddingSpec("BAAI/bge-m3", 1024),
 }
 
 
@@ -37,21 +61,26 @@ def _require(name: str) -> str:
     return value
 
 
-def embedding_model_id() -> str:
-    raw = _require("EMBEDING_MODEL")
-    return EMBEDING_MODEL_ENV_TO_HUGGINGFACE_ID.get(raw, raw)
+def language() -> str:
+    value = (os.getenv("APP_LANGUAGE") or DEFAULT_LANGUAGE).strip()
+    if value not in LANGUAGES:
+        raise AppError(
+            "misconfigured",
+            "Unknown APP_LANGUAGE.",
+            status_code=500,
+        )
+    return value
 
 
-def embedding_vector_size() -> int:
-    model = embedding_model_id().lower()
-    for suffix, size in EMBEDDING_MODEL_VARIANT_VECTOR_SIZE.items():
-        if suffix in model:
-            return size
-    raise AppError(
-        "misconfigured",
-        "Unknown embedding model.",
-        status_code=500,
-    )
+def embedding_model() -> EmbeddingSpec:
+    spec = EMBEDDING_MODELS.get(_require("EMBEDING_MODEL"))
+    if spec is None:
+        raise AppError(
+            "misconfigured",
+            "Unknown embedding model.",
+            status_code=500,
+        )
+    return spec
 
 
 def rabbitmq_url() -> str:

@@ -3,7 +3,6 @@ import {Outlet, useLocation} from "react-router";
 
 import {useSessionStore} from "@/shared/auth/session-store";
 import type {SessionUser} from "@/shared/auth/types";
-import {LanguageSwitcher} from "@/shared/i18n/LanguageSwitcher";
 import {useI18n} from "@/shared/i18n/I18nProvider";
 import {ThemeSwitcher} from "@/theme/ThemeSwitcher";
 import {NotificationBell} from "@/widgets/notifications/ui/NotificationBell";
@@ -36,7 +35,6 @@ export default function AppLayout() {
                     </div>
                     <div className="flex shrink-0 items-center gap-0.5">
                         <NotificationBell />
-                        <LanguageSwitcher />
                         <ThemeSwitcher />
                         <span
                             className="mx-1.5 hidden h-4 w-px bg-border sm:block"

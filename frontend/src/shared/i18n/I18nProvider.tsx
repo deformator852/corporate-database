@@ -1,28 +1,23 @@
-import {
-    createContext,
-    useCallback,
-    useContext,
-    useEffect,
-    useMemo,
-    useState,
-    type ReactNode,
-} from "react";
+import {createContext, useContext, useEffect, useMemo, type ReactNode} from "react";
 
 import {
     DEFAULT_LOCALE,
-    isLocale,
-    LOCALE_STORAGE_KEY,
+    LOCALE,
     localeHtmlLang,
     messages,
+    type CustomMessageKey,
     type Locale,
     type MessageKey,
+    type MessageOverrides,
 } from "./messages";
 
-export type TranslateFn = (key: MessageKey, params?: Record<string, string | number>) => string;
+export type TranslateFn = (
+    key: MessageKey | CustomMessageKey,
+    params?: Record<string, string | number>,
+) => string;
 
 type I18nContextValue = {
     locale: Locale;
-    setLocale: (locale: Locale) => void;
     t: TranslateFn;
 };
 
@@ -38,55 +33,26 @@ function interpolate(template: string, params?: Record<string, string | number>)
     });
 }
 
-function readStoredLocale(): Locale {
-    try {
-        const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
-        if (stored === "ja") {
-            return DEFAULT_LOCALE;
-        }
-        if (isLocale(stored)) {
-            return stored;
-        }
-    } catch {
-        // ignore
-    }
-    return DEFAULT_LOCALE;
-}
-
-export function I18nProvider({children}: {children: ReactNode}) {
-    const [locale, setLocaleState] = useState<Locale>(() => readStoredLocale());
-
-    const setLocale = useCallback((next: Locale) => {
-        setLocaleState(next);
-        try {
-            localStorage.setItem(LOCALE_STORAGE_KEY, next);
-        } catch {
-            // ignore
-        }
+export function I18nProvider({
+    children,
+    overrides = [],
+}: {
+    children: ReactNode;
+    overrides?: MessageOverrides[];
+}) {
+    useEffect(() => {
+        document.documentElement.lang = localeHtmlLang(LOCALE);
     }, []);
 
-    useEffect(() => {
-        document.documentElement.lang = localeHtmlLang(locale);
-    }, [locale]);
-
-    const t = useCallback<TranslateFn>(
-        (key, params) => {
-            const table = messages[locale];
-            const fallback = messages[DEFAULT_LOCALE];
-            const template = table[key] ?? fallback[key] ?? key;
-            return interpolate(template, params);
-        },
-        [locale],
-    );
-
-    const value = useMemo(
-        () => ({
-            locale,
-            setLocale,
-            t,
-        }),
-        [locale, setLocale, t],
-    );
+    const value = useMemo(() => {
+        const merge = (locale: Locale): Record<string, string> =>
+            Object.assign({}, messages[locale], ...overrides.map((o) => o[locale]));
+        const table = merge(LOCALE);
+        const fallback = merge(DEFAULT_LOCALE);
+        const t: TranslateFn = (key, params) =>
+            interpolate(table[key] ?? fallback[key] ?? key, params);
+        return {locale: LOCALE, t};
+    }, [overrides]);
 
     return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
