@@ -3,11 +3,14 @@ import {Outlet, useLocation} from "react-router";
 
 import {useSessionStore} from "@/shared/auth/session-store";
 import type {SessionUser} from "@/shared/auth/types";
+import {LanguageSwitcher} from "@/shared/i18n/LanguageSwitcher";
+import {useI18n} from "@/shared/i18n/I18nProvider";
 import {ThemeSwitcher} from "@/theme/ThemeSwitcher";
 import {NotificationBell} from "@/widgets/notifications/ui/NotificationBell";
 import {Sidebar} from "@/widgets/sidebar/ui/Sidebar.tsx";
 
 export default function AppLayout() {
+    const {t} = useI18n();
     const user = useSessionStore((state) => state.user);
     const location = useLocation();
     const pane = location.pathname === "/";
@@ -28,11 +31,12 @@ export default function AppLayout() {
                             <Database className="size-4" strokeWidth={2} />
                         </span>
                         <strong className="truncate text-sm font-semibold tracking-tight">
-                            Corporate Database
+                            {t("app.title")}
                         </strong>
                     </div>
                     <div className="flex shrink-0 items-center gap-0.5">
                         <NotificationBell />
+                        <LanguageSwitcher />
                         <ThemeSwitcher />
                         <span
                             className="mx-1.5 hidden h-4 w-px bg-border sm:block"

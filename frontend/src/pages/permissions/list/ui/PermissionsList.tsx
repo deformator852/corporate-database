@@ -11,6 +11,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import {useI18n} from "@/shared/i18n/I18nProvider";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
 import {getPermissionsPage} from "@pages/permissions/list/api/permissions";
 import {
@@ -31,6 +32,7 @@ type LoadState =
     | {key: string; status: "error"; message: string};
 
 export function PermissionsList() {
+    const {t} = useI18n();
     const [searchParams, setSearchParams] = useSearchParams();
     const page = parsePage(searchParams.get("page"));
     const [reloadKey, setReloadKey] = useState(0);
@@ -53,7 +55,7 @@ export function PermissionsList() {
                         status: "error",
                         message: getApiErrorMessage(
                             reason,
-                            "Could not load permissions.",
+                            t("permissions.loadError"),
                         ),
                     });
                 }
@@ -62,7 +64,7 @@ export function PermissionsList() {
         return () => {
             cancelled = true;
         };
-    }, [page, reloadKey, requestKey]);
+    }, [page, reloadKey, requestKey, t]);
 
     const goToPage = (nextPage: number) => {
         setSearchParams((current) => {
@@ -90,26 +92,23 @@ export function PermissionsList() {
     return (
         <div className="stack stack--lg w-full">
             <div className="stack">
-                <h1 id="permissions-heading">Permissions</h1>
+                <h1 id="permissions-heading">{t("permissions.title")}</h1>
                 <p className="max-w-xl text-muted-foreground">
-                    Application actions. Assign them to roles when needed.
+                    {t("permissions.subtitle")}
                 </p>
             </div>
 
             {status === "error" ? (
                 <div className="flex flex-col items-start gap-3 rounded-xl bg-card px-4 py-8 ring-1 ring-foreground/10">
-                    <p className="font-medium">Could not load permissions</p>
+                    <p className="font-medium">{t("permissions.loadErrorTitle")}</p>
                     <p className="text-sm text-muted-foreground">{error}</p>
                     <Button type="button" onClick={() => setReloadKey((key) => key + 1)}>
-                        Try again
+                        {t("common.tryAgain")}
                     </Button>
                 </div>
             ) : status === "ready" && total === 0 ? (
                 <div className="flex flex-col items-start gap-3 rounded-xl bg-card px-4 py-8 ring-1 ring-foreground/10">
-                    <p className="font-medium">No permissions yet</p>
-                    <p className="text-sm text-muted-foreground">
-                        Permissions are defined by the application.
-                    </p>
+                    <p className="font-medium">{t("permissions.emptyTitle")}</p>
                 </div>
             ) : (
                 <div className="stack">
@@ -117,9 +116,11 @@ export function PermissionsList() {
                         <Table aria-labelledby="permissions-heading">
                             <TableHeader>
                                 <TableRow className="hover:bg-transparent">
-                                    <TableHead className="px-4">Name</TableHead>
-                                    <TableHead>Key</TableHead>
-                                    <TableHead className="px-4">Roles</TableHead>
+                                    <TableHead className="px-4">{t("common.name")}</TableHead>
+                                    <TableHead>{t("common.key")}</TableHead>
+                                    <TableHead className="px-4">
+                                        {t("permissions.table.roles")}
+                                    </TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -129,7 +130,7 @@ export function PermissionsList() {
                                             colSpan={3}
                                             className="px-4 py-8 text-muted-foreground"
                                         >
-                                            Loading permissions…
+                                            {t("permissions.loading")}
                                         </TableCell>
                                     </TableRow>
                                 ) : (
@@ -149,7 +150,7 @@ export function PermissionsList() {
                                                     className="max-w-xs truncate px-4"
                                                     title={roleNames || undefined}
                                                 >
-                                                    {roleNames || "—"}
+                                                    {roleNames || t("common.noDataDash")}
                                                 </TableCell>
                                             </TableRow>
                                         );
@@ -161,11 +162,11 @@ export function PermissionsList() {
 
                     {status === "ready" ? (
                         <nav
-                            aria-label="Pagination"
+                            aria-label={t("common.pagination")}
                             className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
                         >
                             <p className="text-sm text-muted-foreground">
-                                Showing {from}–{to} of {total}
+                                {t("common.showing", {from, to, total})}
                             </p>
                             <div className="flex items-center gap-2">
                                 <Button
@@ -175,10 +176,13 @@ export function PermissionsList() {
                                     disabled={page <= 1}
                                     onClick={() => goToPage(page - 1)}
                                 >
-                                    Previous
+                                    {t("common.previous")}
                                 </Button>
                                 <p className="min-w-24 text-center text-sm text-muted-foreground">
-                                    Page {page} of {Math.max(pages, 1)}
+                                    {t("common.pageOf", {
+                                        page,
+                                        pages: Math.max(pages, 1),
+                                    })}
                                 </p>
                                 <Button
                                     type="button"
@@ -187,7 +191,7 @@ export function PermissionsList() {
                                     disabled={pages === 0 || page >= pages}
                                     onClick={() => goToPage(page + 1)}
                                 >
-                                    Next
+                                    {t("common.next")}
                                 </Button>
                             </div>
                         </nav>

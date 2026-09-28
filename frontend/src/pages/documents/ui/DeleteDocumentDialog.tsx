@@ -11,6 +11,7 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {Button} from "@/components/ui/button";
+import {useI18n} from "@/shared/i18n/I18nProvider";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
 import {deleteDocument} from "@pages/documents/api/documents";
 import type {DocumentListItem} from "@pages/documents/model/documents";
@@ -28,9 +29,10 @@ export function DeleteDocumentDialog({
     onOpenChange,
     onDeleted,
 }: DeleteDocumentDialogProps) {
+    const {t} = useI18n();
     const [pending, setPending] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const name = document?.name ?? "this document";
+    const name = document?.name ?? t("common.thisDocument");
 
     const handleOpenChange = (next: boolean) => {
         if (pending) {
@@ -53,7 +55,7 @@ export function DeleteDocumentDialog({
             onDeleted();
             onOpenChange(false);
         } catch (reason) {
-            setError(getApiErrorMessage(reason, "Could not delete the document."));
+            setError(getApiErrorMessage(reason, t("documents.delete.error")));
         } finally {
             setPending(false);
         }
@@ -63,9 +65,11 @@ export function DeleteDocumentDialog({
         <AlertDialog open={open} onOpenChange={handleOpenChange}>
             <AlertDialogContent>
                 <AlertDialogHeader>
-                    <AlertDialogTitle>Delete {name}?</AlertDialogTitle>
+                    <AlertDialogTitle>
+                        {t("documents.delete.title", {name})}
+                    </AlertDialogTitle>
                     <AlertDialogDescription>
-                        The file and its search data will be removed. This cannot be undone.
+                        {t("documents.delete.description")}
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 {error ? (
@@ -73,12 +77,14 @@ export function DeleteDocumentDialog({
                         role="alert"
                         className="flex gap-2.5 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
                     >
-                        <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+                        <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
                         <p>{error}</p>
                     </div>
                 ) : null}
                 <AlertDialogFooter>
-                    <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+                    <AlertDialogCancel disabled={pending}>
+                        {t("common.cancel")}
+                    </AlertDialogCancel>
                     <Button
                         type="button"
                         variant="destructive"
@@ -87,7 +93,7 @@ export function DeleteDocumentDialog({
                             void handleDelete();
                         }}
                     >
-                        {pending ? "Deleting…" : "Delete"}
+                        {pending ? t("common.deleting") : t("common.delete")}
                     </Button>
                 </AlertDialogFooter>
             </AlertDialogContent>

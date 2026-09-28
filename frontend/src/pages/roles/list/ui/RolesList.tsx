@@ -12,6 +12,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import {useI18n} from "@/shared/i18n/I18nProvider";
 import {can} from "@/shared/lib/api/me";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
 import {getRolesPage} from "@pages/roles/list/api/roles";
@@ -36,6 +37,7 @@ type LoadState =
     | {key: string; status: "error"; message: string};
 
 export function RolesList() {
+    const {t} = useI18n();
     const [searchParams, setSearchParams] = useSearchParams();
     const page = parsePage(searchParams.get("page"));
     const [reloadKey, setReloadKey] = useState(0);
@@ -64,7 +66,7 @@ export function RolesList() {
                     setLoad({
                         key: requestKey,
                         status: "error",
-                        message: getApiErrorMessage(reason, "Could not load roles."),
+                        message: getApiErrorMessage(reason, t("roles.loadError")),
                     });
                 }
             });
@@ -123,37 +125,37 @@ export function RolesList() {
         <div className="stack stack--lg w-full">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="stack">
-                    <h1 id="roles-heading">Roles</h1>
+                    <h1 id="roles-heading">{t("roles.title")}</h1>
                     <p className="max-w-xl text-muted-foreground">
-                        Access groups and their permissions.
+                        {t("roles.subtitle")}
                     </p>
                 </div>
                 {canCreate ? (
                     <Button type="button" className="self-start" onClick={openCreate}>
                         <Plus aria-hidden/>
-                        Create role
+                        {t("roles.create")}
                     </Button>
                 ) : null}
             </div>
 
             {status === "error" ? (
                 <div className="flex flex-col items-start gap-3 rounded-xl bg-card px-4 py-8 ring-1 ring-foreground/10">
-                    <p className="font-medium">Could not load roles</p>
+                    <p className="font-medium">{t("roles.loadErrorTitle")}</p>
                     <p className="text-sm text-muted-foreground">{error}</p>
                     <Button type="button" onClick={() => setReloadKey((key) => key + 1)}>
-                        Try again
+                        {t("common.tryAgain")}
                     </Button>
                 </div>
             ) : status === "ready" && total === 0 ? (
                 <div className="flex flex-col items-start gap-3 rounded-xl bg-card px-4 py-8 ring-1 ring-foreground/10">
-                    <p className="font-medium">No roles yet</p>
+                    <p className="font-medium">{t("roles.emptyTitle")}</p>
                     <p className="text-sm text-muted-foreground">
-                        Create a role to group permissions.
+                        {t("roles.emptyDescription")}
                     </p>
                     {canCreate ? (
                         <Button type="button" onClick={openCreate}>
                             <Plus aria-hidden/>
-                            Create role
+                            {t("roles.create")}
                         </Button>
                     ) : null}
                 </div>
@@ -163,12 +165,12 @@ export function RolesList() {
                         <Table aria-labelledby="roles-heading">
                             <TableHeader>
                                 <TableRow className="hover:bg-transparent">
-                                    <TableHead className="px-4">Name</TableHead>
-                                    <TableHead>Key</TableHead>
-                                    <TableHead>Permissions</TableHead>
+                                    <TableHead className="px-4">{t("common.name")}</TableHead>
+                                    <TableHead>{t("common.key")}</TableHead>
+                                    <TableHead>{t("roles.table.permissions")}</TableHead>
                                     {showActions ? (
                                         <TableHead className="px-4 text-right">
-                                            Actions
+                                            {t("common.actions")}
                                         </TableHead>
                                     ) : null}
                                 </TableRow>
@@ -180,7 +182,7 @@ export function RolesList() {
                                             colSpan={showActions ? 4 : 3}
                                             className="px-4 py-8 text-muted-foreground"
                                         >
-                                            Loading roles…
+                                            {t("roles.loading")}
                                         </TableCell>
                                     </TableRow>
                                 ) : (
@@ -200,7 +202,7 @@ export function RolesList() {
                                                     className="max-w-xs truncate"
                                                     title={permissionNames || undefined}
                                                 >
-                                                    {permissionNames || "—"}
+                                                    {permissionNames || t("common.noDataDash")}
                                                 </TableCell>
                                                 {showActions ? (
                                                     <TableCell className="px-4">
@@ -210,11 +212,13 @@ export function RolesList() {
                                                                     type="button"
                                                                     variant="ghost"
                                                                     size="sm"
-                                                                    aria-label={`Edit ${role.name}`}
+                                                                    aria-label={t("roles.editAria", {
+                                                                        name: role.name,
+                                                                    })}
                                                                     onClick={() => openEdit(role)}
                                                                 >
                                                                     <Pencil aria-hidden/>
-                                                                    Edit
+                                                                    {t("common.edit")}
                                                                 </Button>
                                                             ) : null}
                                                             {canDelete ? (
@@ -224,13 +228,15 @@ export function RolesList() {
                                                                     size="sm"
                                                                     aria-label={
                                                                         role.protected
-                                                                            ? "The Admin role cannot be deleted"
-                                                                            : `Delete ${role.name}`
+                                                                            ? t("roles.cannotDeleteAdmin")
+                                                                            : t("roles.deleteAria", {
+                                                                                  name: role.name,
+                                                                              })
                                                                     }
                                                                     disabled={role.protected}
                                                                     title={
                                                                         role.protected
-                                                                            ? "The Admin role cannot be deleted"
+                                                                            ? t("roles.cannotDeleteAdmin")
                                                                             : undefined
                                                                     }
                                                                     onClick={() =>
@@ -238,7 +244,7 @@ export function RolesList() {
                                                                     }
                                                                 >
                                                                     <Trash2 aria-hidden/>
-                                                                    Delete
+                                                                    {t("common.delete")}
                                                                 </Button>
                                                             ) : null}
                                                         </div>
@@ -254,11 +260,11 @@ export function RolesList() {
 
                     {status === "ready" ? (
                         <nav
-                            aria-label="Pagination"
+                            aria-label={t("common.pagination")}
                             className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
                         >
                             <p className="text-sm text-muted-foreground">
-                                Showing {from}–{to} of {total}
+                                {t("common.showing", {from, to, total})}
                             </p>
                             <div className="flex items-center gap-2">
                                 <Button
@@ -268,10 +274,13 @@ export function RolesList() {
                                     disabled={page <= 1}
                                     onClick={() => goToPage(page - 1)}
                                 >
-                                    Previous
+                                    {t("common.previous")}
                                 </Button>
                                 <p className="min-w-24 text-center text-sm text-muted-foreground">
-                                    Page {page} of {Math.max(pages, 1)}
+                                    {t("common.pageOf", {
+                                        page,
+                                        pages: Math.max(pages, 1),
+                                    })}
                                 </p>
                                 <Button
                                     type="button"
@@ -280,7 +289,7 @@ export function RolesList() {
                                     disabled={pages === 0 || page >= pages}
                                     onClick={() => goToPage(page + 1)}
                                 >
-                                    Next
+                                    {t("common.next")}
                                 </Button>
                             </div>
                         </nav>

@@ -1,19 +1,23 @@
 import {zodResolver} from "@hookform/resolvers/zod";
 import {CircleAlert} from "lucide-react";
+import {useMemo} from "react";
 import {useForm} from "react-hook-form";
 import {useNavigate} from "react-router";
 
 import {login} from "@pages/login/api/login";
+import {createLoginSchema, type LoginFormData} from "@pages/login/schema/loginForm";
+import {useI18n} from "@/shared/i18n/I18nProvider";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
 import {useSessionStore} from "@/shared/auth/session-store";
 import {Button} from "@/components/ui/button";
 import {Field, FieldError, FieldGroup, FieldLabel} from "@/components/ui/field";
 import {Input} from "@/components/ui/input";
-import {type LoginFormData, loginSchema} from "@pages/login/schema/loginForm";
 
 export function LoginForm() {
+    const {t} = useI18n();
     const navigate = useNavigate();
     const setUser = useSessionStore((state) => state.setUser);
+    const loginSchema = useMemo(() => createLoginSchema(t), [t]);
     const {
         register,
         handleSubmit,
@@ -34,7 +38,7 @@ export function LoginForm() {
             await navigate("/");
         } catch (error) {
             setError("root", {
-                message: getApiErrorMessage(error, "Could not sign in. Try again."),
+                message: getApiErrorMessage(error, t("login.errorSignIn")),
             });
         }
     };
@@ -60,11 +64,11 @@ export function LoginForm() {
                 ) : null}
 
                 <Field data-invalid={!!errors.email || undefined}>
-                    <FieldLabel htmlFor="login-email">Email</FieldLabel>
+                    <FieldLabel htmlFor="login-email">{t("common.email")}</FieldLabel>
                     <Input
                         id="login-email"
                         type="email"
-                        placeholder="name@company.com"
+                        placeholder={t("login.emailPlaceholder")}
                         autoComplete="email"
                         aria-invalid={!!errors.email || undefined}
                         aria-describedby={errors.email ? emailErrorId : undefined}
@@ -74,7 +78,7 @@ export function LoginForm() {
                 </Field>
 
                 <Field data-invalid={!!errors.password || undefined}>
-                    <FieldLabel htmlFor="login-password">Password</FieldLabel>
+                    <FieldLabel htmlFor="login-password">{t("common.password")}</FieldLabel>
                     <Input
                         id="login-password"
                         type="password"
@@ -94,10 +98,10 @@ export function LoginForm() {
                             name="remember"
                             className="size-3.5 rounded border border-input accent-primary"
                         />
-                        Remember me
+                        {t("login.rememberMe")}
                     </label>
                     <Button type="button" variant="link" className="h-auto px-0">
-                        Forgot password?
+                        {t("login.forgotPassword")}
                     </Button>
                 </div>
 
@@ -107,7 +111,7 @@ export function LoginForm() {
                     size="lg"
                     disabled={isSubmitting}
                 >
-                    {isSubmitting ? "Signing in…" : "Sign in"}
+                    {isSubmitting ? t("login.signingIn") : t("login.signIn")}
                 </Button>
             </FieldGroup>
         </form>

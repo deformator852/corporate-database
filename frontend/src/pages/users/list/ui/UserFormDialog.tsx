@@ -1,5 +1,6 @@
 import {zodResolver} from "@hookform/resolvers/zod";
 import {CircleAlert} from "lucide-react";
+import {useMemo} from "react";
 import {Controller, useForm} from "react-hook-form";
 
 import {Button} from "@/components/ui/button";
@@ -13,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import {Field, FieldError, FieldGroup, FieldLabel} from "@/components/ui/field";
 import {Input} from "@/components/ui/input";
+import {useI18n} from "@/shared/i18n/I18nProvider";
 import {getApiErrorCode, getApiErrorMessage} from "@/shared/lib/api/errors";
 import {can} from "@/shared/lib/api/me";
 import {createUser, updateUser} from "@pages/users/list/api/users";
@@ -46,8 +48,10 @@ export function UserFormDialog({
     onOpenChange,
     onSaved,
 }: UserFormDialogProps) {
+    const {t} = useI18n();
     const mode = user ? "edit" : "create";
     const canListRoles = can("roles.list");
+    const schema = useMemo(() => createUserFormSchema(t, mode), [t, mode]);
     const {
         register,
         control,
@@ -55,7 +59,7 @@ export function UserFormDialog({
         setError,
         formState: {errors, isSubmitting},
     } = useForm<UserFormData>({
-        resolver: zodResolver(createUserFormSchema(mode)),
+        resolver: zodResolver(schema),
         defaultValues: defaultValues(user),
     });
 
@@ -80,7 +84,7 @@ export function UserFormDialog({
                 setError("email", {
                     message: getApiErrorMessage(
                         error,
-                        "A user with this email already exists",
+                        t("users.form.emailConflict"),
                     ),
                 });
                 return;
@@ -88,7 +92,7 @@ export function UserFormDialog({
             setError("root", {
                 message: getApiErrorMessage(
                     error,
-                    user ? "Could not update user." : "Could not create user.",
+                    user ? t("users.form.updateError") : t("users.form.createError"),
                 ),
             });
         }
@@ -103,9 +107,11 @@ export function UserFormDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md" showCloseButton>
                 <DialogHeader>
-                    <DialogTitle>{user ? "Edit user" : "Create user"}</DialogTitle>
+                    <DialogTitle>
+                        {user ? t("users.form.editTitle") : t("users.form.createTitle")}
+                    </DialogTitle>
                     <DialogDescription className="sr-only">
-                        {user ? "Edit user" : "Create user"}
+                        {user ? t("users.form.editTitle") : t("users.form.createTitle")}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -128,7 +134,9 @@ export function UserFormDialog({
 
                         <div className="grid gap-4 sm:grid-cols-2">
                             <Field data-invalid={!!errors.first_name || undefined}>
-                                <FieldLabel htmlFor="user-first-name">First name</FieldLabel>
+                                <FieldLabel htmlFor="user-first-name">
+                                    {t("users.form.firstName")}
+                                </FieldLabel>
                                 <Input
                                     id="user-first-name"
                                     autoComplete="given-name"
@@ -141,7 +149,9 @@ export function UserFormDialog({
                                 <FieldError id={firstNameErrorId} errors={[errors.first_name]}/>
                             </Field>
                             <Field data-invalid={!!errors.last_name || undefined}>
-                                <FieldLabel htmlFor="user-last-name">Last name</FieldLabel>
+                                <FieldLabel htmlFor="user-last-name">
+                                    {t("users.form.lastName")}
+                                </FieldLabel>
                                 <Input
                                     id="user-last-name"
                                     autoComplete="family-name"
@@ -156,7 +166,7 @@ export function UserFormDialog({
                         </div>
 
                         <Field data-invalid={!!errors.email || undefined}>
-                            <FieldLabel htmlFor="user-email">Email</FieldLabel>
+                            <FieldLabel htmlFor="user-email">{t("common.email")}</FieldLabel>
                             <Input
                                 id="user-email"
                                 type="email"
@@ -170,7 +180,7 @@ export function UserFormDialog({
 
                         <Field data-invalid={!!errors.password || undefined}>
                             <FieldLabel htmlFor="user-password">
-                                {user ? "New password" : "Password"}
+                                {user ? t("users.form.newPassword") : t("common.password")}
                             </FieldLabel>
                             <Input
                                 id="user-password"
@@ -186,7 +196,9 @@ export function UserFormDialog({
                         </Field>
 
                         <fieldset className="flex min-h-0 flex-col gap-2">
-                            <legend className="text-sm font-medium">Roles</legend>
+                            <legend className="text-sm font-medium">
+                                {t("users.form.roles")}
+                            </legend>
                             {canListRoles ? (
                                 <Controller
                                     name="role_keys"
@@ -200,13 +212,13 @@ export function UserFormDialog({
                                             lockedKeys={
                                                 user?.is_last_admin ? ["admin"] : []
                                             }
-                                            lockedReason="The Admin role cannot be removed from the last admin"
+                                            lockedReason={t("users.form.adminRoleLocked")}
                                         />
                                     )}
                                 />
                             ) : (
                                 <p className="text-sm text-muted-foreground">
-                                    You don't have permission to view roles.
+                                    {t("users.form.noRolesPermission")}
                                 </p>
                             )}
                         </fieldset>
@@ -220,16 +232,16 @@ export function UserFormDialog({
                         disabled={isSubmitting}
                         onClick={() => onOpenChange(false)}
                     >
-                        Cancel
+                        {t("common.cancel")}
                     </Button>
                     <Button type="submit" form="user-form" disabled={isSubmitting}>
                         {isSubmitting
                             ? user
-                                ? "Saving…"
-                                : "Creating…"
+                                ? t("common.saving")
+                                : t("common.creating")
                             : user
-                              ? "Save changes"
-                              : "Create user"}
+                              ? t("common.saveChanges")
+                              : t("users.form.createTitle")}
                     </Button>
                 </DialogFooter>
             </DialogContent>

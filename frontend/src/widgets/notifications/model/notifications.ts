@@ -27,13 +27,6 @@ export type NotificationListPage = {
     unread_count: number;
 };
 
-export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
-    "document.completed": "Document ready",
-    "document.store_failed": "Upload failed",
-    "document.queue_failed": "Queue failed",
-    "document.process_failed": "Processing failed",
-};
-
 export function isNotificationType(value: string): value is NotificationType {
     return (NOTIFICATION_TYPES as readonly string[]).includes(value);
 }
@@ -53,12 +46,12 @@ export function isNotificationItem(value: unknown): value is NotificationItem {
     );
 }
 
-export function formatNotificationTime(value: string): string {
+export function formatNotificationTime(value: string, locale?: string): string {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) {
         return value;
     }
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat(locale, {
         dateStyle: "medium",
         timeStyle: "short",
     }).format(date);

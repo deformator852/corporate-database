@@ -3,6 +3,7 @@ import {type FormEvent, type KeyboardEvent} from "react";
 
 import {Button} from "@/components/ui/button";
 import {Textarea} from "@/components/ui/textarea";
+import {useI18n} from "@/shared/i18n/I18nProvider";
 
 type ChatComposerProps = {
     value: string;
@@ -19,6 +20,7 @@ export function ChatComposer({
     onSubmit,
     onCancel,
 }: ChatComposerProps) {
+    const {t} = useI18n();
     const canSend = !pending && value.trim().length > 0;
 
     function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -47,11 +49,11 @@ export function ChatComposer({
     return (
         <form
             className="flex shrink-0 items-end gap-2 border-t border-border p-3"
-            aria-label="Send a message"
+            aria-label={t("chat.sendForm")}
             onSubmit={handleSubmit}
         >
             <label className="sr-only" htmlFor="chat-message">
-                Message
+                {t("chat.messageLabel")}
             </label>
             <Textarea
                 id="chat-message"
@@ -59,7 +61,7 @@ export function ChatComposer({
                 rows={2}
                 value={value}
                 disabled={pending}
-                placeholder="Ask about your documents"
+                placeholder={t("chat.placeholder")}
                 className="max-h-40 min-h-12 resize-none"
                 onChange={(event) => onChange(event.target.value)}
                 onKeyDown={handleKeyDown}
@@ -68,7 +70,7 @@ export function ChatComposer({
                 <Button
                     type="submit"
                     size="icon"
-                    aria-label="Stop generating"
+                    aria-label={t("chat.stop")}
                 >
                     <Square className="size-3.5 fill-current" />
                 </Button>
@@ -77,7 +79,7 @@ export function ChatComposer({
                     type="submit"
                     size="icon"
                     disabled={!canSend}
-                    aria-label="Send"
+                    aria-label={t("chat.send")}
                 >
                     <ArrowUp />
                 </Button>

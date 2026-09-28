@@ -1,24 +1,25 @@
 import {zodResolver} from "@hookform/resolvers/zod";
 import {cn} from "cn";
 import {CircleAlert, FileUp} from "lucide-react";
-import {useRef, useState, type DragEvent} from "react";
+import {useMemo, useRef, useState, type DragEvent} from "react";
 import {useForm} from "react-hook-form";
 
 import {Button} from "@/components/ui/button";
 import {Field, FieldError, FieldGroup, FieldLabel} from "@/components/ui/field";
 import {Input} from "@/components/ui/input";
+import {useI18n} from "@/shared/i18n/I18nProvider";
+import {documentClassificationKey} from "@/shared/i18n/keys";
 import {can} from "@/shared/lib/api/me";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
 import {uploadDocument} from "@pages/documents/api/documents";
 import {
     DOCUMENT_ACCEPT,
-    DOCUMENT_CLASSIFICATION_LABELS,
     allowedUploadClassifications,
     fileStem,
     type DocumentListItem,
 } from "@pages/documents/model/documents";
 import {
-    documentUploadSchema,
+    createDocumentUploadSchema,
     type DocumentUploadFormData,
 } from "@pages/documents/schema/documentUpload";
 
@@ -27,9 +28,11 @@ type DocumentUploadFormProps = {
 };
 
 export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
+    const {t} = useI18n();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [dragging, setDragging] = useState(false);
     const [success, setSuccess] = useState<string | null>(null);
+    const schema = useMemo(() => createDocumentUploadSchema(t), [t]);
     const {
         register,
         handleSubmit,
@@ -40,7 +43,7 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
         reset,
         formState: {errors, isSubmitting},
     } = useForm<DocumentUploadFormData>({
-        resolver: zodResolver(documentUploadSchema),
+        resolver: zodResolver(schema),
         defaultValues: {
             name: "",
             classification: "standard",
@@ -105,12 +108,12 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
             onUploaded?.(accepted);
             setSuccess(
                 accepted.converted
-                    ? "Document uploaded and converted to .docx."
-                    : "Document uploaded.",
+                    ? t("documents.upload.successConverted")
+                    : t("documents.upload.success"),
             );
         } catch (error) {
             setError("root", {
-                message: getApiErrorMessage(error, "Could not upload the document."),
+                message: getApiErrorMessage(error, t("documents.upload.error")),
             });
         }
     }
@@ -138,7 +141,9 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
                 ) : null}
 
                 <Field data-invalid={!!errors.name || undefined}>
-                    <FieldLabel htmlFor="document-name">Name</FieldLabel>
+                    <FieldLabel htmlFor="document-name">
+                        {t("documents.upload.name")}
+                    </FieldLabel>
                     <Input
                         id="document-name"
                         autoComplete="off"
@@ -152,7 +157,9 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
                 </Field>
 
                 <Field data-invalid={!!errors.classification || undefined}>
-                    <FieldLabel htmlFor="document-classification">Access</FieldLabel>
+                    <FieldLabel htmlFor="document-classification">
+                        {t("common.access")}
+                    </FieldLabel>
                     <select
                         id="document-classification"
                         disabled={isSubmitting}
@@ -173,7 +180,7 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
                     >
                         {classifications.map((value) => (
                             <option key={value} value={value}>
-                                {DOCUMENT_CLASSIFICATION_LABELS[value]}
+                                {t(documentClassificationKey(value))}
                             </option>
                         ))}
                     </select>
@@ -184,7 +191,7 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
                 </Field>
 
                 <Field data-invalid={!!errors.file || undefined}>
-                    <FieldLabel htmlFor="document-file">File</FieldLabel>
+                    <FieldLabel htmlFor="document-file">{t("common.file")}</FieldLabel>
                     <div
                         className={`cursor-pointer rounded-lg border border-dashed px-4 py-6 text-center transition-colors ${
                             dragging
@@ -201,12 +208,9 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
                         onDrop={handleDrop}
                     >
                         <FileUp className="mx-auto mb-2 size-5 text-muted-foreground" aria-hidden />
-                        <p className="text-sm">
-                            Drop a file here or{" "}
-                            <span className="font-medium underline-offset-2">choose one</span>
-                        </p>
+                        <p className="text-sm">{t("documents.upload.dropPrompt")}</p>
                         <p className="mt-1 text-sm text-muted-foreground">
-                            {file ? file.name : "PDF, Word, Excel, CSV, XML, JSON, Markdown, or ODT. Up to 32 MB."}
+                            {file ? file.name : t("documents.upload.dropHint")}
                         </p>
                     </div>
                     <input
@@ -227,7 +231,7 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
             </FieldGroup>
 
             <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Uploading..." : "Upload"}
+                {isSubmitting ? t("common.uploading") : t("documents.upload.submit")}
             </Button>
         </form>
     );

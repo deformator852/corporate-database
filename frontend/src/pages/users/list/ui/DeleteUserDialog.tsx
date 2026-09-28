@@ -11,6 +11,7 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {Button} from "@/components/ui/button";
+import {useI18n} from "@/shared/i18n/I18nProvider";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
 import {deleteUser} from "@pages/users/list/api/users";
 import type {UserListItem} from "@pages/users/list/model/users";
@@ -28,9 +29,12 @@ export function DeleteUserDialog({
     onOpenChange,
     onDeleted,
 }: DeleteUserDialogProps) {
+    const {t} = useI18n();
     const [pending, setPending] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const name = user ? `${user.first_name} ${user.last_name}` : "this user";
+    const name = user
+        ? `${user.first_name} ${user.last_name}`
+        : t("common.thisUser");
 
     const handleOpenChange = (next: boolean) => {
         if (pending) {
@@ -53,7 +57,7 @@ export function DeleteUserDialog({
             onDeleted();
             onOpenChange(false);
         } catch (reason) {
-            setError(getApiErrorMessage(reason, "Could not delete user."));
+            setError(getApiErrorMessage(reason, t("users.delete.error")));
         } finally {
             setPending(false);
         }
@@ -63,9 +67,11 @@ export function DeleteUserDialog({
         <AlertDialog open={open} onOpenChange={handleOpenChange}>
             <AlertDialogContent>
                 <AlertDialogHeader>
-                    <AlertDialogTitle>Delete {name}?</AlertDialogTitle>
+                    <AlertDialogTitle>
+                        {t("users.delete.title", {name})}
+                    </AlertDialogTitle>
                     <AlertDialogDescription>
-                        This person will lose access immediately. This cannot be undone.
+                        {t("users.delete.description")}
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 {error ? (
@@ -78,7 +84,9 @@ export function DeleteUserDialog({
                     </div>
                 ) : null}
                 <AlertDialogFooter>
-                    <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+                    <AlertDialogCancel disabled={pending}>
+                        {t("common.cancel")}
+                    </AlertDialogCancel>
                     <Button
                         type="button"
                         variant="destructive"
@@ -87,7 +95,7 @@ export function DeleteUserDialog({
                             void handleDelete();
                         }}
                     >
-                        {pending ? "Deleting…" : "Delete user"}
+                        {pending ? t("common.deleting") : t("users.delete.confirm")}
                     </Button>
                 </AlertDialogFooter>
             </AlertDialogContent>

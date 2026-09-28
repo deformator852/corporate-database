@@ -1,15 +1,16 @@
 import {z} from "zod";
 
+import type {TranslateFn} from "@/shared/i18n/I18nProvider";
 import {keyFromName} from "@/shared/lib/keyFromName";
 
-export function roleFormSchema(mode: "create" | "edit") {
+export function createRoleFormSchema(t: TranslateFn, mode: "create" | "edit") {
     return z
         .object({
             name: z
                 .string()
                 .trim()
-                .min(2, "Enter at least 2 characters")
-                .max(100, "Must be 100 characters or fewer"),
+                .min(2, t("validation.roleNameMin"))
+                .max(100, t("validation.roleNameMax")),
             description: z.string(),
             permission_keys: z.array(z.string()),
         })
@@ -21,10 +22,10 @@ export function roleFormSchema(mode: "create" | "edit") {
                 ctx.addIssue({
                     code: "custom",
                     path: ["name"],
-                    message: "Name must start with a letter",
+                    message: t("validation.roleNameLetter"),
                 });
             }
         });
 }
 
-export type RoleFormData = z.infer<ReturnType<typeof roleFormSchema>>;
+export type RoleFormData = z.infer<ReturnType<typeof createRoleFormSchema>>;

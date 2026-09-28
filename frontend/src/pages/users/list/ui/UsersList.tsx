@@ -13,6 +13,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import {useSessionStore} from "@/shared/auth/session-store";
+import {useI18n} from "@/shared/i18n/I18nProvider";
 import {can} from "@/shared/lib/api/me";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
 import {getUsersPage} from "@pages/users/list/api/users";
@@ -41,6 +42,7 @@ type LoadState =
     | {key: string; status: "error"; message: string};
 
 export function UsersList() {
+    const {t} = useI18n();
     const [searchParams, setSearchParams] = useSearchParams();
     const page = parsePage(searchParams.get("page"));
     const [reloadKey, setReloadKey] = useState(0);
@@ -70,7 +72,7 @@ export function UsersList() {
                     setLoad({
                         key: requestKey,
                         status: "error",
-                        message: getApiErrorMessage(reason, "Could not load users."),
+                        message: getApiErrorMessage(reason, t("users.loadError")),
                     });
                 }
             });
@@ -136,37 +138,37 @@ export function UsersList() {
         <div className="stack stack--lg w-full">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="stack">
-                    <h1 id="users-heading">Users</h1>
+                    <h1 id="users-heading">{t("users.title")}</h1>
                     <p className="max-w-xl text-muted-foreground">
-                        People with access to this workspace.
+                        {t("users.subtitle")}
                     </p>
                 </div>
                 {canCreate ? (
                     <Button type="button" className="self-start" onClick={openCreate}>
                         <Plus aria-hidden/>
-                        Create user
+                        {t("users.create")}
                     </Button>
                 ) : null}
             </div>
 
             {status === "error" ? (
                 <div className="flex flex-col items-start gap-3 rounded-xl bg-card px-4 py-8 ring-1 ring-foreground/10">
-                    <p className="font-medium">Could not load users</p>
+                    <p className="font-medium">{t("users.loadErrorTitle")}</p>
                     <p className="text-sm text-muted-foreground">{error}</p>
                     <Button type="button" onClick={() => setReloadKey((key) => key + 1)}>
-                        Try again
+                        {t("common.tryAgain")}
                     </Button>
                 </div>
             ) : status === "ready" && total === 0 ? (
                 <div className="flex flex-col items-start gap-3 rounded-xl bg-card px-4 py-8 ring-1 ring-foreground/10">
-                    <p className="font-medium">No users yet</p>
+                    <p className="font-medium">{t("users.emptyTitle")}</p>
                     <p className="text-sm text-muted-foreground">
-                        Create a user to give someone access to this workspace.
+                        {t("users.emptyDescription")}
                     </p>
                     {canCreate ? (
                         <Button type="button" onClick={openCreate}>
                             <Plus aria-hidden/>
-                            Create user
+                            {t("users.create")}
                         </Button>
                     ) : null}
                 </div>
@@ -176,12 +178,12 @@ export function UsersList() {
                         <Table aria-labelledby="users-heading">
                             <TableHeader>
                                 <TableRow className="hover:bg-transparent">
-                                    <TableHead className="px-4">Name</TableHead>
-                                    <TableHead>Email</TableHead>
-                                    <TableHead>Role</TableHead>
+                                    <TableHead className="px-4">{t("common.name")}</TableHead>
+                                    <TableHead>{t("common.email")}</TableHead>
+                                    <TableHead>{t("users.table.role")}</TableHead>
                                     {showActions ? (
                                         <TableHead className="px-4 text-right">
-                                            Actions
+                                            {t("common.actions")}
                                         </TableHead>
                                     ) : null}
                                 </TableRow>
@@ -193,7 +195,7 @@ export function UsersList() {
                                             colSpan={showActions ? 4 : 3}
                                             className="px-4 py-8 text-muted-foreground"
                                         >
-                                            Loading users…
+                                            {t("users.loading")}
                                         </TableCell>
                                     </TableRow>
                                 ) : (
@@ -210,7 +212,7 @@ export function UsersList() {
                                                     ? user.roles
                                                           .map((role) => role.name)
                                                           .join(", ")
-                                                    : "—"}
+                                                    : t("common.noDataDash")}
                                             </TableCell>
                                             {showActions ? (
                                                 <TableCell className="px-4">
@@ -220,11 +222,13 @@ export function UsersList() {
                                                                 type="button"
                                                                 variant="ghost"
                                                                 size="sm"
-                                                                aria-label={`Edit ${fullName(user)}`}
+                                                                aria-label={t("users.editAria", {
+                                                                    name: fullName(user),
+                                                                })}
                                                                 onClick={() => openEdit(user)}
                                                             >
                                                                 <Pencil aria-hidden/>
-                                                                Edit
+                                                                {t("common.edit")}
                                                             </Button>
                                                         ) : null}
                                                         {canDelete ? (
@@ -234,19 +238,21 @@ export function UsersList() {
                                                                 size="sm"
                                                                 aria-label={
                                                                     isSelf(user)
-                                                                        ? "You cannot delete your own account"
-                                                                        : `Delete ${fullName(user)}`
+                                                                        ? t("users.cannotDeleteSelf")
+                                                                        : t("users.deleteAria", {
+                                                                              name: fullName(user),
+                                                                          })
                                                                 }
                                                                 disabled={isSelf(user)}
                                                                 title={
                                                                     isSelf(user)
-                                                                        ? "You cannot delete your own account"
+                                                                        ? t("users.cannotDeleteSelf")
                                                                         : undefined
                                                                 }
                                                                 onClick={() => setDeletingUser(user)}
                                                             >
                                                                 <Trash2 aria-hidden/>
-                                                                Delete
+                                                                {t("common.delete")}
                                                             </Button>
                                                         ) : null}
                                                     </div>
@@ -261,11 +267,11 @@ export function UsersList() {
 
                     {status === "ready" ? (
                         <nav
-                            aria-label="Pagination"
+                            aria-label={t("common.pagination")}
                             className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
                         >
                             <p className="text-sm text-muted-foreground">
-                                Showing {from}–{to} of {total}
+                                {t("common.showing", {from, to, total})}
                             </p>
                             <div className="flex items-center gap-2">
                                 <Button
@@ -275,10 +281,13 @@ export function UsersList() {
                                     disabled={page <= 1}
                                     onClick={() => goToPage(page - 1)}
                                 >
-                                    Previous
+                                    {t("common.previous")}
                                 </Button>
                                 <p className="min-w-24 text-center text-sm text-muted-foreground">
-                                    Page {page} of {Math.max(pages, 1)}
+                                    {t("common.pageOf", {
+                                        page,
+                                        pages: Math.max(pages, 1),
+                                    })}
                                 </p>
                                 <Button
                                     type="button"
@@ -287,7 +296,7 @@ export function UsersList() {
                                     disabled={pages === 0 || page >= pages}
                                     onClick={() => goToPage(page + 1)}
                                 >
-                                    Next
+                                    {t("common.next")}
                                 </Button>
                             </div>
                         </nav>

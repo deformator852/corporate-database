@@ -2,11 +2,13 @@ import {useEffect, useState} from "react";
 import {Navigate, Outlet, useLocation} from "react-router";
 
 import {Button} from "@/components/ui/button";
+import {useI18n} from "@/shared/i18n/I18nProvider";
 import {useSessionStore} from "@/shared/auth/session-store";
 import {getMe} from "@/shared/lib/api/me";
 import {getApiErrorMessage, isUnauthorized} from "@/shared/lib/api/errors";
 
 export function SessionGate() {
+    const {t} = useI18n();
     const status = useSessionStore((state) => state.status);
     const user = useSessionStore((state) => state.user);
     const error = useSessionStore((state) => state.error);
@@ -36,9 +38,7 @@ export function SessionGate() {
                     clear();
                     return;
                 }
-                fail(
-                    getApiErrorMessage(reason, "Could not load session."),
-                );
+                fail(getApiErrorMessage(reason, t("session.errorDefault")));
             });
 
         return () => {
@@ -49,12 +49,12 @@ export function SessionGate() {
     if (status === "error") {
         return (
             <div className="flex min-h-svh flex-col items-center justify-center gap-3 px-4">
-                <p className="font-medium">Could not load session</p>
+                <p className="font-medium">{t("session.errorTitle")}</p>
                 <p className="text-center text-sm text-muted-foreground">
-                    {error ?? "Could not load session."}
+                    {error ?? t("session.errorDefault")}
                 </p>
                 <Button type="button" onClick={() => setAttempt((current) => current + 1)}>
-                    Try again
+                    {t("common.tryAgain")}
                 </Button>
             </div>
         );
@@ -63,7 +63,7 @@ export function SessionGate() {
     if (status !== "ready") {
         return (
             <div className="flex min-h-svh items-center justify-center text-sm text-muted-foreground">
-                Loading session…
+                {t("session.loading")}
             </div>
         );
     }

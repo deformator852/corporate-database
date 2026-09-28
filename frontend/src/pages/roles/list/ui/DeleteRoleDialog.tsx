@@ -11,6 +11,7 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {Button} from "@/components/ui/button";
+import {useI18n} from "@/shared/i18n/I18nProvider";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
 import {deleteRole} from "@pages/roles/list/api/roles";
 import type {RoleListItem} from "@pages/roles/list/model/roles";
@@ -28,9 +29,10 @@ export function DeleteRoleDialog({
     onOpenChange,
     onDeleted,
 }: DeleteRoleDialogProps) {
+    const {t} = useI18n();
     const [pending, setPending] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const name = role?.name ?? "this role";
+    const name = role?.name ?? t("common.thisRole");
 
     const handleOpenChange = (next: boolean) => {
         if (pending) {
@@ -53,7 +55,7 @@ export function DeleteRoleDialog({
             onDeleted();
             onOpenChange(false);
         } catch (reason) {
-            setError(getApiErrorMessage(reason, "Could not delete role."));
+            setError(getApiErrorMessage(reason, t("roles.delete.error")));
         } finally {
             setPending(false);
         }
@@ -63,9 +65,11 @@ export function DeleteRoleDialog({
         <AlertDialog open={open} onOpenChange={handleOpenChange}>
             <AlertDialogContent>
                 <AlertDialogHeader>
-                    <AlertDialogTitle>Delete {name}?</AlertDialogTitle>
+                    <AlertDialogTitle>
+                        {t("roles.delete.title", {name})}
+                    </AlertDialogTitle>
                     <AlertDialogDescription>
-                        Users with this role will lose its permissions. This cannot be undone.
+                        {t("roles.delete.description")}
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 {error ? (
@@ -78,7 +82,9 @@ export function DeleteRoleDialog({
                     </div>
                 ) : null}
                 <AlertDialogFooter>
-                    <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+                    <AlertDialogCancel disabled={pending}>
+                        {t("common.cancel")}
+                    </AlertDialogCancel>
                     <Button
                         type="button"
                         variant="destructive"
@@ -87,7 +93,7 @@ export function DeleteRoleDialog({
                             void handleDelete();
                         }}
                     >
-                        {pending ? "Deleting…" : "Delete role"}
+                        {pending ? t("common.deleting") : t("roles.delete.confirm")}
                     </Button>
                 </AlertDialogFooter>
             </AlertDialogContent>

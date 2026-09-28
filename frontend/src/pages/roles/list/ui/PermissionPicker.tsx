@@ -3,6 +3,7 @@ import {useEffect, useRef, useState} from "react";
 import {Button} from "@/components/ui/button";
 import {Checkbox} from "@/components/ui/checkbox";
 import {Input} from "@/components/ui/input";
+import {useI18n} from "@/shared/i18n/I18nProvider";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
 import {getPermissionsPage} from "@pages/permissions/list/api/permissions";
 import type {PermissionRef} from "@pages/roles/list/model/roles";
@@ -46,6 +47,7 @@ export function PermissionPicker({
     onChange,
     enabled,
 }: PermissionPickerProps) {
+    const {t} = useI18n();
     const [search, setSearch] = useState("");
     const [debouncedQuery, setDebouncedQuery] = useState("");
     const [retryKey, setRetryKey] = useState(0);
@@ -93,7 +95,7 @@ export function PermissionPicker({
                     status: "error",
                     message: getApiErrorMessage(
                         reason,
-                        "Could not load permissions.",
+                        t("roles.permissionPicker.loadError"),
                     ),
                 });
             });
@@ -143,7 +145,7 @@ export function PermissionPicker({
                         status: "error",
                         message: getApiErrorMessage(
                             reason,
-                            "Could not load permissions.",
+                            t("roles.permissionPicker.loadError"),
                         ),
                     };
                 });
@@ -215,8 +217,8 @@ export function PermissionPicker({
             <Input
                 type="search"
                 value={search}
-                placeholder="Search permissions"
-                aria-label="Search permissions"
+                placeholder={t("roles.permissionPicker.search")}
+                aria-label={t("roles.permissionPicker.search")}
                 autoComplete="off"
                 onKeyDown={(event) => {
                     if (event.key === "Enter") {
@@ -229,21 +231,23 @@ export function PermissionPicker({
             />
             {value.length > 0 ? (
                 <p className="text-sm text-muted-foreground">
-                    {value.length} selected
+                    {t("common.selectedCount", {count: value.length})}
                 </p>
             ) : null}
             {status === "error" && items.length === 0 ? (
                 <PickerError
-                    message={error ?? "Could not load permissions."}
+                    message={error ?? t("roles.permissionPicker.loadError")}
                     onRetry={retry}
                 />
             ) : status === "loading" && items.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Loading permissions…</p>
+                <p className="text-sm text-muted-foreground">
+                    {t("permissions.loading")}
+                </p>
             ) : status === "ready" && items.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                     {debouncedQuery
-                        ? "No permissions match this search."
-                        : "No permissions are available."}
+                        ? t("roles.permissionPicker.emptySearch")
+                        : t("roles.permissionPicker.empty")}
                 </p>
             ) : (
                 <div
@@ -274,7 +278,7 @@ export function PermissionPicker({
                             ref={sentinelRef}
                             className="px-3 py-2 text-sm text-muted-foreground"
                         >
-                            Loading more…
+                            {t("common.loadingMore")}
                         </div>
                     ) : null}
                 </div>
@@ -296,11 +300,12 @@ function PickerError({
     message: string;
     onRetry: () => void;
 }) {
+    const {t} = useI18n();
     return (
         <div className="flex flex-col items-start gap-2">
             <p className="text-sm text-destructive">{message}</p>
             <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-                Try again
+                {t("common.tryAgain")}
             </Button>
         </div>
     );

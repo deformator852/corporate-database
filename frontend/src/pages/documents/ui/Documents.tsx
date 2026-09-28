@@ -1,6 +1,7 @@
 import {useEffect, useState} from "react";
 import {useSearchParams} from "react-router";
 
+import {useI18n} from "@/shared/i18n/I18nProvider";
 import {can} from "@/shared/lib/api/me";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
 import {connectSocket} from "@/shared/lib/ws";
@@ -33,6 +34,7 @@ type LoadState =
     | {key: string; status: "error"; message: string};
 
 export function Documents() {
+    const {t} = useI18n();
     const canCreate = can("documents.create");
     const canList = can("documents.list");
     const canDelete = can("documents.delete");
@@ -61,7 +63,7 @@ export function Documents() {
                         status: "error",
                         message: getApiErrorMessage(
                             reason,
-                            "Could not load documents.",
+                            t("documents.loadError"),
                         ),
                     });
                 }
@@ -115,9 +117,9 @@ export function Documents() {
     return (
         <div className="stack stack--lg w-full">
             <div className="stack">
-                <h1 id="documents-heading">Documents</h1>
+                <h1 id="documents-heading">{t("documents.title")}</h1>
                 <p className="max-w-xl text-muted-foreground">
-                    Upload files for this workspace.
+                    {t("documents.subtitle")}
                 </p>
             </div>
 
@@ -137,7 +139,7 @@ export function Documents() {
                 </div>
             ) : (
                 <p className="text-sm text-muted-foreground">
-                    You don't have permission to upload documents.
+                    {t("documents.noUploadPermission")}
                 </p>
             )}
 

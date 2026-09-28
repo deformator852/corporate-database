@@ -1,5 +1,6 @@
 import {zodResolver} from "@hookform/resolvers/zod";
 import {CircleAlert} from "lucide-react";
+import {useMemo} from "react";
 import {Controller, useForm} from "react-hook-form";
 
 import {Button} from "@/components/ui/button";
@@ -14,12 +15,16 @@ import {
 import {Field, FieldError, FieldGroup, FieldLabel} from "@/components/ui/field";
 import {Input} from "@/components/ui/input";
 import {Textarea} from "@/components/ui/textarea";
+import {useI18n} from "@/shared/i18n/I18nProvider";
 import {getApiErrorCode, getApiErrorMessage} from "@/shared/lib/api/errors";
 import {can} from "@/shared/lib/api/me";
 import {keyFromName} from "@/shared/lib/keyFromName";
 import {createRole, updateRole} from "@pages/roles/list/api/roles";
 import type {RoleListItem} from "@pages/roles/list/model/roles";
-import {roleFormSchema, type RoleFormData} from "@pages/roles/list/schema/roleForm";
+import {
+    createRoleFormSchema,
+    type RoleFormData,
+} from "@pages/roles/list/schema/roleForm";
 import {PermissionPicker} from "@pages/roles/list/ui/PermissionPicker";
 
 type RoleFormDialogProps = {
@@ -43,8 +48,10 @@ export function RoleFormDialog({
     onOpenChange,
     onSaved,
 }: RoleFormDialogProps) {
+    const {t} = useI18n();
     const mode = role ? "edit" : "create";
     const nameLocked = role != null;
+    const schema = useMemo(() => createRoleFormSchema(t, mode), [t, mode]);
     const {
         register,
         control,
@@ -53,7 +60,7 @@ export function RoleFormDialog({
         watch,
         formState: {errors, isSubmitting},
     } = useForm<RoleFormData>({
-        resolver: zodResolver(roleFormSchema(mode)),
+        resolver: zodResolver(schema),
         defaultValues: defaultValues(role),
     });
     const canListPermissions = can("permissions.list");
@@ -77,7 +84,7 @@ export function RoleFormDialog({
                 setError("name", {
                     message: getApiErrorMessage(
                         error,
-                        "A role with this name already exists",
+                        t("roles.form.nameConflict"),
                     ),
                 });
                 return;
@@ -85,7 +92,7 @@ export function RoleFormDialog({
             setError("root", {
                 message: getApiErrorMessage(
                     error,
-                    role ? "Could not update role." : "Could not create role.",
+                    role ? t("roles.form.updateError") : t("roles.form.createError"),
                 ),
             });
         }
@@ -98,9 +105,11 @@ export function RoleFormDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md" showCloseButton>
                 <DialogHeader>
-                    <DialogTitle>{role ? "Edit role" : "Create role"}</DialogTitle>
+                    <DialogTitle>
+                        {role ? t("roles.form.editTitle") : t("roles.form.createTitle")}
+                    </DialogTitle>
                     <DialogDescription className="sr-only">
-                        {role ? "Edit role" : "Create role"}
+                        {role ? t("roles.form.editTitle") : t("roles.form.createTitle")}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -122,7 +131,9 @@ export function RoleFormDialog({
                         ) : null}
 
                         <Field data-invalid={!!errors.name || undefined}>
-                            <FieldLabel htmlFor="role-name">Name</FieldLabel>
+                            <FieldLabel htmlFor="role-name">
+                                {t("roles.form.name")}
+                            </FieldLabel>
                             <Input
                                 id="role-name"
                                 readOnly={nameLocked}
@@ -138,7 +149,7 @@ export function RoleFormDialog({
                             />
                             {derivedKey ? (
                                 <p className="text-sm text-muted-foreground">
-                                    Key{" "}
+                                    {t("common.key")}{" "}
                                     <span className="font-medium text-foreground">
                                         {derivedKey}
                                     </span>
@@ -148,7 +159,9 @@ export function RoleFormDialog({
                         </Field>
 
                         <Field data-invalid={!!errors.description || undefined}>
-                            <FieldLabel htmlFor="role-description">Description</FieldLabel>
+                            <FieldLabel htmlFor="role-description">
+                                {t("roles.form.description")}
+                            </FieldLabel>
                             <Textarea
                                 id="role-description"
                                 rows={3}
@@ -165,7 +178,9 @@ export function RoleFormDialog({
                         </Field>
 
                         <fieldset className="flex min-h-0 flex-col gap-2">
-                            <legend className="text-sm font-medium">Permissions</legend>
+                            <legend className="text-sm font-medium">
+                                {t("roles.form.permissions")}
+                            </legend>
                             {canListPermissions ? (
                                 <Controller
                                     name="permission_keys"
@@ -181,7 +196,7 @@ export function RoleFormDialog({
                                 />
                             ) : (
                                 <p className="text-sm text-muted-foreground">
-                                    You don't have permission to view permissions.
+                                    {t("roles.form.noPermissionsPermission")}
                                 </p>
                             )}
                         </fieldset>
@@ -195,16 +210,16 @@ export function RoleFormDialog({
                         disabled={isSubmitting}
                         onClick={() => onOpenChange(false)}
                     >
-                        Cancel
+                        {t("common.cancel")}
                     </Button>
                     <Button type="submit" form="role-form" disabled={isSubmitting}>
                         {isSubmitting
                             ? role
-                                ? "Saving…"
-                                : "Creating…"
+                                ? t("common.saving")
+                                : t("common.creating")
                             : role
-                              ? "Save changes"
-                              : "Create role"}
+                              ? t("common.saveChanges")
+                              : t("roles.create")}
                     </Button>
                 </DialogFooter>
             </DialogContent>

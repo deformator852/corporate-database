@@ -1,6 +1,7 @@
 import {useEffect, useRef} from "react";
 
 import type {ChatMessage, ChatStatus} from "@pages/home/model/chat";
+import {useI18n} from "@/shared/i18n/I18nProvider";
 
 type ChatMessagesProps = {
     messages: ChatMessage[];
@@ -17,6 +18,7 @@ function bubbleClass(role: ChatMessage["role"]) {
 }
 
 export function ChatMessages({messages, status, error, onRetry}: ChatMessagesProps) {
+    const {t} = useI18n();
     const scrollerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -30,9 +32,9 @@ export function ChatMessages({messages, status, error, onRetry}: ChatMessagesPro
     if (messages.length === 0 && status === "idle") {
         return (
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-6 py-10 text-center">
-                <p className="text-base font-medium">Ask about your documents</p>
+                <p className="text-base font-medium">{t("chat.emptyTitle")}</p>
                 <p className="max-w-sm text-sm text-muted-foreground">
-                    Answers come only from files you are allowed to access.
+                    {t("chat.emptyDescription")}
                 </p>
             </div>
         );
@@ -44,7 +46,7 @@ export function ChatMessages({messages, status, error, onRetry}: ChatMessagesPro
             role="log"
             aria-live="polite"
             aria-relevant="additions"
-            aria-label="Conversation"
+            aria-label={t("chat.conversation")}
             className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4"
         >
             {messages.map((message) => (
@@ -53,7 +55,7 @@ export function ChatMessages({messages, status, error, onRetry}: ChatMessagesPro
                     className={`rounded-2xl px-3.5 py-2.5 text-sm break-words whitespace-pre-wrap ${bubbleClass(message.role)}`}
                 >
                     <span className="sr-only">
-                        {message.role === "user" ? "You: " : "Assistant: "}
+                        {message.role === "user" ? t("chat.you") : t("chat.assistant")}
                     </span>
                     {message.content}
                 </p>
@@ -62,7 +64,7 @@ export function ChatMessages({messages, status, error, onRetry}: ChatMessagesPro
             {status === "pending" ? (
                 <p
                     className="mr-auto flex max-w-[min(100%,36rem)] items-center gap-1 rounded-2xl bg-muted px-3.5 py-2.5 text-sm text-muted-foreground"
-                    aria-label="Assistant is writing"
+                    aria-label={t("chat.writing")}
                 >
                     <span className="size-1.5 animate-pulse rounded-full bg-muted-foreground" />
                     <span className="size-1.5 animate-pulse rounded-full bg-muted-foreground [animation-delay:150ms]" />
@@ -78,7 +80,7 @@ export function ChatMessages({messages, status, error, onRetry}: ChatMessagesPro
                         className="cursor-pointer font-medium underline-offset-2 hover:underline"
                         onClick={onRetry}
                     >
-                        Try again
+                        {t("chat.retry")}
                     </button>
                 </div>
             ) : null}

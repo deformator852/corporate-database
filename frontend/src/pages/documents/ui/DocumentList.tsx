@@ -10,9 +10,12 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import {useI18n} from "@/shared/i18n/I18nProvider";
 import {
-    DOCUMENT_CLASSIFICATION_LABELS,
-    DOCUMENT_STATUS_LABELS,
+    documentClassificationKey,
+    documentStatusKey,
+} from "@/shared/i18n/keys";
+import {
     type DocumentListItem,
     type DocumentListPage,
     type DocumentStatus,
@@ -41,6 +44,7 @@ export function DocumentList({
     onPageChange,
     onDelete,
 }: DocumentListProps) {
+    const {t} = useI18n();
     const items = data?.items ?? [];
     const total = data?.total ?? 0;
     const pages = data?.pages ?? 0;
@@ -52,10 +56,10 @@ export function DocumentList({
     if (status === "error") {
         return (
             <div className="flex flex-col items-start gap-3 rounded-xl bg-card px-4 py-8 ring-1 ring-foreground/10">
-                <p className="font-medium">Could not load documents</p>
+                <p className="font-medium">{t("documents.loadErrorTitle")}</p>
                 <p className="text-sm text-muted-foreground">{error}</p>
                 <Button type="button" onClick={onRetry}>
-                    Try again
+                    {t("common.tryAgain")}
                 </Button>
             </div>
         );
@@ -64,9 +68,9 @@ export function DocumentList({
     if (status === "ready" && total === 0) {
         return (
             <div className="flex flex-col items-start gap-3 rounded-xl bg-card px-4 py-8 ring-1 ring-foreground/10">
-                <p className="font-medium">No documents yet</p>
+                <p className="font-medium">{t("documents.emptyTitle")}</p>
                 <p className="text-sm text-muted-foreground">
-                    Upload a file to start processing.
+                    {t("documents.emptyDescription")}
                 </p>
             </div>
         );
@@ -78,14 +82,14 @@ export function DocumentList({
                 <Table aria-labelledby={headingId}>
                     <TableHeader>
                         <TableRow className="hover:bg-transparent">
-                            <TableHead className="px-4">Name</TableHead>
-                            <TableHead>File</TableHead>
-                            <TableHead>Access</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="px-4">Progress</TableHead>
+                            <TableHead className="px-4">{t("common.name")}</TableHead>
+                            <TableHead>{t("common.file")}</TableHead>
+                            <TableHead>{t("common.access")}</TableHead>
+                            <TableHead>{t("common.status")}</TableHead>
+                            <TableHead className="px-4">{t("common.progress")}</TableHead>
                             {canDelete ? (
                                 <TableHead className="px-4">
-                                    <span className="sr-only">Actions</span>
+                                    <span className="sr-only">{t("common.actions")}</span>
                                 </TableHead>
                             ) : null}
                         </TableRow>
@@ -97,7 +101,7 @@ export function DocumentList({
                                     colSpan={columns}
                                     className="px-4 py-8 text-muted-foreground"
                                 >
-                                    Loading documents…
+                                    {t("documents.loading")}
                                 </TableCell>
                             </TableRow>
                         ) : (
@@ -114,29 +118,40 @@ export function DocumentList({
                 </Table>
             </Card>
             {status === "ready" && pages > 1 ? (
-                <div className="flex flex-wrap items-center justify-between gap-3">
+                <nav
+                    aria-label={t("common.pagination")}
+                    className="flex flex-wrap items-center justify-between gap-3"
+                >
                     <p className="text-sm text-muted-foreground">
-                        {from}–{to} of {total}
+                        {t("common.showing", {from, to, total})}
                     </p>
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
                         <Button
                             type="button"
                             variant="outline"
+                            size="sm"
                             disabled={page <= 1}
                             onClick={() => onPageChange(page - 1)}
                         >
-                            Previous
+                            {t("common.previous")}
                         </Button>
+                        <p className="min-w-24 text-center text-sm text-muted-foreground">
+                            {t("common.pageOf", {
+                                page,
+                                pages: Math.max(pages, 1),
+                            })}
+                        </p>
                         <Button
                             type="button"
                             variant="outline"
+                            size="sm"
                             disabled={page >= pages}
                             onClick={() => onPageChange(page + 1)}
                         >
-                            Next
+                            {t("common.next")}
                         </Button>
                     </div>
-                </div>
+                </nav>
             ) : null}
         </div>
     );
@@ -151,18 +166,18 @@ function DocumentRow({
     canDelete: boolean;
     onDelete?: (document: DocumentListItem) => void;
 }) {
+    const {t} = useI18n();
     const status = document.status as DocumentStatus;
     return (
         <TableRow>
             <TableCell className="px-4 font-medium">{document.name}</TableCell>
             <TableCell className="text-muted-foreground">{document.filename}</TableCell>
             <TableCell>
-                {DOCUMENT_CLASSIFICATION_LABELS[document.classification] ??
-                    document.classification}
+                {t(documentClassificationKey(document.classification))}
             </TableCell>
             <TableCell>
                 <div className="flex flex-col gap-1">
-                    <span>{DOCUMENT_STATUS_LABELS[status] ?? document.status}</span>
+                    <span>{t(documentStatusKey(status))}</span>
                     {document.status === "failed" && document.error_message ? (
                         <p className="flex items-start gap-1 text-sm text-destructive">
                             <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
@@ -179,7 +194,7 @@ function DocumentRow({
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-valuenow={document.progress}
-                        aria-label={`${document.progress} percent`}
+                        aria-label={`${document.progress}%`}
                     >
                         <div
                             className="h-full bg-primary"
@@ -198,11 +213,13 @@ function DocumentRow({
                             type="button"
                             variant="destructive"
                             size="sm"
-                            aria-label={`Delete ${document.name}`}
+                            aria-label={t("documents.delete.title", {
+                                name: document.name,
+                            })}
                             onClick={() => onDelete?.(document)}
                         >
                             <Trash2 aria-hidden />
-                            Delete
+                            {t("common.delete")}
                         </Button>
                     </div>
                 </TableCell>

@@ -3,13 +3,22 @@ import {useState} from "react";
 
 import {Button} from "@/components/ui/button";
 import {Popover, PopoverContent, PopoverTrigger} from "@/components/ui/popover";
+import {useI18n} from "@/shared/i18n/I18nProvider";
+import type {MessageKey} from "@/shared/i18n/messages";
 
-import {isTheme, THEME_LABELS, THEMES} from "./themes";
+import {isTheme, THEMES, type Theme} from "./themes";
 import {useTheme} from "./ThemeProvider";
 
+const THEME_LABEL_KEYS: Record<Theme, MessageKey> = {
+    neutral: "theme.neutral",
+    slate: "theme.slate",
+};
+
 export function ThemeSwitcher() {
+    const {t} = useI18n();
     const {theme, setTheme} = useTheme();
     const [open, setOpen] = useState(false);
+    const currentLabel = t(THEME_LABEL_KEYS[theme]);
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -19,14 +28,14 @@ export function ThemeSwitcher() {
                         type="button"
                         variant="ghost"
                         size="icon"
-                        aria-label={`Theme: ${THEME_LABELS[theme]}`}
+                        aria-label={`${t("theme.label")}: ${currentLabel}`}
                     />
                 }
             >
                 <Palette />
             </PopoverTrigger>
-            <PopoverContent className="w-44 p-1" aria-label="Theme">
-                <div role="radiogroup" aria-label="Theme" className="flex flex-col">
+            <PopoverContent className="w-44 p-1" aria-label={t("theme.label")}>
+                <div role="radiogroup" aria-label={t("theme.label")} className="flex flex-col">
                     {THEMES.map((option) => {
                         const selected = theme === option;
                         return (
@@ -43,7 +52,7 @@ export function ThemeSwitcher() {
                                     setOpen(false);
                                 }}
                             >
-                                {THEME_LABELS[option]}
+                                {t(THEME_LABEL_KEYS[option])}
                                 {selected ? (
                                     <Check className="size-4" aria-hidden />
                                 ) : null}

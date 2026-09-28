@@ -3,6 +3,9 @@ import {useCallback, useEffect, useRef, useState} from "react";
 
 import {Button} from "@/components/ui/button";
 import {Popover, PopoverContent, PopoverTrigger} from "@/components/ui/popover";
+import {useI18n} from "@/shared/i18n/I18nProvider";
+import {notificationTypeKey} from "@/shared/i18n/keys";
+import {localeIntlTag} from "@/shared/i18n/messages";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
 import {connectSocket} from "@/shared/lib/ws";
 import {
@@ -13,7 +16,6 @@ import {
 import {
     formatNotificationTime,
     isNotificationItem,
-    NOTIFICATION_TYPE_LABELS,
     NOTIFICATIONS_PER_PAGE,
     type NotificationItem,
     type NotificationListPage,
@@ -25,6 +27,7 @@ type LoadState =
     | {status: "error"; message: string};
 
 export function NotificationBell() {
+    const {t, locale} = useI18n();
     const [open, setOpen] = useState(false);
     const [load, setLoad] = useState<LoadState | null>(null);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -68,7 +71,7 @@ export function NotificationBell() {
                         status: "error",
                         message: getApiErrorMessage(
                             reason,
-                            "Could not load notifications.",
+                            t("notifications.loadError"),
                         ),
                     });
                 }
@@ -153,7 +156,7 @@ export function NotificationBell() {
         } catch (reason) {
             setLoad({
                 status: "error",
-                message: getApiErrorMessage(reason, "Could not clear notifications."),
+                message: getApiErrorMessage(reason, t("notifications.clearError")),
             });
         }
     }
@@ -182,7 +185,9 @@ export function NotificationBell() {
     }
 
     const label =
-        unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications";
+        unreadCount > 0
+            ? t("notifications.unread", {count: unreadCount})
+            : t("notifications.label");
 
     return (
         <Popover
@@ -212,9 +217,9 @@ export function NotificationBell() {
                     </span>
                 ) : null}
             </PopoverTrigger>
-            <PopoverContent aria-label="Notifications">
+            <PopoverContent aria-label={t("notifications.label")}>
                 <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
-                    <p className="font-medium">Notifications</p>
+                    <p className="font-medium">{t("notifications.label")}</p>
                     <Button
                         type="button"
                         variant="ghost"
@@ -224,7 +229,7 @@ export function NotificationBell() {
                             void handleClear();
                         }}
                     >
-                        Clear
+                        {t("notifications.clear")}
                     </Button>
                 </div>
                 {load?.status === "error" ? (
@@ -240,18 +245,20 @@ export function NotificationBell() {
                                         status: "error",
                                         message: getApiErrorMessage(
                                             reason,
-                                            "Could not load notifications.",
+                                            t("notifications.loadError"),
                                         ),
                                     });
                                 });
                             }}
                         >
-                            Try again
+                            {t("common.tryAgain")}
                         </Button>
                     </div>
                 ) : !data || data.items.length === 0 ? (
                     <p className="px-3 py-6 text-sm text-muted-foreground">
-                        {load == null ? "Loading notifications…" : "No notifications"}
+                        {load == null
+                            ? t("notifications.loading")
+                            : t("notifications.empty")}
                     </p>
                 ) : (
                     <ul
@@ -267,12 +274,15 @@ export function NotificationBell() {
                                 className="border-b px-3 py-2.5 last:border-b-0"
                             >
                                 <p className="font-medium">
-                                    {NOTIFICATION_TYPE_LABELS[item.type]}
+                                    {t(notificationTypeKey(item.type))}
                                 </p>
                                 <p className="text-sm text-muted-foreground">{item.message}</p>
                                 <p className="mt-1 text-xs text-muted-foreground">
                                     <time dateTime={item.created_at}>
-                                        {formatNotificationTime(item.created_at)}
+                                        {formatNotificationTime(
+                                            item.created_at,
+                                            localeIntlTag(locale),
+                                        )}
                                     </time>
                                 </p>
                             </li>

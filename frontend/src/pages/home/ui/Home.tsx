@@ -9,12 +9,14 @@ import {
 } from "@pages/home/model/chat";
 import {ChatComposer} from "@pages/home/ui/ChatComposer";
 import {ChatMessages} from "@pages/home/ui/ChatMessages";
+import {useI18n} from "@/shared/i18n/I18nProvider";
 
 function nextId() {
     return crypto.randomUUID();
 }
 
 function Home() {
+    const {t} = useI18n();
     const socketRef = useRef<ChatSocket | null>(null);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [draft, setDraft] = useState("");
@@ -33,7 +35,7 @@ function Home() {
     async function send(history: ChatMessage[]) {
         const socket = socketRef.current;
         if (socket == null) {
-            setError("Could not send the message.");
+            setError(t("chat.errorSend"));
             setStatus("error");
             return;
         }
@@ -57,7 +59,7 @@ function Home() {
             const message =
                 caught instanceof ChatRequestError
                     ? caught.message
-                    : "Could not send the message.";
+                    : t("chat.errorSend");
             setError(message);
             setStatus("error");
         }
@@ -88,13 +90,13 @@ function Home() {
 
     return (
         <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-            <h1 className="sr-only">Assistant</h1>
+            <h1 className="sr-only">{t("chat.title")}</h1>
             <section
-                aria-label="Assistant chat"
+                aria-label={t("chat.panelLabel")}
                 className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10"
             >
                 <header className="flex shrink-0 items-center border-b border-border px-4 py-3">
-                    <p className="text-sm font-medium">Assistant</p>
+                    <p className="text-sm font-medium">{t("chat.title")}</p>
                 </header>
                 <ChatMessages
                     messages={messages}

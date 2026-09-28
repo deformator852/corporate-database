@@ -6,27 +6,32 @@ import {
     fileExtension,
     MAX_DOCUMENT_BYTES,
 } from "@pages/documents/model/documents";
+import type {TranslateFn} from "@/shared/i18n/I18nProvider";
 
 const allowed = new Set<string>(DOCUMENT_EXTENSIONS);
 
-export const documentUploadSchema = z.object({
-    name: z
-        .string()
-        .trim()
-        .min(1, "Enter a name")
-        .max(200, "Name is too long"),
-    classification: z.enum(DOCUMENT_CLASSIFICATIONS),
-    file: z
-        .instanceof(File, {message: "Choose a file"})
-        .refine((file) => file.size > 0, "The file is empty.")
-        .refine(
-            (file) => file.size <= MAX_DOCUMENT_BYTES,
-            "The file is too large.",
-        )
-        .refine(
-            (file) => allowed.has(fileExtension(file.name)),
-            "This file type is not supported.",
-        ),
-});
+export function createDocumentUploadSchema(t: TranslateFn) {
+    return z.object({
+        name: z
+            .string()
+            .trim()
+            .min(1, t("validation.enterName"))
+            .max(200, t("validation.nameTooLong")),
+        classification: z.enum(DOCUMENT_CLASSIFICATIONS),
+        file: z
+            .instanceof(File, {message: t("validation.chooseFile")})
+            .refine((file) => file.size > 0, t("validation.fileEmpty"))
+            .refine(
+                (file) => file.size <= MAX_DOCUMENT_BYTES,
+                t("validation.fileTooLarge"),
+            )
+            .refine(
+                (file) => allowed.has(fileExtension(file.name)),
+                t("validation.fileTypeUnsupported"),
+            ),
+    });
+}
 
-export type DocumentUploadFormData = z.infer<typeof documentUploadSchema>;
+export type DocumentUploadFormData = z.infer<
+    ReturnType<typeof createDocumentUploadSchema>
+>;
