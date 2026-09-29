@@ -1,36 +1,49 @@
 import asyncio
+import logging
+import time
+from pathlib import Path
 from collections.abc import Awaitable, Callable
 
 from chonkie import RecursiveChunker
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import AsyncSessionLocal
+from database import AsyncSessionLocal, engine
 from exceptions import AppError
 from models.document import Document, DocumentStatus
 from models.document_text import DocumentText
 from models.notification import Notification, NotificationType
-from services.document_events import DocumentEventPublisher
+from services.documents.events import DocumentEventPublisher
 from services.embedding import EmbeddingModel
-from services.notification import NotificationService
-from services.notification_events import NotificationEventPublisher
-from services.parser import DocumentParser
+from services.notifications.notification import NotificationService
+from services.notifications.events import NotificationEventPublisher
+from services.documents.parser import DocumentParser
 from services.rag import Rag
 from services.storage import ObjectStorage
+from services.documents.text_cleanup import LlmCleaner, basic_clean
+from settings import (
+    chunk_overlap,
+    chunk_size,
+    text_cleanup_budget_seconds,
+    text_cleanup_mode,
+)
 
 EMBED_BATCH_SIZE = 8
-CHUNK_SIZE = 800
-CHUNK_OVERLAP = 150
 _DONE = {DocumentStatus.COMPLETED, DocumentStatus.FAILED}
+# Data, not prose: no LLM rewrite and no line-dropping rules, which could
+# only lose values there.
+_STRUCTURED = frozenset({".csv", ".json", ".xml", ".xlsx"})
+
+logger = logging.getLogger(__name__)
 
 
-def _split_text(chunker: RecursiveChunker, text: str) -> list[str]:
+def _split_text(chunker: RecursiveChunker, text: str, overlap: int) -> list[str]:
     pieces = [piece for piece in chunker.chunk(text) if piece.text.strip()]
     chunks: list[str] = []
     for index, piece in enumerate(pieces):
         start = piece.start_index
         if index:
-            start = max(0, piece.start_index - CHUNK_OVERLAP)
+            start = max(0, piece.start_index - overlap)
         chunk = text[start : piece.end_index].strip()
         if chunk:
             chunks.append(chunk)
@@ -67,22 +80,31 @@ class DocumentProcessor:
             await self.rag.delete_document(document.id)
             await self._set(document, DocumentStatus.PARSING, 15)
             text = await asyncio.to_thread(self.parser.parse, content, document.filename)
-            # Chat reads this instead of re-parsing the file per question.
+            # Chat reads this (the original) instead of re-parsing per question.
             await self.session.merge(DocumentText(document_id=document.id, text=text))
-            await self._set(document, DocumentStatus.CHUNKING, 30)
-            chunks = _split_text(self.chunker, text)
+            await self._set(document, DocumentStatus.CHUNKING, 25)
+            mode = text_cleanup_mode()
+            structured = Path(document.filename).suffix.lower() in _STRUCTURED
+            if mode != "off":
+                text = basic_clean(text, structured=structured)
+            # `chunks` go to the Qdrant payload (rules only, faithful);
+            # `searchable` is what gets embedded.
+            chunks = _split_text(self.chunker, text, chunk_overlap())
             if not chunks:
                 raise AppError("invalid", "The document has no text.", status_code=400)
-            await self._set(document, DocumentStatus.EMBEDDING, 35)
+            searchable = chunks
+            if mode == "llm" and not structured:
+                searchable = await self._llm_clean(document, chunks)
+            await self._set(document, DocumentStatus.EMBEDDING, 60)
             vectors: list[list[float]] = []
-            total = len(chunks)
+            total = len(searchable)
             for start in range(0, total, EMBED_BATCH_SIZE):
-                batch = chunks[start : start + EMBED_BATCH_SIZE]
+                batch = searchable[start : start + EMBED_BATCH_SIZE]
                 vectors.extend(
                     await asyncio.to_thread(self.embedder.embed_passages, batch)
                 )
                 done = min(start + EMBED_BATCH_SIZE, total)
-                progress = 35 + int(60 * done / total)
+                progress = 60 + int(35 * done / total)
                 await self._set(document, DocumentStatus.EMBEDDING, progress)
             await self.rag.upsert_chunks(
                 document_id=document.id,
@@ -121,6 +143,35 @@ class DocumentProcessor:
             except AppError:
                 pass
             raise
+
+    async def _llm_clean(self, document: Document, chunks: list[str]) -> list[str]:
+        """LLM-cleaned chunks for embedding, within the per-document time
+        budget; chunks past the budget keep their rules-only text."""
+        await self._set(document, DocumentStatus.CLEANING, 30)
+        cleaner = LlmCleaner()
+        deadline = time.monotonic() + text_cleanup_budget_seconds()
+        cleaned: list[str] = []
+        total = len(chunks)
+        progress = 30
+        for index, chunk in enumerate(chunks, start=1):
+            if time.monotonic() < deadline:
+                chunk = await cleaner.clean(chunk)
+            cleaned.append(chunk)
+            next_progress = 30 + int(30 * index / total)
+            if next_progress != progress:
+                progress = next_progress
+                await self._set(document, DocumentStatus.CLEANING, progress)
+        rewritten = sum(a != b for a, b in zip(chunks, cleaned, strict=True))
+        logger.info(
+            "Document %s cleanup: %s of %s chunks rewritten, %s rewrites rejected, "
+            "%s past the time budget",
+            document.id,
+            rewritten,
+            total,
+            cleaner.rejected,
+            max(0, total - cleaner.attempted),
+        )
+        return cleaned
 
     async def fail(self, document_id: int, message: str) -> None:
         document = await self._require(document_id)
@@ -202,6 +253,21 @@ class DocumentProcessor:
             pass
 
 
+async def unfinished_document_ids() -> list[int]:
+    """Documents not completed or failed. Nothing runs while the (single)
+    worker starts, so these lost their job: a crash, a restart, a bug."""
+    try:
+        async with AsyncSessionLocal() as session:
+            ids = await session.scalars(
+                select(Document.id)
+                .where(Document.status.not_in(_DONE))
+                .order_by(Document.id)
+            )
+            return list(ids)
+    finally:
+        await engine.dispose()
+
+
 async def process_document_job(document_id: int) -> None:
     await _with_processor(lambda processor: processor.run(document_id))
 
@@ -219,7 +285,8 @@ async def _with_processor(
 ) -> None:
     storage = ObjectStorage()
     parser = DocumentParser()
-    chunker = RecursiveChunker(tokenizer="character", chunk_size=CHUNK_SIZE)
+    # Sizes come from .env (CHUNK_SIZE, CHUNK_OVERLAP) at job time.
+    chunker = RecursiveChunker(tokenizer="character", chunk_size=chunk_size())
     embedder = EmbeddingModel()
     rag = Rag()
     events = DocumentEventPublisher()
@@ -241,3 +308,6 @@ async def _with_processor(
         await rag.client.close()
         await events.close()
         await note_events.close()
+        # Each Celery task runs its own event loop (asyncio.run); pooled
+        # connections are bound to this one and break the next task.
+        await engine.dispose()

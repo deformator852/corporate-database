@@ -11,7 +11,7 @@ from models.rbac.constants import ADMIN_ROLE_KEY
 from models.rbac.role import Role
 from models.user import User
 from schemas.user import UserCreateSchema, UserUpdateSchema
-from services.document_access import user_permission_keys
+from services.documents.access import user_permission_keys
 from services.grant import ensure_can_grant, ensure_can_manage, role_keys
 from services.password import hash_password
 

@@ -7,10 +7,10 @@ from exceptions import AppError
 from models.document import Document, DocumentStatus
 from models.document_text import DocumentText
 from schemas.chat import ChatMessageSchema
-from services.document_access import retrieval_classifications, user_permission_keys
+from services.documents.access import retrieval_classifications, user_permission_keys
 from services.embedding import EmbeddingModel
 from services.generator import OllamaGenerator, OnDelta
-from services.parser import DocumentParser
+from services.documents.parser import DocumentParser
 from services.rag import Rag
 from services.storage import ObjectStorage
 

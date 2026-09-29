@@ -1,8 +1,9 @@
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from exceptions import AppError
 from models.notification import Notification, NotificationType
-from services.notification_events import NotificationEventPublisher
+from services.notifications.events import NotificationEventPublisher
 
 
 class NotificationService:
@@ -65,6 +66,19 @@ class NotificationService:
             )
             .values(read=True)
         )
+        await self.session.commit()
+
+    async def delete(self, user_id: int, notification_id: int) -> None:
+        """Dismisses one of the user's own notifications."""
+        notification = await self.session.scalar(
+            select(Notification).where(
+                Notification.id == notification_id,
+                Notification.user_id == user_id,
+            )
+        )
+        if notification is None:
+            raise AppError("not_found", "Notification not found", status_code=404)
+        await self.session.delete(notification)
         await self.session.commit()
 
     async def clear(self, user_id: int) -> None:

@@ -21,6 +21,7 @@ export const DOCUMENT_STATUSES = [
     "queued",
     "parsing",
     "chunking",
+    "cleaning",
     "embedding",
     "completed",
     "failed",
@@ -68,6 +69,7 @@ export const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
     queued: "Queued",
     parsing: "Parsing",
     chunking: "Chunking",
+    cleaning: "Cleaning up",
     embedding: "Embedding",
     completed: "Completed",
     failed: "Failed",
@@ -77,9 +79,10 @@ export const DOCUMENT_STATUS_RANK: Record<DocumentStatus, number> = {
     queued: 0,
     parsing: 1,
     chunking: 2,
-    embedding: 3,
-    completed: 4,
-    failed: 4,
+    cleaning: 3,
+    embedding: 4,
+    completed: 5,
+    failed: 5,
 };
 
 export function isDocumentStatus(value: string): value is DocumentStatus {

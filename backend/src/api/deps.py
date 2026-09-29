@@ -13,8 +13,8 @@ from models.user import User
 from security import security, user_session_valid
 from services.audit import AuditService
 from services.auth import AuthService
-from services.document import DocumentService
-from services.notification import NotificationService
+from services.documents.document import DocumentService
+from services.notifications.notification import NotificationService
 from services.permission import PermissionService
 from services.role import RoleService
 from services.storage import ObjectStorage

@@ -9,6 +9,7 @@ from settings import (
     minio_access_key,
     minio_bucket,
     minio_endpoint,
+    minio_region,
     minio_secret_key,
     minio_secure,
 )
@@ -23,6 +24,7 @@ class ObjectStorage:
             access_key=minio_access_key(),
             secret_key=minio_secret_key(),
             secure=minio_secure(),
+            region=minio_region(),
         )
         self.bucket = bucket or minio_bucket()
 

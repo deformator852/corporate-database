@@ -10,11 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from exceptions import AppError
 from models.document import Document, DocumentStatus
 from schemas.document import DocumentUploadSchema
-from services.document_access import classifications_for_user
-from services.office import convert_doc_to_docx
+from services.documents.access import classifications_for_user
+from services.documents.office import convert_doc_to_docx
 from services.rag import Rag
 from services.storage import ObjectStorage
-from services.upload_check import check_upload
+from services.documents.upload_check import check_upload
 
 ALLOWED_SUFFIXES = frozenset(
     {

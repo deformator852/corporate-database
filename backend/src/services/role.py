@@ -9,7 +9,7 @@ from models.rbac.permission import Permission
 from models.rbac.role import Role
 from schemas.key import key_from_name
 from schemas.role import RoleCreateSchema, RoleWriteSchema
-from services.document_access import user_permission_keys
+from services.documents.access import user_permission_keys
 from services.grant import ensure_can_grant, ensure_can_manage, role_keys
 
 

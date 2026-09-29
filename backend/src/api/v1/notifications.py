@@ -18,8 +18,8 @@ from schemas.notification import (
     NotificationReadSchema,
 )
 from security import get_ws_payload
-from services.notification import NotificationService
-from services.notification_hub import hub
+from services.notifications.notification import NotificationService
+from services.notifications.hub import hub
 
 router = APIRouter(
     prefix="/notifications",
@@ -67,6 +67,20 @@ async def mark_notifications_read(
     service: NotificationService = Depends(get_notification_service),
 ) -> Response:
     await service.mark_read(user.id, payload.ids)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete(
+    "/{notification_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={**ERROR_RESPONSES, 404: {"model": ErrorSchema}},
+)
+async def delete_notification(
+    notification_id: int,
+    user: User = Depends(get_current_user),
+    service: NotificationService = Depends(get_notification_service),
+) -> Response:
+    await service.delete(user.id, notification_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

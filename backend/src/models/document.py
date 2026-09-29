@@ -11,6 +11,7 @@ class DocumentStatus(StrEnum):
     QUEUED = "queued"
     PARSING = "parsing"
     CHUNKING = "chunking"
+    CLEANING = "cleaning"
     EMBEDDING = "embedding"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -49,7 +50,8 @@ class Document(TimestampMixin, Base):
         CheckConstraint("length(name) BETWEEN 1 AND 200"),
         CheckConstraint("progress BETWEEN 0 AND 100"),
         CheckConstraint(
-            "status IN ('queued','parsing','chunking','embedding','completed','failed')"
+            "status IN ('queued','parsing','chunking','cleaning','embedding',"
+            "'completed','failed')"
         ),
         CheckConstraint(
             "classification IN ('standard','restricted','confidential','secret')",

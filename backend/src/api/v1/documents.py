@@ -28,9 +28,9 @@ from schemas.document import (
 from schemas.error import ErrorSchema
 from security import get_ws_payload
 from services.audit import AuditService
-from services.document import DocumentService
-from services.document_access import classifications_for_user
-from services.document_hub import hub
+from services.documents.document import DocumentService
+from services.documents.access import classifications_for_user
+from services.documents.hub import hub
 
 router = APIRouter(
     prefix="/documents",

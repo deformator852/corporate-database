@@ -15,12 +15,12 @@ from exceptions import AppError
 from extensions import plugins
 from schemas.error import ErrorSchema
 from security import security
-from services.document_events import consume_document_events
-from services.document_hub import hub
+from services.documents.events import consume_document_events
+from services.documents.hub import hub
 from services.embedding import get_embedding_model
 from services.generator import OllamaGenerator
-from services.notification_events import consume_notification_events
-from services.notification_hub import dispatch_notification
+from services.notifications.events import consume_notification_events
+from services.notifications.hub import dispatch_notification
 
 
 logger = logging.getLogger(__name__)

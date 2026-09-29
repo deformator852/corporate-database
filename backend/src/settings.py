@@ -111,6 +111,13 @@ def minio_bucket() -> str:
     return os.getenv("MINIO_BUCKET") or "documents"
 
 
+def minio_region() -> str:
+    """Passing the region stops the client from asking the server for the
+    bucket location before every call, which the least-privilege app user is
+    not allowed to do (AccessDenied)."""
+    return (os.getenv("MINIO_REGION") or "us-east-1").strip()
+
+
 def minio_secure() -> bool:
     return (os.getenv("MINIO_SECURE") or "false").strip().lower() in {
         "1",
@@ -138,6 +145,85 @@ def llm_num_ctx() -> int:
             "misconfigured", "LLM_NUM_CTX must be at least 4096.", status_code=500
         )
     return value
+
+
+# Chunk size and overlap in characters; see setup/steps/chunking.py for what
+# each size is good at.
+DEFAULT_CHUNK_SIZE = 800
+DEFAULT_CHUNK_OVERLAP = 150
+MIN_CHUNK_SIZE = 200
+MAX_CHUNK_SIZE = 4000
+
+
+def _live_int(name: str, default: int) -> int:
+    # Read from .env per call: a change applies to the next upload without a
+    # worker restart.
+    raw = (dotenv_values(ENV_FILE).get(name) or os.getenv(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise AppError(
+            "misconfigured", f"{name} must be a number.", status_code=500
+        ) from exc
+
+
+def chunk_size() -> int:
+    value = _live_int("CHUNK_SIZE", DEFAULT_CHUNK_SIZE)
+    if not MIN_CHUNK_SIZE <= value <= MAX_CHUNK_SIZE:
+        raise AppError(
+            "misconfigured",
+            f"CHUNK_SIZE must be {MIN_CHUNK_SIZE}-{MAX_CHUNK_SIZE}.",
+            status_code=500,
+        )
+    return value
+
+
+def chunk_overlap() -> int:
+    """At most half the chunk: beyond that every piece of text is stored and
+    embedded twice or more."""
+    value = _live_int("CHUNK_OVERLAP", DEFAULT_CHUNK_OVERLAP)
+    if not 0 <= value <= chunk_size() // 2:
+        raise AppError(
+            "misconfigured",
+            "CHUNK_OVERLAP must be between 0 and half of CHUNK_SIZE.",
+            status_code=500,
+        )
+    return value
+
+
+TEXT_CLEANUP_MODES = ("llm", "rules", "off")
+
+
+def text_cleanup_mode() -> str:
+    """How chunks are cleaned before embedding: rules and then the LLM, rules
+    only, or not at all. Read per document, so a change applies to the next
+    upload without restarting the worker."""
+    value = (
+        dotenv_values(ENV_FILE).get("TEXT_CLEANUP") or os.getenv("TEXT_CLEANUP") or "llm"
+    ).strip()
+    if value not in TEXT_CLEANUP_MODES:
+        raise AppError(
+            "misconfigured",
+            "TEXT_CLEANUP must be llm, rules or off.",
+            status_code=500,
+        )
+    return value
+
+
+def text_cleanup_budget_seconds() -> int:
+    """LLM cleanup time per document. Chunks past it get rules only, so large
+    files still finish inside the worker's time limit."""
+    raw = (os.getenv("TEXT_CLEANUP_BUDGET_SECONDS") or "480").strip()
+    try:
+        return max(0, int(raw))
+    except ValueError as exc:
+        raise AppError(
+            "misconfigured",
+            "TEXT_CLEANUP_BUDGET_SECONDS must be a number.",
+            status_code=500,
+        ) from exc
 
 
 def llm_model() -> str:
