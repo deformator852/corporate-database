@@ -6,6 +6,7 @@ import {
     type ChatAskMessage,
     type ChatCancelMessage,
     type ChatMessage,
+    type ChatReply,
     type ChatServerMessage,
 } from "@pages/home/model/chat";
 import {reconnectDelay} from "@/shared/lib/ws";
@@ -21,8 +22,9 @@ export type ChatSocket = {
     /** Resolves with the full answer; `onDelta` receives pieces as they arrive. */
     send: (
         messages: Pick<ChatMessage, "role" | "content">[],
+        conversationId: number | null,
         onDelta?: (piece: string) => void,
-    ) => Promise<string>;
+    ) => Promise<ChatReply>;
     cancel: () => void;
     close: () => void;
 };
@@ -32,7 +34,7 @@ export function connectChatSocket(): ChatSocket {
     let socket: WebSocket | null = null;
     let timer: number | undefined;
     let pending: {
-        resolve: (content: string) => void;
+        resolve: (reply: ChatReply) => void;
         reject: (error: Error) => void;
         onDelta?: (piece: string) => void;
     } | null = null;
@@ -101,7 +103,11 @@ export function connectChatSocket(): ChatSocket {
             current.reject(new ChatCancelledError());
             return;
         }
-        current.resolve(message.content);
+        current.resolve({
+            content: message.content,
+            conversationId: message.conversation_id,
+            sources: message.sources,
+        });
     };
 
     // Deferred so an immediate close() (React StrictMode remount) cancels it
@@ -109,10 +115,11 @@ export function connectChatSocket(): ChatSocket {
     timer = window.setTimeout(open, 0);
 
     return {
-        send(messages, onDelta) {
+        send(messages, conversationId, onDelta) {
             const body: ChatAskMessage = {
                 type: "ask",
                 messages: messages.slice(-CHAT_HISTORY),
+                conversation_id: conversationId,
             };
             const target = socket;
             if (target == null || closed) {
@@ -121,7 +128,7 @@ export function connectChatSocket(): ChatSocket {
             if (pending != null) {
                 return Promise.reject(new ChatRequestError("invalid", FALLBACK));
             }
-            return new Promise<string>((resolve, reject) => {
+            return new Promise<ChatReply>((resolve, reject) => {
                 pending = {resolve, reject, onDelta};
                 void waitUntilOpen(target).then(
                     () => {

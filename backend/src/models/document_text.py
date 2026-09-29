@@ -1,7 +1,8 @@
-from sqlalchemy import ForeignKey, Text
+from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database import Base
+from encryption import EncryptedText
 
 
 class DocumentText(Base):
@@ -15,4 +16,5 @@ class DocumentText(Base):
         ForeignKey("documents.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    text: Mapped[str] = mapped_column(Text)
+    # Encrypted at rest (DATA_ENCRYPTION_KEY); the ORM sees plain text.
+    text: Mapped[str] = mapped_column(EncryptedText)

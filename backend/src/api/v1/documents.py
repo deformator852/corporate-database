@@ -1,4 +1,5 @@
 from typing import Annotated
+from urllib.parse import quote
 
 from fastapi import (
     APIRouter,
@@ -12,7 +13,12 @@ from fastapi import (
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.deps import get_audit_service, get_document_service, require_permission
+from api.deps import (
+    get_audit_service,
+    get_current_user,
+    get_document_service,
+    require_permission,
+)
 from api.ws import hold
 from database import AsyncSessionLocal
 from models.audit import AuditAction
@@ -125,6 +131,48 @@ async def delete_document(
         },
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# Opened in the browser; everything else downloads. Never HTML, SVG or XML
+# inline: those can run script.
+_INLINE_TYPES = frozenset({"application/pdf", "text/plain", "text/markdown", "text/csv"})
+
+
+@router.get(
+    "/{document_id}/file",
+    responses={**ERROR_RESPONSES, 404: {"model": ErrorSchema}},
+)
+async def open_document_file(
+    document_id: int,
+    user: User = Depends(get_current_user),
+    service: DocumentService = Depends(get_document_service),
+    audit: AuditService = Depends(get_audit_service),
+) -> Response:
+    document, content = await service.open_file(document_id, user.id)
+    audit.record(
+        AuditAction.DOCUMENT_VIEW,
+        actor=user,
+        target_type="document",
+        target_id=document.id,
+        target_label=document.name,
+        details={
+            "filename": document.filename,
+            "classification": document.classification,
+        },
+    )
+    disposition = "inline" if document.content_type in _INLINE_TYPES else "attachment"
+    return Response(
+        content=content,
+        media_type=document.content_type,
+        headers={
+            "Content-Disposition": (
+                f"{disposition}; filename*=UTF-8''{quote(document.filename)}"
+            ),
+            # A file that sneaks in script cannot run it in the app's origin.
+            "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @router.websocket("/ws")

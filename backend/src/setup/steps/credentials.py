@@ -11,6 +11,9 @@ _SECRETS = {
     "DB_PASSWORD": 16,
     "RABBITMQ_PASSWORD": 16,
     "QDRANT_API_KEY": 32,
+    # Encrypts files, document text and chats at rest. Never rotated here:
+    # a new key would make stored data unreadable.
+    "DATA_ENCRYPTION_KEY": 32,
 }
 # Names are only filled when empty: renaming breaks existing data.
 _NAMES = {
@@ -46,4 +49,9 @@ class SecretsStep:
         ]
         if "JWT_SECRET_KEY" in written:
             notes.append("A new JWT secret signs everyone out.")
+        if "DATA_ENCRYPTION_KEY" in written:
+            notes.append(
+                "DATA_ENCRYPTION_KEY encrypts stored documents and chats. Back it up "
+                "separately from the data: without it they cannot be read."
+            )
         console.print(Panel("\n".join(notes), title="Restart services", style="yellow"))

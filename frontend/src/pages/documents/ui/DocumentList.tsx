@@ -1,4 +1,5 @@
-import {CircleAlert, Trash2} from "lucide-react";
+import {CircleAlert, FileText, Trash2} from "lucide-react";
+import {useState} from "react";
 
 import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
@@ -11,6 +12,8 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import {useI18n} from "@/shared/i18n/I18nProvider";
+import {getApiErrorMessage} from "@/shared/lib/api/errors";
+import {openDocumentFile} from "@/shared/lib/documentFile";
 import {
     documentClassificationKey,
     documentStatusKey,
@@ -168,9 +171,30 @@ function DocumentRow({
 }) {
     const {t} = useI18n();
     const status = document.status as DocumentStatus;
+    const [openError, setOpenError] = useState<string | null>(null);
     return (
         <TableRow>
-            <TableCell className="px-4 font-medium">{document.name}</TableCell>
+            <TableCell className="px-4 font-medium">
+                <button
+                    type="button"
+                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-sm text-left underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+                    title={t("documents.open")}
+                    onClick={() => {
+                        setOpenError(null);
+                        void openDocumentFile(document.id, document.filename).catch((reason) =>
+                            setOpenError(getApiErrorMessage(reason, t("documents.openError"))),
+                        );
+                    }}
+                >
+                    <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                    {document.name}
+                </button>
+                {openError ? (
+                    <p role="alert" className="mt-1 text-xs font-normal text-destructive">
+                        {openError}
+                    </p>
+                ) : null}
+            </TableCell>
             <TableCell className="text-muted-foreground">{document.filename}</TableCell>
             <TableCell>
                 {t(documentClassificationKey(document.classification))}

@@ -57,12 +57,21 @@ AUDIT_PERMISSIONS = (
     ),
 )
 
+SYSTEM_PERMISSIONS = (
+    (
+        "system.view",
+        "View system status",
+        "See whether the database, search, storage, queue and AI models work",
+    ),
+)
+
 ALL_PERMISSIONS = (
     USER_PERMISSIONS
     + ROLE_PERMISSIONS
     + PERMISSION_PERMISSIONS
     + DOCUMENT_PERMISSIONS
     + AUDIT_PERMISSIONS
+    + SYSTEM_PERMISSIONS
     + tuple(
         permission
         for plugin in plugins()

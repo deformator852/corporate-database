@@ -33,6 +33,14 @@ _CHARS_PER_TOKEN = 3
 _PROMPT_OVERHEAD_TOKENS = 1536
 
 
+def document_budget_chars(documents: int) -> int:
+    """Characters of document text one of `documents` documents may take in
+    the prompt; longer ones are sent as excerpts (services/chat.py)."""
+    num_ctx = llm_num_ctx()
+    budget = (num_ctx - num_ctx // 4 - _PROMPT_OVERHEAD_TOKENS) * _CHARS_PER_TOKEN
+    return budget // max(documents, 1)
+
+
 class OllamaGenerator:
     def __init__(self, client: AsyncClient | None = None) -> None:
         self.client = client or AsyncClient(host=llm_host(), timeout=_TIMEOUT)

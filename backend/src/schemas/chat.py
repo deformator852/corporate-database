@@ -1,4 +1,5 @@
-from typing import Literal
+from datetime import datetime
+from typing import Literal, Self
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -34,6 +35,8 @@ class ChatRequestSchema(BaseModel):
 
 class ChatAskSchema(ChatRequestSchema):
     type: Literal["ask"]
+    # Continue a saved chat; None starts a new one.
+    conversation_id: int | None = Field(default=None, ge=1)
 
 
 class ChatCancelSchema(BaseModel):
@@ -42,11 +45,23 @@ class ChatCancelSchema(BaseModel):
     type: Literal["cancel"]
 
 
+class ChatSourceSchema(BaseModel):
+    """A document an answer was built from."""
+
+    model_config = MODEL_CONFIG
+
+    id: int
+    name: str
+    filename: str
+
+
 class ChatAnswerSchema(BaseModel):
     model_config = MODEL_CONFIG
 
     type: Literal["answer"]
     content: str
+    conversation_id: int
+    sources: list[ChatSourceSchema] = Field(default_factory=list)
 
 
 class ChatDeltaSchema(BaseModel):
@@ -71,3 +86,70 @@ class ChatSocketErrorSchema(BaseModel):
     type: Literal["error"]
     code: str
     message: str
+
+
+class ChatHistoryMessageSchema(BaseModel):
+    model_config = MODEL_CONFIG
+
+    id: int
+    role: Literal["user", "assistant"]
+    content: str
+    sources: list[ChatSourceSchema]
+    created_at: datetime
+
+
+class ChatConversationItemSchema(BaseModel):
+    model_config = MODEL_CONFIG
+
+    id: int
+    title: str
+    updated_at: datetime
+
+
+class ChatConversationListSchema(BaseModel):
+    model_config = MODEL_CONFIG
+
+    items: list[ChatConversationItemSchema]
+    page: int
+    per_page: int
+    total: int
+    pages: int
+
+    @classmethod
+    def from_page(cls, items: list, *, page: int, per_page: int, total: int) -> Self:
+        pages = (total + per_page - 1) // per_page if per_page and total else 0
+        return cls(
+            items=[
+                ChatConversationItemSchema(id=c.id, title=c.title, updated_at=c.updated_at)
+                for c in items
+            ],
+            page=page,
+            per_page=per_page,
+            total=total,
+            pages=pages,
+        )
+
+
+class ChatConversationSchema(BaseModel):
+    model_config = MODEL_CONFIG
+
+    id: int
+    title: str
+    messages: list[ChatHistoryMessageSchema]
+
+    @classmethod
+    def from_conversation(cls, conversation) -> Self:
+        return cls(
+            id=conversation.id,
+            title=conversation.title,
+            messages=[
+                ChatHistoryMessageSchema(
+                    id=m.id,
+                    role=m.role,
+                    content=m.content,
+                    sources=[ChatSourceSchema(**source) for source in m.sources],
+                    created_at=m.created_at,
+                )
+                for m in conversation.messages
+            ],
+        )

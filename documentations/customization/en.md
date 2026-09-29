@@ -1,6 +1,6 @@
 # Customization
 
-Other languages: [Español](es.md) · [Українська](uk.md) · [Türkçe](tr.md) · [Français](fr.md)
+Other languages: [Español](es.md) · [Français](fr.md)
 
 ## How it works
 
@@ -236,7 +236,7 @@ export default {
     nav: [{to: "/crm", labelKey: "custom.crm.title", end: true, can: "crm.report"}],
     messages: {
         en: {"custom.crm.title": "CRM report"},
-        uk: {"custom.crm.title": "Звіт CRM"},
+        fr: {"custom.crm.title": "Rapport CRM"},
     },
 } satisfies Extension;
 ```
@@ -271,7 +271,7 @@ nav: [{to: "/documents", labelKey: "custom.nav.files", end: true, can: "document
 
 - New keys must start with `custom.`, for example `custom.crm.title`.
 - Core keys can be overridden, for example `"nav.documents": "Files"`.
-- Languages: `en`, `es`, `uk`, `tr`, `fr`. A missing key falls back to `en`,
+- Languages: `en`, `es`, `fr`. A missing key falls back to `en`,
   then to the key itself.
 - The interface uses the system language chosen in `uv run setup`
   (`APP_LANGUAGE` in `backend/.env`).

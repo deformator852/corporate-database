@@ -12,6 +12,7 @@ dependencies = [
     "bcrypt>=5.0.0",
     "celery>=5.6.3",
     "chonkie>=1.7.0",
+    "cryptography>=50.0.1",
     "fastapi>=0.141.1",
     "minio>=7.2.20",
     "ollama>=0.6.2",
@@ -43,3 +44,13 @@ ignore = ["B008"]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.params.Depends"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning", "ignore::UserWarning"]

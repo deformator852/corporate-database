@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import AsyncSessionLocal, engine
 from exceptions import AppError
+from i18n import t
 from models.document import Document, DocumentStatus
 from models.document_text import DocumentText
 from models.notification import Notification, NotificationType
@@ -37,17 +38,24 @@ _STRUCTURED = frozenset({".csv", ".json", ".xml", ".xlsx"})
 logger = logging.getLogger(__name__)
 
 
-def _split_text(chunker: RecursiveChunker, text: str, overlap: int) -> list[str]:
+def _split_text(
+    chunker: RecursiveChunker, text: str, overlap: int
+) -> tuple[list[str], list[int]]:
+    """Chunks and where each starts in `text`. The offsets let long-document
+    excerpts join neighbouring chunks exactly (services/chat.py)."""
     pieces = [piece for piece in chunker.chunk(text) if piece.text.strip()]
     chunks: list[str] = []
+    starts: list[int] = []
     for index, piece in enumerate(pieces):
         start = piece.start_index
         if index:
             start = max(0, piece.start_index - overlap)
-        chunk = text[start : piece.end_index].strip()
+        raw = text[start : piece.end_index]
+        chunk = raw.strip()
         if chunk:
             chunks.append(chunk)
-    return chunks
+            starts.append(start + len(raw) - len(raw.lstrip()))
+    return chunks, starts
 
 
 class DocumentProcessor:
@@ -89,7 +97,7 @@ class DocumentProcessor:
                 text = basic_clean(text, structured=structured)
             # `chunks` go to the Qdrant payload (rules only, faithful);
             # `searchable` is what gets embedded.
-            chunks = _split_text(self.chunker, text, chunk_overlap())
+            chunks, starts = _split_text(self.chunker, text, chunk_overlap())
             if not chunks:
                 raise AppError("invalid", "The document has no text.", status_code=400)
             searchable = chunks
@@ -112,6 +120,7 @@ class DocumentProcessor:
                 filename=document.filename,
                 classification=document.classification,
                 chunks=chunks,
+                starts=starts,
                 vectors=vectors,
             )
             document.error_message = None
@@ -119,7 +128,7 @@ class DocumentProcessor:
             await self._notify(
                 document,
                 NotificationType.DOCUMENT_COMPLETED,
-                f'"{document.name}" is ready.',
+                t('"{name}" is ready.', name=document.name),
             )
         except AppError as exc:
             if exc.code == "not_found":
@@ -130,12 +139,12 @@ class DocumentProcessor:
                 pass
             if exc.status_code >= 500:
                 raise
-            document.error_message = exc.message
+            document.error_message = t(exc.message)
             await self._set(document, DocumentStatus.FAILED, document.progress)
             await self._notify(
                 document,
                 NotificationType.DOCUMENT_PROCESS_FAILED,
-                exc.message,
+                t(exc.message),
             )
         except Exception:
             try:
@@ -181,12 +190,12 @@ class DocumentProcessor:
             await self.rag.delete_document(document.id)
         except AppError:
             pass
-        document.error_message = message
+        document.error_message = t(message)
         await self._set(document, DocumentStatus.FAILED, document.progress)
         await self._notify(
             document,
             NotificationType.DOCUMENT_PROCESS_FAILED,
-            message,
+            t(message),
         )
 
     async def drop_incomplete(self, document_id: int) -> None:
@@ -204,7 +213,7 @@ class DocumentProcessor:
         notification = await self._create_notice(
             document,
             NotificationType.DOCUMENT_PROCESS_FAILED,
-            f'Could not process "{document.name}".',
+            t('Could not process "{name}".', name=document.name),
         )
         await self.session.delete(document)
         await self.session.commit()

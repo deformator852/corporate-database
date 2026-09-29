@@ -1,6 +1,6 @@
 # Personnalisation
 
-Autres langues : [English](en.md) · [Español](es.md) · [Українська](uk.md) · [Türkçe](tr.md)
+Autres langues : [English](en.md) · [Español](es.md)
 
 ## Fonctionnement
 
@@ -287,7 +287,7 @@ nav: [{to: "/documents", labelKey: "custom.nav.files", end: true, can: "document
   `custom.crm.title`.
 - Les clés du noyau peuvent être redéfinies, par exemple
   `"nav.documents": "Fichiers"`.
-- Langues : `en`, `es`, `uk`, `tr`, `fr`. Une clé absente se rabat sur `en`,
+- Langues : `en`, `es`, `fr`. Une clé absente se rabat sur `en`,
   puis sur la clé elle-même.
 - L'interface utilise la langue du système choisie dans `uv run setup`
   (`APP_LANGUAGE` dans `backend/.env`).

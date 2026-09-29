@@ -12,12 +12,16 @@ load_dotenv()
 
 from api.v1.router import api_router
 from exceptions import AppError
+from i18n import t
 from extensions import plugins
 from schemas.error import ErrorSchema
 from security import security
 from services.documents.events import consume_document_events
 from services.documents.hub import hub
+from database import AsyncSessionLocal
+from services.chat_history import ChatHistoryService
 from services.embedding import get_embedding_model
+from settings import chat_retention_days
 from services.generator import OllamaGenerator
 from services.notifications.events import consume_notification_events
 from services.notifications.hub import dispatch_notification
@@ -39,9 +43,28 @@ async def warm_up() -> None:
         logger.warning("LLM warm-up failed", exc_info=True)
 
 
+_PURGE_EVERY_SECONDS = 6 * 3600
+
+
+async def purge_old_chats() -> None:
+    """Deletes saved chats idle longer than CHAT_RETENTION_DAYS, every 6 hours."""
+    while True:
+        try:
+            days = chat_retention_days()
+            if days:
+                async with AsyncSessionLocal() as session:
+                    removed = await ChatHistoryService(session).purge_older_than(days)
+                if removed:
+                    logger.info("Deleted %s chat(s) older than %s days", removed, days)
+        except Exception:
+            logger.warning("Chat retention cleanup failed", exc_info=True)
+        await asyncio.sleep(_PURGE_EVERY_SECONDS)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     warm_up_task = asyncio.create_task(warm_up())
+    purge_task = asyncio.create_task(purge_old_chats())
     document_task = asyncio.create_task(consume_document_events(hub.broadcast))
     notification_task = asyncio.create_task(
         consume_notification_events(dispatch_notification)
@@ -49,10 +72,9 @@ async def lifespan(_app: FastAPI):
     try:
         yield
     finally:
-        warm_up_task.cancel()
-        document_task.cancel()
-        notification_task.cancel()
-        for task in (warm_up_task, document_task, notification_task):
+        for task in (warm_up_task, purge_task, document_task, notification_task):
+            task.cancel()
+        for task in (warm_up_task, purge_task, document_task, notification_task):
             try:
                 await task
             except asyncio.CancelledError:
@@ -106,13 +128,13 @@ for plugin in plugins():
 # changed) with 422; clients sign in again only on 401.
 @app.exception_handler(JWTDecodeError)
 async def invalid_token_handler(_request: Request, _exc: JWTDecodeError) -> JSONResponse:
-    body = ErrorSchema(code="unauthorized", message="Not authenticated")
+    body = ErrorSchema(code="unauthorized", message=t("Not authenticated"))
     return JSONResponse(status_code=401, content=body.model_dump())
 
 
 @app.exception_handler(AppError)
 async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
-    body = ErrorSchema(code=exc.code, message=exc.message)
+    body = ErrorSchema(code=exc.code, message=t(exc.message))
     return JSONResponse(status_code=exc.status_code, content=body.model_dump())
 
 

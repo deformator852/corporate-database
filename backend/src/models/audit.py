@@ -22,6 +22,7 @@ class AuditAction(StrEnum):
     ROLE_DELETE = "roles.delete"
     DOCUMENT_UPLOAD = "documents.upload"
     DOCUMENT_DELETE = "documents.delete"
+    DOCUMENT_VIEW = "documents.view"
     CHAT_ANSWER = "chat.answer"
 
 

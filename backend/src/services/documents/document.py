@@ -8,9 +8,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from exceptions import AppError
+from i18n import t
 from models.document import Document, DocumentStatus
 from schemas.document import DocumentUploadSchema
-from services.documents.access import classifications_for_user
+from services.documents.access import (
+    classifications_for_user,
+    retrieval_classifications,
+    user_permission_keys,
+)
 from services.documents.office import convert_doc_to_docx
 from services.rag import Rag
 from services.storage import ObjectStorage
@@ -154,7 +159,7 @@ class DocumentService:
                 self.queue.enqueue(document.id)
             except Exception as exc:
                 document.status = DocumentStatus.FAILED
-                document.error_message = "Could not queue the document."
+                document.error_message = t("Could not queue the document.")
                 await self.session.commit()
                 raise AppError(
                     "unavailable",
@@ -183,6 +188,19 @@ class DocumentService:
         finally:
             await rag.client.close()
         return document
+
+    async def open_file(self, document_id: int, user_id: int) -> tuple[Document, bytes]:
+        """The original file, for anyone who may retrieve documents of its
+        classification (the same rule as chat answers)."""
+        allowed = retrieval_classifications(
+            await user_permission_keys(self.session, user_id)
+        )
+        document = await self.session.get(Document, document_id)
+        # 404 for both missing and forbidden: do not reveal what exists.
+        if document is None or document.classification not in allowed:
+            raise AppError("not_found", "Document not found", status_code=404)
+        content = await asyncio.to_thread(self.storage.get, document.object_key)
+        return document, content
 
     async def _allowed(self, user_id: int) -> tuple[str, ...]:
         return await classifications_for_user(self.session, user_id)

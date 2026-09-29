@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from database import AsyncSessionLocal
 from exceptions import AppError
+from i18n import t
 from models.audit import AuditAction
 from models.rbac.role import Role
 from models.user import User
@@ -73,7 +74,10 @@ class AuthService:
             minutes = int(LOGIN_WINDOW.total_seconds() // 60)
             raise AppError(
                 "rate_limited",
-                f"Too many failed sign-in attempts. Try again in {minutes} minutes.",
+                t(
+                    "Too many failed sign-in attempts. Try again in {minutes} minutes.",
+                    minutes=minutes,
+                ),
                 status_code=429,
             )
 

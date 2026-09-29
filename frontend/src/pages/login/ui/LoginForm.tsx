@@ -91,20 +91,6 @@ export function LoginForm() {
                     <FieldError id={passwordErrorId} errors={[errors.password]}/>
                 </Field>
 
-                <div className="flex items-center justify-between gap-4 text-sm">
-                    <label className="flex cursor-pointer items-center gap-2 text-muted-foreground">
-                        <input
-                            type="checkbox"
-                            name="remember"
-                            className="size-3.5 rounded border border-input accent-primary"
-                        />
-                        {t("login.rememberMe")}
-                    </label>
-                    <Button type="button" variant="link" className="h-auto px-0">
-                        {t("login.forgotPassword")}
-                    </Button>
-                </div>
-
                 <Button
                     type="submit"
                     className="mt-1 w-full"
@@ -113,6 +99,10 @@ export function LoginForm() {
                 >
                     {isSubmitting ? t("login.signingIn") : t("login.signIn")}
                 </Button>
+
+                <p className="text-center text-xs text-muted-foreground">
+                    {t("login.forgotHint")}
+                </p>
             </FieldGroup>
         </form>
     );

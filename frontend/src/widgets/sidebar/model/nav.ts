@@ -15,4 +15,5 @@ export const CORE_NAV: NavItem[] = [
     {to: "/roles", labelKey: "nav.roles", end: true, can: "roles.list"},
     {to: "/permissions", labelKey: "nav.permissions", end: true, can: "permissions.list"},
     {to: "/audit", labelKey: "nav.audit", end: true, can: "audit.list"},
+    {to: "/system", labelKey: "nav.system", end: true, can: "system.view"},
 ];

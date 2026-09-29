@@ -16,6 +16,7 @@ export const AUDIT_ACTIONS = [
     "roles.delete",
     "documents.upload",
     "documents.delete",
+    "documents.view",
     "chat.answer",
 ] as const;
 

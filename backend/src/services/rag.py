@@ -21,6 +21,7 @@ from qdrant_client.http.models import (
     VectorParams,
 )
 
+from encryption import decrypt_text, encrypt_text
 from exceptions import AppError
 from settings import embedding_model, qdrant_api_key
 
@@ -130,6 +131,7 @@ class Rag:
         classification: str,
         chunks: list[str],
         vectors: list[list[float]],
+        starts: list[int] | None = None,
     ) -> None:
         await self.ensure_collection()
         points = [
@@ -139,10 +141,13 @@ class Rag:
                 payload={
                     "document_id": document_id,
                     "chunk_index": index,
-                    "text": chunk,
+                    # Encrypted at rest; vectors cannot be (search needs them).
+                    "text": encrypt_text(chunk, _chunk_context(document_id, index)),
                     "name": name,
                     "filename": filename,
                     "classification": classification,
+                    # Offset of the chunk in the cleaned text, for exact joins.
+                    "start": starts[index] if starts else None,
                 },
             )
             for index, (chunk, vector) in enumerate(zip(chunks, vectors, strict=True))
@@ -209,7 +214,7 @@ class Rag:
         for hit in hits:
             payload = getattr(hit, "payload", None)
             if isinstance(payload, dict):
-                payloads.append(payload)
+                payloads.append(_open_payload(payload))
         return payloads
 
     async def payloads_for_document(self, document_id: int) -> list[dict[str, object]]:
@@ -240,9 +245,47 @@ class Rag:
         for record in records:
             payload = getattr(record, "payload", None)
             if isinstance(payload, dict):
-                payloads.append(payload)
+                payloads.append(_open_payload(payload))
         payloads.sort(key=_chunk_index)
         return payloads
+
+    async def chunks_by_index(
+        self, document_id: int, indexes: Sequence[int]
+    ) -> dict[int, tuple[str, int | None]]:
+        """Text and start offset (None for chunks stored before offsets) of the
+        document's chunks at `indexes`; missing ones are left out."""
+        if not indexes:
+            return {}
+        try:
+            records, _offset = await self.client.scroll(
+                collection_name=COLLECTION_NAME,
+                scroll_filter=Filter(
+                    must=[
+                        FieldCondition(key="document_id", match=MatchValue(value=document_id)),
+                        FieldCondition(key="chunk_index", match=MatchAny(any=list(indexes))),
+                    ]
+                ),
+                limit=len(indexes),
+                with_payload=True,
+                with_vectors=False,
+            )
+        except UnexpectedResponse as exc:
+            if exc.status_code == 404:
+                return {}
+            _raise_from_unexpected(exc)
+        except (RequestError, ResponseHandlingException) as exc:
+            _raise_unavailable(exc)
+        found: dict[int, tuple[str, int | None]] = {}
+        for record in records:
+            payload = _open_payload(record.payload or {})
+            index, text, start = (
+                payload.get("chunk_index"),
+                payload.get("text"),
+                payload.get("start"),
+            )
+            if isinstance(index, int) and isinstance(text, str):
+                found[index] = (text, start if isinstance(start, int) else None)
+        return found
 
     def _classification_filter(self, allowed_classifications: Sequence[str]) -> Filter:
         allowed = list(allowed_classifications)
@@ -338,3 +381,17 @@ def _chunk_index(payload: dict[str, object]) -> int:
     if isinstance(raw, str) and raw.isdigit():
         return int(raw)
     return 0
+
+
+def _chunk_context(document_id: object, index: object) -> str:
+    return f"chunk:{document_id}:{index}"
+
+
+def _open_payload(payload: dict[str, object]) -> dict[str, object]:
+    """Payload with its chunk text decrypted (plain text from before
+    encryption passes through)."""
+    text = payload.get("text")
+    if not isinstance(text, str):
+        return payload
+    context = _chunk_context(payload.get("document_id"), payload.get("chunk_index"))
+    return {**payload, "text": decrypt_text(text, context)}

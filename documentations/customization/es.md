@@ -1,6 +1,6 @@
 # Personalización
 
-Otros idiomas: [English](en.md) · [Українська](uk.md) · [Türkçe](tr.md) · [Français](fr.md)
+Otros idiomas: [English](en.md) · [Français](fr.md)
 
 ## Cómo funciona
 
@@ -281,7 +281,7 @@ nav: [{to: "/documents", labelKey: "custom.nav.files", end: true, can: "document
 - Las claves nuevas deben empezar por `custom.`, por ejemplo `custom.crm.title`.
 - Las claves del núcleo se pueden sobrescribir, por ejemplo
   `"nav.documents": "Archivos"`.
-- Idiomas: `en`, `es`, `uk`, `tr`, `fr`. Si falta una clave se usa `en` y, si
+- Idiomas: `en`, `es`, `fr`. Si falta una clave se usa `en` y, si
   tampoco existe, la propia clave.
 - La interfaz usa el idioma del sistema elegido en `uv run setup`
   (`APP_LANGUAGE` en `backend/.env`).

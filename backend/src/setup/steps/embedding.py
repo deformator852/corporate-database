@@ -65,11 +65,7 @@ OPTIONS: dict[str, tuple[EmbeddingOption, ...]] = {
         _large("solon-large", 2.1),
     ),
     "es": (_E5_SMALL, _E5_BASE, _BGE_M3),
-    "uk": (_E5_SMALL, _E5_BASE, _BGE_M3),
-    "tr": (_E5_SMALL, _E5_BASE, _BGE_M3),
 }
-
-
 def _fmt_bytes(n: int) -> str:
     return f"{n / _GIB:.1f} GB"
 
@@ -119,7 +115,7 @@ def _choose(console: Console, language: str) -> EmbeddingOption:
     options = OPTIONS[language]
     current = env_value(ENV_PATH, "EMBEDING_MODEL")
     free = shutil.disk_usage("/").free
-    table = Table(title=f"Embedding models for {LANGUAGES[language]}")
+    table = Table(title=f"Embedding models for {LANGUAGES[language]} documents")
     table.add_column("#", justify="right")
     table.add_column("Model")
     table.add_column("Disk")
@@ -143,6 +139,10 @@ def _choose(console: Console, language: str) -> EmbeddingOption:
             option.summary + ("  (current)" if option.key == current else ""),
         )
     console.print(table)
+    console.print(
+        f"[yellow]These models are tuned for {LANGUAGES[language]}: documents in "
+        "other languages are found less reliably.[/]"
+    )
     console.print(f"Free disk: {_fmt_bytes(free)}")
     while True:
         choice = IntPrompt.ask("Choice", default=default, console=console)

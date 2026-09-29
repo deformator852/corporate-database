@@ -42,8 +42,6 @@ OPTIONS: dict[str, tuple[LlmOption, ...]] = {
     "en": (_LLAMA, _GEMMA_12B, _QWEN),
     "es": (_LLAMA, _GEMMA_12B, _QWEN),
     "fr": (_LLAMA, _GEMMA_12B, _QWEN),
-    "uk": (_GEMMA_4B, _GEMMA_12B, _QWEN),
-    "tr": (_GEMMA_4B, _GEMMA_12B, _QWEN),
 }
 
 

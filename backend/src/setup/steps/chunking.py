@@ -85,8 +85,6 @@ again to re-chunk them."""
 _SAMPLES = {
     "en": "The travel request is submitted no later than seven working days before departure. ",
     "es": "La solicitud de viaje se presenta a más tardar siete días hábiles antes de la salida. ",
-    "uk": "Заявка на відрядження подається не пізніше ніж за сім робочих днів до виїзду. ",
-    "tr": "Seyahat talebi ayrılıştan en geç yedi iş günü önce sisteme girilir. ",
     "fr": "La demande de déplacement est soumise au plus tard sept jours ouvrés avant le départ. ",
 }
 

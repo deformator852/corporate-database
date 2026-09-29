@@ -14,6 +14,10 @@ class EmbeddingModel:
             self._model = SentenceTransformer(self._spec.hf_id)
         return self._model, self._spec
 
+    @property
+    def loaded(self) -> bool:
+        return self._model is not None
+
     def warm_up(self) -> None:
         self._loaded()
 

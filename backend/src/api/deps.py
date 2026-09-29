@@ -13,6 +13,7 @@ from models.user import User
 from security import security, user_session_valid
 from services.audit import AuditService
 from services.auth import AuthService
+from services.chat_history import ChatHistoryService
 from services.documents.document import DocumentService
 from services.notifications.notification import NotificationService
 from services.permission import PermissionService
@@ -52,6 +53,12 @@ def get_notification_service(
     session: AsyncSession = Depends(get_db),
 ) -> NotificationService:
     return NotificationService(session)
+
+
+def get_chat_history_service(
+    session: AsyncSession = Depends(get_db),
+) -> ChatHistoryService:
+    return ChatHistoryService(session)
 
 
 def get_storage() -> ObjectStorage:

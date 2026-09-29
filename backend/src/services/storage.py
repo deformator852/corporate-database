@@ -4,6 +4,7 @@ import uuid
 from minio import Minio
 from minio.error import S3Error
 
+from encryption import decrypt_bytes, encrypt_bytes
 from exceptions import AppError
 from settings import (
     minio_access_key,
@@ -34,6 +35,8 @@ class ObjectStorage:
 
     def put(self, *, key: str, content: bytes, content_type: str) -> None:
         # The bucket is created by minio-init; the app user cannot create or list buckets.
+        # Encrypted at rest; bound to its key so a moved object will not decrypt.
+        content = encrypt_bytes(content, key)
         try:
             self.client.put_object(
                 self.bucket,
@@ -53,7 +56,7 @@ class ObjectStorage:
         try:
             response = self.client.get_object(self.bucket, key)
             try:
-                return response.read()
+                return decrypt_bytes(response.read(), key)
             finally:
                 response.close()
                 response.release_conn()

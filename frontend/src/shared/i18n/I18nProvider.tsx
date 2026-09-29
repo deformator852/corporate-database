@@ -54,6 +54,11 @@ export function I18nProvider({
         return {locale: LOCALE, t};
     }, [overrides]);
 
+    // Tab title follows app.title, so a rename in custom/ messages applies too.
+    useEffect(() => {
+        document.title = value.t("app.title");
+    }, [value]);
+
     return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 

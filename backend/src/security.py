@@ -58,13 +58,20 @@ async def revoke_tokens(*tokens: str | None) -> None:
         await session.commit()
 
 
+def sessions_cutoff() -> datetime:
+    """Value for users.sessions_valid_after that ends every current session.
+    Token issue times have 1-second precision, so round up: a token issued
+    earlier in this same second is revoked too (a new sign-in waits <1 s)."""
+    return datetime.now(UTC).replace(microsecond=0) + timedelta(seconds=1)
+
+
 def user_session_valid(user: User | None, payload: TokenPayload) -> bool:
     """False for deleted users and tokens issued before a password change."""
     if user is None:
         return False
     if user.sessions_valid_after is None:
         return True
-    return payload.issued_at >= user.sessions_valid_after.replace(microsecond=0)
+    return payload.issued_at >= user.sessions_valid_after
 
 
 async def session_active(payload: TokenPayload, token: str) -> bool:

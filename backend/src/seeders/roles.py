@@ -55,8 +55,9 @@ async def seed_roles(session: AsyncSession) -> None:
         role.description = definition["description"]
         role.permissions = assigned
 
+    # Only the roles defined here are managed; roles created in the UI are
+    # left alone, even with no users yet.
     await session.flush()
-    await _delete_unassigned_roles(session)
 
 
 def _assigned_permissions(
@@ -72,19 +73,6 @@ def _assigned_permissions(
         for permission_key in permission_keys
         if permission_key in permissions_by_key
     ]
-
-
-async def _delete_unassigned_roles(session: AsyncSession) -> None:
-    kept_keys = set(ROLE_DEFINITIONS)
-    extras = await session.scalars(
-        select(Role)
-        .where(Role.key.not_in(kept_keys))
-        .options(selectinload(Role.users))
-    )
-    for role in extras:
-        if role.key == ADMIN_ROLE_KEY or role.users:
-            continue
-        await session.delete(role)
 
 
 if __name__ == "__main__":

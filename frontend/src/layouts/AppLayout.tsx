@@ -1,10 +1,11 @@
-import {Database, LogOut} from "lucide-react";
+import {LogOut} from "lucide-react";
 import {useState} from "react";
-import {Outlet, useLocation} from "react-router";
+import {Link, Outlet, useLocation} from "react-router";
 
 import {Button} from "@/components/ui/button";
 import {useSessionStore} from "@/shared/auth/session-store";
 import {signOut} from "@/shared/lib/api/me";
+import {Logo} from "@/shared/ui/Logo";
 import type {SessionUser} from "@/shared/auth/types";
 import {useI18n} from "@/shared/i18n/I18nProvider";
 import {ThemeSwitcher} from "@/theme/ThemeSwitcher";
@@ -12,7 +13,6 @@ import {NotificationBell} from "@/widgets/notifications/ui/NotificationBell";
 import {Sidebar} from "@/widgets/sidebar/ui/Sidebar.tsx";
 
 export default function AppLayout() {
-    const {t} = useI18n();
     const user = useSessionStore((state) => state.user);
     const location = useLocation();
     const pane = location.pathname === "/";
@@ -25,17 +25,9 @@ export default function AppLayout() {
         <div className="app app-layout">
             <header className="app-header app-layout__header">
                 <div className="app-header__inner">
-                    <div className="flex min-w-0 items-center gap-2.5">
-                        <span
-                            className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground"
-                            aria-hidden
-                        >
-                            <Database className="size-4" strokeWidth={2} />
-                        </span>
-                        <strong className="truncate text-sm font-semibold tracking-tight">
-                            {t("app.title")}
-                        </strong>
-                    </div>
+                    <Link to="/" className="min-w-0 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+                        <Logo />
+                    </Link>
                     <div className="flex shrink-0 items-center gap-0.5">
                         <NotificationBell />
                         <ThemeSwitcher />

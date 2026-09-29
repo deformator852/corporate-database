@@ -9,12 +9,14 @@ from models.document_text import DocumentText
 from schemas.chat import ChatMessageSchema
 from services.documents.access import retrieval_classifications, user_permission_keys
 from services.embedding import EmbeddingModel
-from services.generator import OllamaGenerator, OnDelta
+from services.generator import OllamaGenerator, OnDelta, document_budget_chars
 from services.documents.parser import DocumentParser
 from services.rag import Rag
 from services.storage import ObjectStorage
 
 _MAX_DOCS = 2
+# Chunks taken on each side of a search hit for excerpts of long documents.
+_EXCERPT_RADIUS = 3
 _MAX_CHARS = 100_000
 _DUMP_MARKERS = (
     "full content",
@@ -69,11 +71,54 @@ class ChatService:
             documents = await self._documents_for_reply(
                 query, chunks, allowed, rag
             )
+            if documents and _wants_full_document(query):
+                return _dump(documents), documents
+            prompt_documents = await self._fit_to_context(documents, chunks, rag)
         finally:
             await rag.client.close()
-        if documents and _wants_full_document(query):
-            return _dump(documents), documents
-        return await self.generator.complete(messages, documents, on_delta), documents
+        answer = await self.generator.complete(messages, prompt_documents, on_delta)
+        return answer, documents
+
+    async def _fit_to_context(
+        self,
+        documents: list[dict[str, object]],
+        hits: list[dict[str, object]],
+        rag: Rag,
+    ) -> list[dict[str, object]]:
+        """Documents as the LLM sees them. One too long for its share of the
+        context is replaced by excerpts around the search hits, so a clause
+        deep in a long contract still reaches the model (a cut from the start
+        would drop it). Without hits it keeps the start of the text."""
+        budget = document_budget_chars(_MAX_DOCS)
+        fitted: list[dict[str, object]] = []
+        for document in documents:
+            text = str(document["text"])
+            hit_indexes = [
+                index
+                for hit in hits
+                if _document_id(hit) == document["document_id"]
+                and isinstance(index := hit.get("chunk_index"), int)
+            ]
+            if len(text) <= budget or not hit_indexes:
+                fitted.append(document)
+                continue
+            wanted = sorted(
+                {
+                    index + offset
+                    for index in hit_indexes
+                    for offset in range(-_EXCERPT_RADIUS, _EXCERPT_RADIUS + 1)
+                    if index + offset >= 0
+                }
+            )
+            chunks = await rag.chunks_by_index(int(document["document_id"]), wanted)
+            excerpt = build_excerpt(chunks, hit_indexes, budget)
+            if not excerpt:
+                fitted.append(document)
+                continue
+            fitted.append(
+                {**document, "text": "[Excerpts from a longer document]\n" + excerpt}
+            )
+        return fitted
 
     async def _documents_for_reply(
         self,
@@ -196,3 +241,57 @@ def _document_id(chunk: dict[str, object]) -> int | None:
     if isinstance(raw, str) and raw.isdigit():
         return int(raw)
     return None
+
+
+def build_excerpt(
+    chunks: dict[int, tuple[str, int | None]], hits: list[int], budget: int
+) -> str:
+    """Hit chunks first, then their neighbours at distance 1, 2, ... while
+    they fit `budget` characters; joined in document order without repeating
+    the overlap between neighbours. Gaps are marked with "…"."""
+    order: list[int] = list(dict.fromkeys(hits))
+    for distance in range(1, _EXCERPT_RADIUS + 1):
+        for hit in dict.fromkeys(hits):
+            order += [hit - distance, hit + distance]
+    selected: set[int] = set()
+    used = 0
+    for index in order:
+        entry = chunks.get(index)
+        if entry is None or index in selected or used + len(entry[0]) > budget:
+            continue
+        selected.add(index)
+        used += len(entry[0])
+    parts: list[str] = []
+    previous: int | None = None
+    for index in sorted(selected):
+        text, start = chunks[index]
+        if previous is not None and index == previous + 1:
+            parts[-1] += _continuation(chunks[previous], (text, start))
+        else:
+            parts.append(text)
+        previous = index
+    return "\n…\n".join(part.strip() for part in parts)
+
+
+# A shorter match could be a coincidence rather than the real overlap.
+_MIN_GUESSED_OVERLAP = 20
+
+
+def _continuation(
+    before: tuple[str, int | None], after: tuple[str, int | None]
+) -> str:
+    """`after` without the text it repeats from `before`. Exact with stored
+    offsets. Older chunks have none: the shortest plausible repeated start is
+    cut, so repetitive text (tables) may keep a little duplicate but never
+    loses any."""
+    (before_text, before_start), (after_text, after_start) = before, after
+    if before_start is not None and after_start is not None:
+        shared = before_start + len(before_text) - after_start
+        if shared > 0:
+            return after_text[shared:]
+        # Not adjacent in the text (whitespace between chunks).
+        return "\n" + after_text
+    for size in range(_MIN_GUESSED_OVERLAP, min(len(before_text), len(after_text)) + 1):
+        if before_text.endswith(after_text[:size]):
+            return after_text[size:]
+    return "\n" + after_text

@@ -1,5 +1,3 @@
-from datetime import UTC, datetime
-
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +11,7 @@ from models.user import User
 from schemas.user import UserCreateSchema, UserUpdateSchema
 from services.documents.access import user_permission_keys
 from services.grant import ensure_can_grant, ensure_can_manage, role_keys
+from security import sessions_cutoff
 from services.password import hash_password
 
 
@@ -73,7 +72,7 @@ class UserService:
         if data.password is not None:
             user.password = hash_password(data.password)
             # Signs the user out everywhere, e.g. after a lost laptop.
-            user.sessions_valid_after = datetime.now(UTC)
+            user.sessions_valid_after = sessions_cutoff()
         await self._flush_user(user)
         return user
 

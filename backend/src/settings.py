@@ -17,8 +17,6 @@ NOTIFICATION_EVENTS_EXCHANGE = "notification.events"
 LANGUAGES = {
     "en": "English",
     "es": "Spanish",
-    "uk": "Ukrainian",
-    "tr": "Turkish",
     "fr": "French",
 }
 DEFAULT_LANGUAGE = "en"
@@ -191,6 +189,11 @@ def chunk_overlap() -> int:
             status_code=500,
         )
     return value
+
+
+def chat_retention_days() -> int:
+    """Saved chats idle this long are deleted; 0 keeps them forever."""
+    return max(0, _live_int("CHAT_RETENTION_DAYS", 90))
 
 
 TEXT_CLEANUP_MODES = ("llm", "rules", "off")

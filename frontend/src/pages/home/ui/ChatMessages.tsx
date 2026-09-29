@@ -1,7 +1,10 @@
-import {useEffect, useRef} from "react";
+import {FileText} from "lucide-react";
+import {useEffect, useRef, useState} from "react";
 
-import type {ChatMessage, ChatStatus} from "@pages/home/model/chat";
+import type {ChatMessage, ChatSource, ChatStatus} from "@pages/home/model/chat";
 import {useI18n} from "@/shared/i18n/I18nProvider";
+import {getApiErrorMessage} from "@/shared/lib/api/errors";
+import {openDocumentFile} from "@/shared/lib/documentFile";
 
 type ChatMessagesProps = {
     messages: ChatMessage[];
@@ -58,15 +61,19 @@ export function ChatMessages({
             className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4"
         >
             {messages.map((message) => (
-                <p
-                    key={message.id}
-                    className={`rounded-2xl px-3.5 py-2.5 text-sm break-words whitespace-pre-wrap ${bubbleClass(message.role)}`}
-                >
-                    <span className="sr-only">
-                        {message.role === "user" ? t("chat.you") : t("chat.assistant")}
-                    </span>
-                    {message.content}
-                </p>
+                <div key={message.id} className="space-y-1.5">
+                    <p
+                        className={`rounded-2xl px-3.5 py-2.5 text-sm break-words whitespace-pre-wrap ${bubbleClass(message.role)}`}
+                    >
+                        <span className="sr-only">
+                            {message.role === "user" ? t("chat.you") : t("chat.assistant")}
+                        </span>
+                        {message.content}
+                    </p>
+                    {message.role === "assistant" && message.sources?.length ? (
+                        <SourceList sources={message.sources} />
+                    ) : null}
+                </div>
             ))}
 
             {status === "pending" && streaming ? (
@@ -106,6 +113,42 @@ export function ChatMessages({
                         {t("chat.retry")}
                     </button>
                 </div>
+            ) : null}
+        </div>
+    );
+}
+
+/** Documents an answer was built from; each opens the original file. */
+function SourceList({sources}: {sources: ChatSource[]}) {
+    const {t} = useI18n();
+    const [error, setError] = useState<string | null>(null);
+    return (
+        <div className="mr-auto flex max-w-[min(100%,48rem)] flex-col gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-xs text-muted-foreground">{t("chat.sources")}</span>
+                {sources.map((source) => (
+                    <button
+                        key={source.id}
+                        type="button"
+                        title={source.filename}
+                        aria-label={t("chat.openSource", {name: source.name})}
+                        onClick={() => {
+                            setError(null);
+                            void openDocumentFile(source.id, source.filename).catch((reason) =>
+                                setError(getApiErrorMessage(reason, t("documents.openError"))),
+                            );
+                        }}
+                        className="inline-flex max-w-64 cursor-pointer items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs font-medium outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+                    >
+                        <FileText className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                        <span className="truncate">{source.name}</span>
+                    </button>
+                ))}
+            </div>
+            {error ? (
+                <p role="alert" className="text-xs text-destructive">
+                    {error}
+                </p>
             ) : null}
         </div>
     );

@@ -1,15 +1,13 @@
 import {en, type MessageKey} from "./en";
 import {es} from "./es";
 import {fr} from "./fr";
-import {tr} from "./tr";
-import {uk} from "./uk";
 
 export type {MessageKey};
 /** Keys added by src/custom extensions. */
 export type CustomMessageKey = `custom.${string}`;
 export {en};
 
-export const LOCALES = ["en", "es", "uk", "tr", "fr"] as const;
+export const LOCALES = ["en", "es", "fr"] as const;
 export type Locale = (typeof LOCALES)[number];
 
 export const DEFAULT_LOCALE: Locale = "en";
@@ -22,8 +20,6 @@ export const LOCALE: Locale = isLocale(import.meta.env.APP_LANGUAGE)
 export const messages: Record<Locale, Record<MessageKey, string>> = {
     en,
     es,
-    uk,
-    tr,
     fr,
 };
 
@@ -38,8 +34,6 @@ export function isLocale(value: string | undefined): value is Locale {
 const HTML_LANG: Record<Locale, string> = {
     en: "en",
     es: "es",
-    uk: "uk",
-    tr: "tr",
     fr: "fr",
 };
 
@@ -48,8 +42,5 @@ export function localeHtmlLang(locale: Locale): string {
 }
 
 export function localeIntlTag(locale: Locale): string {
-    if (locale === "uk") {
-        return "uk-UA";
-    }
     return locale;
 }

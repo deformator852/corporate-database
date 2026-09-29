@@ -1,12 +1,22 @@
 import asyncio
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    Depends,
+    Query,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from pydantic import Field, TypeAdapter, ValidationError
 
+from api.deps import get_chat_history_service, get_current_user
 from api.ws import RECHECK_SECONDS, seconds_left, still_allowed
 from database import AsyncSessionLocal
 from exceptions import AppError
+from i18n import t
 from models.audit import AuditAction
 from models.user import User
 from schemas.chat import (
@@ -14,12 +24,17 @@ from schemas.chat import (
     ChatAskSchema,
     ChatCancelSchema,
     ChatCancelledSchema,
+    ChatConversationListSchema,
+    ChatConversationSchema,
     ChatDeltaSchema,
     ChatSocketErrorSchema,
+    ChatSourceSchema,
 )
+from schemas.error import ErrorSchema
 from security import get_ws_payload
 from services.audit import AuditService
 from services.chat import ChatService
+from services.chat_history import ChatHistoryService
 from services.embedding import EmbeddingModel, get_embedding_model
 from services.generator import OllamaGenerator
 from services.storage import ObjectStorage
@@ -28,6 +43,49 @@ router = APIRouter(
     prefix="/chat",
     tags=["chat"],
 )
+
+@router.get(
+    "/conversations",
+    response_model=ChatConversationListSchema,
+    responses={401: {"model": ErrorSchema}},
+)
+async def list_conversations(
+    page: Annotated[int, Query(ge=1)] = 1,
+    per_page: Annotated[int, Query(ge=1, le=100)] = 30,
+    user: User = Depends(get_current_user),
+    history: ChatHistoryService = Depends(get_chat_history_service),
+) -> ChatConversationListSchema:
+    items, total = await history.list_conversations(user.id, page=page, per_page=per_page)
+    return ChatConversationListSchema.from_page(items, page=page, per_page=per_page, total=total)
+
+
+@router.get(
+    "/conversations/{conversation_id}",
+    response_model=ChatConversationSchema,
+    responses={401: {"model": ErrorSchema}, 404: {"model": ErrorSchema}},
+)
+async def get_conversation(
+    conversation_id: int,
+    user: User = Depends(get_current_user),
+    history: ChatHistoryService = Depends(get_chat_history_service),
+) -> ChatConversationSchema:
+    conversation = await history.get(user.id, conversation_id)
+    return ChatConversationSchema.from_conversation(conversation)
+
+
+@router.delete(
+    "/conversations/{conversation_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={401: {"model": ErrorSchema}, 404: {"model": ErrorSchema}},
+)
+async def delete_conversation(
+    conversation_id: int,
+    user: User = Depends(get_current_user),
+    history: ChatHistoryService = Depends(get_chat_history_service),
+) -> Response:
+    await history.delete(user.id, conversation_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
 
 IncomingMessage = TypeAdapter(
     Annotated[ChatAskSchema | ChatCancelSchema, Field(discriminator="type")]
@@ -50,7 +108,7 @@ async def chat_socket(
     generator = OllamaGenerator()
     storage = ObjectStorage()
     receive = asyncio.create_task(websocket.receive_text())
-    reply: asyncio.Task[str] | None = None
+    reply: asyncio.Task[ChatAnswerSchema] | None = None
     try:
         while True:
             wait: set[asyncio.Task] = {receive}
@@ -112,12 +170,12 @@ async def _on_client_message(
     websocket: WebSocket,
     user_id: int,
     raw: str,
-    reply: asyncio.Task[str] | None,
+    reply: asyncio.Task[ChatAnswerSchema] | None,
     ip: str | None,
     embedder: EmbeddingModel,
     generator: OllamaGenerator,
     storage: ObjectStorage,
-) -> asyncio.Task[str] | None:
+) -> asyncio.Task[ChatAnswerSchema] | None:
     try:
         incoming = IncomingMessage.validate_json(raw)
     except ValidationError as exc:
@@ -125,7 +183,7 @@ async def _on_client_message(
             ChatSocketErrorSchema(
                 type="error",
                 code="invalid",
-                message=_validation_message(exc),
+                message=t(_validation_message(exc)),
             ).model_dump()
         )
         return reply
@@ -146,7 +204,7 @@ async def _on_client_message(
             ChatSocketErrorSchema(
                 type="error",
                 code="invalid",
-                message="A reply is already in progress.",
+                message=t("A reply is already in progress."),
             ).model_dump()
         )
         return reply
@@ -163,9 +221,16 @@ async def _generate(
     embedder: EmbeddingModel,
     generator: OllamaGenerator,
     storage: ObjectStorage,
-) -> str:
+) -> ChatAnswerSchema:
     async with AsyncSessionLocal() as session:
         service = ChatService(session, embedder, generator, storage)
+        history = ChatHistoryService(session)
+        question = ask.messages[-1].content
+        # Saved before answering: the question is kept even if the answer
+        # fails or is cancelled.
+        conversation = await history.open_or_start(user_id, ask.conversation_id, question)
+        await history.add_message(conversation, "user", question)
+        await session.commit()
 
         async def send_delta(piece: str) -> None:
             await websocket.send_json(
@@ -173,6 +238,13 @@ async def _generate(
             )
 
         content, documents = await service.reply(user_id, ask.messages, send_delta)
+        sources = [
+            ChatSourceSchema(id=int(d["document_id"]), name=str(d["name"]), filename=str(d["filename"]))
+            for d in documents
+        ]
+        await history.add_message(
+            conversation, "assistant", content, [source.model_dump() for source in sources]
+        )
         if documents:
             # Who read which documents through the assistant; not the question.
             actor = await session.get(User, user_id)
@@ -192,13 +264,20 @@ async def _generate(
                     ]
                 },
             )
-            await session.commit()
-        return content
+        await session.commit()
+        return ChatAnswerSchema(
+            type="answer",
+            content=content,
+            conversation_id=conversation.id,
+            sources=sources,
+        )
 
 
-async def _finish_reply(websocket: WebSocket, reply: asyncio.Task[str]) -> None:
+async def _finish_reply(
+    websocket: WebSocket, reply: asyncio.Task[ChatAnswerSchema]
+) -> None:
     try:
-        content = reply.result()
+        answer = reply.result()
     except asyncio.CancelledError:
         return
     except AppError as exc:
@@ -206,11 +285,11 @@ async def _finish_reply(websocket: WebSocket, reply: asyncio.Task[str]) -> None:
             ChatSocketErrorSchema(
                 type="error",
                 code=exc.code,
-                message=exc.message,
+                message=t(exc.message),
             ).model_dump()
         )
         return
-    await websocket.send_json(ChatAnswerSchema(type="answer", content=content).model_dump())
+    await websocket.send_json(answer.model_dump())
 
 
 def _validation_message(exc: ValidationError) -> str:
