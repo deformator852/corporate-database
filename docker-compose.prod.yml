@@ -1,26 +1,58 @@
 name: corpus
 
-# Production stack. Run through deploy/deploy.sh (it passes backend/.env, or
-# CORPUS_ENV_FILE, for the ${...} values and the containers). Network isolation is the point of this file:
+# Production stack. Run through deploy/deploy.sh: it passes backend/.env (or
+# CORPUS_ENV_FILE) to fill the ${...} values below. Network isolation is the point of this file:
 #   internal  - every service; no route to the internet (internal: true)
 #   edge      - only the HTTPS proxy, the one published port
 #   egress    - only the `models` job (profile "setup"), run on purpose to
 #               download AI models; nothing else can reach the internet.
 
+# Each container gets only the variables it needs (never the whole .env): a
+# compromised proxy or database container must not see the encryption key,
+# the JWT secret or other services' passwords. An empty optional value means
+# the backend default (settings.py).
+#   migrate  - database and search index only
+#   worker   - + queue, file storage, encryption key, LLM
+#   backend  - + JWT secret (sessions) and chat settings
+x-db-env: &db-env
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_USER: ${DB_USER:?is empty; run uv run setup in backend/}
+  DB_PASSWORD: ${DB_PASSWORD:?is empty; run uv run setup in backend/}
+  DB_NAME: ${DB_NAME:?is empty; run uv run setup in backend/}
+  QDRANT_HOST: qdrant
+  QDRANT_PORT: "6333"
+  QDRANT_API_KEY: ${QDRANT_API_KEY:?is empty; run uv run setup in backend/}
+  APP_LANGUAGE: ${APP_LANGUAGE:-}
+  EMBEDDING_MODEL: ${EMBEDDING_MODEL:?is empty; run uv run setup in backend/}
+
+x-worker-env: &worker-env
+  <<: *db-env
+  RABBITMQ_HOST: rabbitmq
+  RABBITMQ_PORT: "5672"
+  RABBITMQ_USER: ${RABBITMQ_USER:?is empty; run uv run setup in backend/}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?is empty; run uv run setup in backend/}
+  # The least-privilege app user only; MinIO root stays with minio/minio-init.
+  MINIO_ENDPOINT: minio:9000
+  MINIO_SECURE: "false"
+  MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?is empty; run uv run setup in backend/}
+  MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?is empty; run uv run setup in backend/}
+  MINIO_BUCKET: ${MINIO_BUCKET:-}
+  MINIO_REGION: ${MINIO_REGION:-}
+  DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?is empty; run uv run setup in backend/}
+  # Set only while rotating the key (maintenance.rotate_key).
+  DATA_ENCRYPTION_KEY_PREVIOUS: ${DATA_ENCRYPTION_KEY_PREVIOUS:-}
+  LLM_HOST: http://ollama:11434
+  LLM_MODEL: ${LLM_MODEL:?is empty; run uv run setup in backend/}
+  LLM_NUM_CTX: ${LLM_NUM_CTX:-}
+  TEXT_CLEANUP: ${TEXT_CLEANUP:-}
+  TEXT_CLEANUP_BUDGET_SECONDS: ${TEXT_CLEANUP_BUDGET_SECONDS:-}
+  CHUNK_SIZE: ${CHUNK_SIZE:-}
+  CHUNK_OVERLAP: ${CHUNK_OVERLAP:-}
+
 x-app: &app
   image: corpus-backend:latest
   restart: unless-stopped
-  env_file: ${CORPUS_ENV_FILE:-./backend/.env}
-  environment: &app-env
-    DB_HOST: postgres
-    DB_PORT: "5432"
-    QDRANT_HOST: qdrant
-    QDRANT_PORT: "6333"
-    RABBITMQ_HOST: rabbitmq
-    RABBITMQ_PORT: "5672"
-    MINIO_ENDPOINT: minio:9000
-    MINIO_SECURE: "false"
-    LLM_HOST: http://ollama:11434
   volumes:
     - hf_models:/models/hf
   networks: [internal]
@@ -29,24 +61,27 @@ services:
   postgres:
     image: postgres:17
     restart: unless-stopped
-    env_file: ${CORPUS_ENV_FILE:-./backend/.env}
+    environment:
+      POSTGRES_USER: ${DB_USER:?is empty; run uv run setup in backend/}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?is empty; run uv run setup in backend/}
+      POSTGRES_DB: ${DB_NAME:?is empty; run uv run setup in backend/}
+    # POSTGRES_PASSWORD only applies to a new volume; re-apply it on every
+    # start (local socket, trusted) so a password rotated in .env works.
     entrypoint:
       - /bin/bash
       - -c
       - |
-        : "$${DB_PASSWORD:?is empty; run uv run setup in backend/}"
-        export POSTGRES_USER="$$DB_USER" POSTGRES_PASSWORD="$$DB_PASSWORD" POSTGRES_DB="$$DB_NAME"
         (
-          until pg_isready -q -h /var/run/postgresql -U "$$DB_USER" -d "$$DB_NAME"; do sleep 1; done
+          until pg_isready -q -h /var/run/postgresql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"; do sleep 1; done
           echo "ALTER ROLE CURRENT_USER PASSWORD :'pw';" |
-            psql -q -h /var/run/postgresql -U "$$DB_USER" -d "$$DB_NAME" -v pw="$$DB_PASSWORD"
+            psql -q -h /var/run/postgresql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v pw="$$POSTGRES_PASSWORD"
         ) &
         exec docker-entrypoint.sh postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks: [internal]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$DB_USER -d $$DB_NAME"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -54,15 +89,9 @@ services:
   qdrant:
     image: qdrant/qdrant:v1.19.1
     restart: unless-stopped
-    env_file: ${CORPUS_ENV_FILE:-./backend/.env}
-    entrypoint:
-      - /bin/bash
-      - -c
-      - |
-        : "$${QDRANT_API_KEY:?is empty; run uv run setup in backend/}"
-        exec env -i PATH="$$PATH" TZ=Etc/UTC RUN_MODE=production \
-          QDRANT__SERVICE__API_KEY="$$QDRANT_API_KEY" \
-          QDRANT__TELEMETRY_DISABLED=true ./entrypoint.sh
+    environment:
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:?is empty; run uv run setup in backend/}
+      QDRANT__TELEMETRY_DISABLED: "true"
     volumes:
       - qdrant_data:/qdrant/storage
     networks: [internal]
@@ -76,19 +105,21 @@ services:
     image: rabbitmq:3.13.7-management
     restart: unless-stopped
     hostname: rabbitmq
-    env_file: ${CORPUS_ENV_FILE:-./backend/.env}
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?is empty; run uv run setup in backend/}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?is empty; run uv run setup in backend/}
+    # The default user is only created on a new volume; re-apply the password
+    # on every start so a password rotated in .env works.
     entrypoint:
       - /bin/bash
       - -c
       - |
-        : "$${RABBITMQ_PASSWORD:?is empty; run uv run setup in backend/}"
-        export RABBITMQ_DEFAULT_USER="$$RABBITMQ_USER" RABBITMQ_DEFAULT_PASS="$$RABBITMQ_PASSWORD"
         (
           until rabbitmqctl -q await_startup >/dev/null 2>&1; do sleep 2; done
-          rabbitmqctl -q add_user "$$RABBITMQ_USER" "$$RABBITMQ_PASSWORD" >/dev/null 2>&1 ||
-            rabbitmqctl -q change_password "$$RABBITMQ_USER" "$$RABBITMQ_PASSWORD"
-          rabbitmqctl -q set_user_tags "$$RABBITMQ_USER" administrator
-          rabbitmqctl -q set_permissions -p / "$$RABBITMQ_USER" ".*" ".*" ".*"
+          rabbitmqctl -q add_user "$$RABBITMQ_DEFAULT_USER" "$$RABBITMQ_DEFAULT_PASS" >/dev/null 2>&1 ||
+            rabbitmqctl -q change_password "$$RABBITMQ_DEFAULT_USER" "$$RABBITMQ_DEFAULT_PASS"
+          rabbitmqctl -q set_user_tags "$$RABBITMQ_DEFAULT_USER" administrator
+          rabbitmqctl -q set_permissions -p / "$$RABBITMQ_DEFAULT_USER" ".*" ".*" ".*"
         ) &
         exec docker-entrypoint.sh rabbitmq-server
     volumes:
@@ -103,17 +134,11 @@ services:
   minio:
     image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     restart: unless-stopped
-    env_file: ${CORPUS_ENV_FILE:-./backend/.env}
-    entrypoint:
-      - /bin/bash
-      - -c
-      - |
-        : "$${MINIO_ROOT_PASSWORD:?is empty; run uv run setup in backend/}"
-        exec env -i PATH="$$PATH" \
-          MINIO_ROOT_USER="$$MINIO_ROOT_USER" \
-          MINIO_ROOT_PASSWORD="$$MINIO_ROOT_PASSWORD" \
-          MINIO_UPDATE=off \
-          minio server /data
+    command: ["server", "/data"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?is empty; run uv run setup in backend/}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?is empty; run uv run setup in backend/}
+      MINIO_UPDATE: "off"
     volumes:
       - minio_data:/data
     networks: [internal]
@@ -129,16 +154,20 @@ services:
     depends_on:
       minio:
         condition: service_healthy
-    env_file: ${CORPUS_ENV_FILE:-./backend/.env}
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?is empty; run uv run setup in backend/}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?is empty; run uv run setup in backend/}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?is empty; run uv run setup in backend/}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?is empty; run uv run setup in backend/}
+      MINIO_BUCKET: ${MINIO_BUCKET:-documents}
     networks: [internal]
     entrypoint:
       - /bin/bash
       - -c
       - |
         set -euo pipefail
-        : "$${MINIO_SECRET_KEY:?is empty; run uv run setup in backend/}"
         export MC_CONFIG_DIR=/tmp/mc
-        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null
+        mc alias set -- local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null
         mc mb --ignore-existing "local/$$MINIO_BUCKET" >/dev/null
         mc anonymous set none "local/$$MINIO_BUCKET" >/dev/null
         cat > /tmp/policy.json <<POLICY
@@ -147,8 +176,8 @@ services:
           "Resource": ["arn:aws:s3:::$$MINIO_BUCKET/*"]}]}
         POLICY
         mc admin policy create local corporate-app /tmp/policy.json >/dev/null
-        mc admin user add local "$$MINIO_ACCESS_KEY" "$$MINIO_SECRET_KEY" >/dev/null
-        mc admin policy attach local corporate-app --user "$$MINIO_ACCESS_KEY" >/dev/null
+        mc admin user add -- local "$$MINIO_ACCESS_KEY" "$$MINIO_SECRET_KEY" >/dev/null
+        mc admin policy attach local corporate-app --user="$$MINIO_ACCESS_KEY" >/dev/null
         echo "MinIO ready: bucket $$MINIO_BUCKET, app user $$MINIO_ACCESS_KEY"
 
   ollama:
@@ -156,6 +185,11 @@ services:
     restart: unless-stopped
     environment:
       OLLAMA_KEEP_ALIVE: "-1"
+      # LLM_PARALLEL answers at once (uv run configure); each reserves its own
+      # context memory, which the 8-bit cache (needs flash attention) halves.
+      OLLAMA_NUM_PARALLEL: ${LLM_PARALLEL:-4}
+      OLLAMA_FLASH_ATTENTION: "1"
+      OLLAMA_KV_CACHE_TYPE: q8_0
     volumes:
       - ollama_data:/root/.ollama
     networks: [internal]
@@ -173,6 +207,8 @@ services:
   migrate:
     <<: *app
     restart: "no"
+    environment:
+      <<: *db-env
     command: ["sh", "-c", "cd /app && alembic upgrade heads && cd src && python -m seeders.run"]
     depends_on:
       postgres: {condition: service_healthy}
@@ -180,6 +216,12 @@ services:
 
   backend:
     <<: *app
+    environment:
+      <<: *worker-env
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?is empty; run uv run setup in backend/}
+      CHAT_RETENTION_DAYS: ${CHAT_RETENTION_DAYS:-}
+      CHAT_QUESTIONS_PER_10_MIN: ${CHAT_QUESTIONS_PER_10_MIN:-}
+      API_DOCS: "false"
     depends_on:
       migrate: {condition: service_completed_successfully}
       rabbitmq: {condition: service_healthy}
@@ -188,6 +230,8 @@ services:
 
   worker:
     <<: *app
+    environment:
+      <<: *worker-env
     command: ["celery", "-A", "worker", "worker", "--loglevel=info"]
     depends_on:
       migrate: {condition: service_completed_successfully}
@@ -197,8 +241,10 @@ services:
   proxy:
     image: corpus-proxy:latest
     restart: unless-stopped
-    env_file: ${CORPUS_ENV_FILE:-./backend/.env}
+    # No secrets: only what the Caddyfile reads.
     environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+      TLS: ${TLS:-internal}
       BACKEND: backend:8000
     ports:
       - "${HTTP_PORT:-80}:80"
@@ -219,8 +265,9 @@ services:
     <<: *app
     restart: "no"
     profiles: [setup]
+    # The only container with internet access: no secrets, no internal network.
     environment:
-      <<: *app-env
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:?is empty; run uv run setup in backend/}
       HF_HUB_OFFLINE: "0"
       TRANSFORMERS_OFFLINE: "0"
     command: ["python", "-m", "maintenance.download_models"]
@@ -230,7 +277,8 @@ services:
     image: ollama/ollama:0.34.3
     restart: "no"
     profiles: [setup]
-    env_file: ${CORPUS_ENV_FILE:-./backend/.env}
+    environment:
+      LLM_MODEL: ${LLM_MODEL:?is empty; run uv run setup in backend/}
     entrypoint:
       - /bin/sh
       - -c

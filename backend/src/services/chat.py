@@ -3,16 +3,13 @@ import asyncio
 from sqlalchemy import func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from exceptions import AppError
 from models.document import Document, DocumentStatus
 from models.document_text import DocumentText
 from schemas.chat import ChatMessageSchema
 from services.documents.access import retrieval_classifications, user_permission_keys
 from services.embedding import EmbeddingModel
 from services.generator import OllamaGenerator, OnDelta, document_budget_chars
-from services.documents.parser import DocumentParser
 from services.rag import Rag
-from services.storage import ObjectStorage
 
 _MAX_DOCS = 2
 # Chunks taken on each side of a search hit for excerpts of long documents.
@@ -26,10 +23,17 @@ _DUMP_MARKERS = (
     "whole file",
     "whole content",
     "verbatim",
-    "полный текст",
-    "полное содержимое",
-    "весь файл",
-    "целиком",
+    # es
+    "texto completo",
+    "contenido completo",
+    "archivo completo",
+    "íntegro",
+    # fr
+    "texte complet",
+    "contenu complet",
+    "fichier complet",
+    "intégralité",
+    "mot pour mot",
 )
 
 
@@ -39,13 +43,10 @@ class ChatService:
         session: AsyncSession,
         embedder: EmbeddingModel,
         generator: OllamaGenerator,
-        storage: ObjectStorage,
     ) -> None:
         self.session = session
         self.embedder = embedder
         self.generator = generator
-        self.storage = storage
-        self.parser = DocumentParser()
 
     async def reply(
         self,
@@ -152,7 +153,7 @@ class ChatService:
             document = rows.get(document_id)
             if document is None:
                 continue
-            text = await self._document_text(document, rag)
+            text = await self._document_text(document)
             if not text:
                 continue
             loaded.append(
@@ -186,28 +187,12 @@ class ChatService:
         )
         return list(ids)
 
-    async def _document_text(self, document: Document, rag: Rag) -> str:
+    async def _document_text(self, document: Document) -> str:
+        """Saved at processing time; never parsed per question."""
         text = await self.session.scalar(
             select(DocumentText.text).where(DocumentText.document_id == document.id)
         )
-        if text is not None:
-            return _cap(text)
-        try:
-            # Processed before texts were stored: parse once and keep it.
-            raw = await asyncio.to_thread(self.storage.get, document.object_key)
-            text = await asyncio.to_thread(
-                self.parser.parse, raw, document.filename
-            )
-            await self.session.merge(DocumentText(document_id=document.id, text=text))
-            await self.session.commit()
-        except AppError:
-            payloads = await rag.payloads_for_document(document.id)
-            text = "\n".join(
-                str(payload.get("text") or "").strip()
-                for payload in payloads
-                if str(payload.get("text") or "").strip()
-            )
-        return _cap(text)
+        return _cap(text or "")
 
 
 def _cap(text: str) -> str:
@@ -244,7 +229,7 @@ def _document_id(chunk: dict[str, object]) -> int | None:
 
 
 def build_excerpt(
-    chunks: dict[int, tuple[str, int | None]], hits: list[int], budget: int
+    chunks: dict[int, tuple[str, int]], hits: list[int], budget: int
 ) -> str:
     """Hit chunks first, then their neighbours at distance 1, 2, ... while
     they fit `budget` characters; joined in document order without repeating
@@ -273,25 +258,12 @@ def build_excerpt(
     return "\n…\n".join(part.strip() for part in parts)
 
 
-# A shorter match could be a coincidence rather than the real overlap.
-_MIN_GUESSED_OVERLAP = 20
-
-
-def _continuation(
-    before: tuple[str, int | None], after: tuple[str, int | None]
-) -> str:
-    """`after` without the text it repeats from `before`. Exact with stored
-    offsets. Older chunks have none: the shortest plausible repeated start is
-    cut, so repetitive text (tables) may keep a little duplicate but never
-    loses any."""
+def _continuation(before: tuple[str, int], after: tuple[str, int]) -> str:
+    """`after` without the text it repeats from `before`, cut exactly by the
+    chunks' start offsets in the document."""
     (before_text, before_start), (after_text, after_start) = before, after
-    if before_start is not None and after_start is not None:
-        shared = before_start + len(before_text) - after_start
-        if shared > 0:
-            return after_text[shared:]
-        # Not adjacent in the text (whitespace between chunks).
-        return "\n" + after_text
-    for size in range(_MIN_GUESSED_OVERLAP, min(len(before_text), len(after_text)) + 1):
-        if before_text.endswith(after_text[:size]):
-            return after_text[size:]
+    shared = before_start + len(before_text) - after_start
+    if shared > 0:
+        return after_text[shared:]
+    # Not adjacent in the text (whitespace between chunks).
     return "\n" + after_text

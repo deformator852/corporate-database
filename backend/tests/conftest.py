@@ -3,8 +3,8 @@
 Needs only Postgres: start it with
     docker compose -f docker-compose.local.yml up -d postgres
 Tests create a throwaway database next to the one in backend/.env, migrate
-it, and drop it at the end. Qdrant, MinIO, RabbitMQ and Ollama are replaced
-by fakes where a test touches them.
+it, and drop it at the end. Qdrant, MinIO, RabbitMQ, Ollama, Celery and the
+embedding model are replaced by the fakes in tests/fakes.py (`infra`).
 
     cd backend && uv run pytest
 """
@@ -13,6 +13,7 @@ import asyncio
 import os
 import uuid
 from collections.abc import Iterator
+from types import SimpleNamespace
 
 import pytest
 from dotenv import dotenv_values
@@ -31,7 +32,7 @@ os.environ.update(
         "JWT_SECRET_KEY": "test-jwt-secret-" + "x" * 32,
         "DATA_ENCRYPTION_KEY": "test-encryption-key-" + "y" * 32,
         "APP_LANGUAGE": "en",
-        "EMBEDING_MODEL": "multilingual-e5-small",
+        "EMBEDDING_MODEL": "multilingual-e5-small",
         "QDRANT_HOST": "localhost",
         "QDRANT_PORT": "6333",
         "QDRANT_API_KEY": "test-qdrant-key-" + "z" * 32,
@@ -138,7 +139,48 @@ def make_user():
 
 
 @pytest.fixture
-def client():
+def infra(monkeypatch):
+    """Fakes for MinIO, Qdrant, embeddings, Ollama, RabbitMQ and Celery
+    (tests/fakes.py), wired in where the app creates its clients."""
+    import aio_pika
+
+    import services.documents.text_cleanup as text_cleanup
+    import services.embedding as embedding
+    import services.generator as generator
+    import services.rag as rag
+    import services.storage as storage
+    import services.system as system
+    from fakes import (
+        FakeBroker,
+        FakeMinio,
+        FakeOllama,
+        FakeSentenceTransformer,
+        RecordingQueue,
+        SharedQdrant,
+    )
+    from services.documents.document import CeleryDocumentQueue
+
+    stack = SimpleNamespace(
+        minio=FakeMinio(),
+        qdrant=SharedQdrant(),
+        llm=FakeOllama(),
+        broker=FakeBroker(),
+        queue=RecordingQueue(),
+    )
+    monkeypatch.setattr(storage, "Minio", lambda *a, **k: stack.minio)
+    monkeypatch.setattr(rag, "_qdrant_client", lambda: stack.qdrant)
+    monkeypatch.setattr(rag, "_indexes_ready", False)
+    monkeypatch.setattr(embedding, "SentenceTransformer", FakeSentenceTransformer)
+    monkeypatch.setattr(embedding, "_embedder", None)
+    for module in (generator, text_cleanup, system):
+        monkeypatch.setattr(module, "AsyncClient", stack.llm.client)
+    monkeypatch.setattr(aio_pika, "connect_robust", stack.broker.connect_robust)
+    monkeypatch.setattr(CeleryDocumentQueue, "enqueue", lambda self, i: stack.queue.enqueue(i))
+    return stack
+
+
+@pytest.fixture
+def client(infra):
     from fastapi.testclient import TestClient
 
     import main
@@ -157,3 +199,19 @@ def login(client, email: str, password: str):
 
 def csrf(client, name: str = "csrf_access_token") -> dict[str, str]:
     return {"X-CSRF-TOKEN": client.cookies.get(name) or ""}
+
+
+def upload(client, name: str, content: bytes, filename: str, classification: str = "standard"):
+    return client.post(
+        "/api/v1/documents",
+        headers=csrf(client),
+        data={"name": name, "classification": classification},
+        files={"file": (filename, content)},
+    )
+
+
+def process(document_id: int) -> None:
+    """Runs the worker's job for a queued document, as Celery would."""
+    from services.documents.processor import process_document_job
+
+    run(process_document_job(document_id))

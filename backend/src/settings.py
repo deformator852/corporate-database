@@ -3,10 +3,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote
 
-from dotenv import dotenv_values, load_dotenv
+from dotenv import load_dotenv
 
 from exceptions import AppError
 
+# Development: backend/.env. Production: compose passes the values as
+# environment variables. Either way they are read once per process start;
+# after changing .env (uv run configure), restart the backend and the worker.
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(ENV_FILE)
 
@@ -34,7 +37,7 @@ _E5 = {"query_prefix": "query: ", "passage_prefix": "passage: "}
 _BGE_EN = {"query_prefix": "Represent this sentence for searching relevant passages: "}
 _SOLON = {"query_prefix": "query : "}
 
-# EMBEDING_MODEL value → model spec.
+# EMBEDDING_MODEL value → model spec.
 EMBEDDING_MODELS = {
     "multilingual-e5-small": EmbeddingSpec("intfloat/multilingual-e5-small", 384, **_E5),
     "multilingual-e5-base": EmbeddingSpec("intfloat/multilingual-e5-base", 768, **_E5),
@@ -71,7 +74,7 @@ def language() -> str:
 
 
 def embedding_model() -> EmbeddingSpec:
-    spec = EMBEDDING_MODELS.get(_require("EMBEDING_MODEL"))
+    spec = EMBEDDING_MODELS.get(_require("EMBEDDING_MODEL"))
     if spec is None:
         raise AppError(
             "misconfigured",
@@ -153,10 +156,8 @@ MIN_CHUNK_SIZE = 200
 MAX_CHUNK_SIZE = 4000
 
 
-def _live_int(name: str, default: int) -> int:
-    # Read from .env per call: a change applies to the next upload without a
-    # worker restart.
-    raw = (dotenv_values(ENV_FILE).get(name) or os.getenv(name) or "").strip()
+def _int_env(name: str, default: int) -> int:
+    raw = (os.getenv(name) or "").strip()
     if not raw:
         return default
     try:
@@ -168,7 +169,7 @@ def _live_int(name: str, default: int) -> int:
 
 
 def chunk_size() -> int:
-    value = _live_int("CHUNK_SIZE", DEFAULT_CHUNK_SIZE)
+    value = _int_env("CHUNK_SIZE", DEFAULT_CHUNK_SIZE)
     if not MIN_CHUNK_SIZE <= value <= MAX_CHUNK_SIZE:
         raise AppError(
             "misconfigured",
@@ -181,7 +182,7 @@ def chunk_size() -> int:
 def chunk_overlap() -> int:
     """At most half the chunk: beyond that every piece of text is stored and
     embedded twice or more."""
-    value = _live_int("CHUNK_OVERLAP", DEFAULT_CHUNK_OVERLAP)
+    value = _int_env("CHUNK_OVERLAP", DEFAULT_CHUNK_OVERLAP)
     if not 0 <= value <= chunk_size() // 2:
         raise AppError(
             "misconfigured",
@@ -193,7 +194,21 @@ def chunk_overlap() -> int:
 
 def chat_retention_days() -> int:
     """Saved chats idle this long are deleted; 0 keeps them forever."""
-    return max(0, _live_int("CHAT_RETENTION_DAYS", 90))
+    return max(0, _int_env("CHAT_RETENTION_DAYS", 90))
+
+
+DEFAULT_CHAT_QUESTIONS = 20
+
+
+def chat_questions_per_10_min() -> int:
+    """Questions one user may ask in any 10 minutes; 0 = no limit."""
+    return max(0, _int_env("CHAT_QUESTIONS_PER_10_MIN", DEFAULT_CHAT_QUESTIONS))
+
+
+# Answers the LLM writes at the same time (Ollama's OLLAMA_NUM_PARALLEL; set
+# in compose from LLM_PARALLEL). Each one reserves its own context memory.
+DEFAULT_LLM_PARALLEL = 4
+MAX_LLM_PARALLEL = 16
 
 
 TEXT_CLEANUP_MODES = ("llm", "rules", "off")
@@ -201,11 +216,8 @@ TEXT_CLEANUP_MODES = ("llm", "rules", "off")
 
 def text_cleanup_mode() -> str:
     """How chunks are cleaned before embedding: rules and then the LLM, rules
-    only, or not at all. Read per document, so a change applies to the next
-    upload without restarting the worker."""
-    value = (
-        dotenv_values(ENV_FILE).get("TEXT_CLEANUP") or os.getenv("TEXT_CLEANUP") or "llm"
-    ).strip()
+    only, or not at all."""
+    value = (os.getenv("TEXT_CLEANUP") or "llm").strip()
     if value not in TEXT_CLEANUP_MODES:
         raise AppError(
             "misconfigured",
@@ -218,21 +230,11 @@ def text_cleanup_mode() -> str:
 def text_cleanup_budget_seconds() -> int:
     """LLM cleanup time per document. Chunks past it get rules only, so large
     files still finish inside the worker's time limit."""
-    raw = (os.getenv("TEXT_CLEANUP_BUDGET_SECONDS") or "480").strip()
-    try:
-        return max(0, int(raw))
-    except ValueError as exc:
-        raise AppError(
-            "misconfigured",
-            "TEXT_CLEANUP_BUDGET_SECONDS must be a number.",
-            status_code=500,
-        ) from exc
+    return max(0, _int_env("TEXT_CLEANUP_BUDGET_SECONDS", 480))
 
 
 def llm_model() -> str:
-    value = (
-        dotenv_values(ENV_FILE).get("LLM_MODEL") or os.getenv("LLM_MODEL") or ""
-    ).strip()
+    value = (os.getenv("LLM_MODEL") or "").strip()
     if not value:
         raise AppError(
             "misconfigured",

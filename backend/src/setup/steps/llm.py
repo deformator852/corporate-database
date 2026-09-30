@@ -30,12 +30,16 @@ class LlmOption:
     disk_bytes: int
     ram_min: str
     ram_recommended: str
+    # Context memory per token of one answer (8-bit KV cache: layers x KV
+    # heads x head size x 2 x ~1.06 bytes). Upper bound: models with sliding
+    # window attention (Gemma) need less.
+    kv_bytes_per_token: int
 
 
-_LLAMA = LlmOption("llama3.1:8b", "8B, strong in EN/ES/FR", int(4.9 * _GIB), "8 GB", "16 GB")
-_GEMMA_4B = LlmOption("gemma3:4b", "4B, light, 140+ languages", int(3.3 * _GIB), "6 GB", "8 GB")
-_GEMMA_12B = LlmOption("gemma3:12b", "12B, best quality, 140+ languages", int(8.1 * _GIB), "12 GB", "16 GB")
-_QWEN = LlmOption("qwen3:8b", "8B, 119 languages", int(5.2 * _GIB), "8 GB", "16 GB")
+_LLAMA = LlmOption("llama3.1:8b", "8B, strong in EN/ES/FR", int(4.9 * _GIB), "8 GB", "16 GB", 69_632)
+_GEMMA_4B = LlmOption("gemma3:4b", "4B, light, 140+ languages", int(3.3 * _GIB), "6 GB", "8 GB", 73_984)
+_GEMMA_12B = LlmOption("gemma3:12b", "12B, best quality, 140+ languages", int(8.1 * _GIB), "12 GB", "16 GB", 208_896)
+_QWEN = LlmOption("qwen3:8b", "8B, 119 languages", int(5.2 * _GIB), "8 GB", "16 GB", 78_336)
 
 # APP_LANGUAGE → models that answer well in that language.
 OPTIONS: dict[str, tuple[LlmOption, ...]] = {
@@ -43,6 +47,9 @@ OPTIONS: dict[str, tuple[LlmOption, ...]] = {
     "es": (_LLAMA, _GEMMA_12B, _QWEN),
     "fr": (_LLAMA, _GEMMA_12B, _QWEN),
 }
+
+
+BY_TAG = {option.tag: option for option in (_LLAMA, _GEMMA_4B, _GEMMA_12B, _QWEN)}
 
 
 def _fmt_bytes(n: int) -> str:

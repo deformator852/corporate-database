@@ -19,6 +19,7 @@ class UserListItemSchema(BaseModel):
     email: Email
     roles: list[RoleRefSchema]
     is_last_admin: bool
+    disabled: bool
 
     @classmethod
     def from_user(cls, user: User, *, is_last_admin: bool = False) -> Self:
@@ -32,6 +33,7 @@ class UserListItemSchema(BaseModel):
                 key=lambda role: role.name,
             ),
             is_last_admin=is_last_admin,
+            disabled=user.is_disabled,
         )
 
 
@@ -126,6 +128,7 @@ class UserDetailSchema(BaseModel):
     last_name: str
     email: Email
     roles: list[RoleRefSchema]
+    disabled: bool
     created_at: datetime
     last_sign_in_at: datetime | None
     actions_total: int
@@ -143,6 +146,7 @@ class UserDetailSchema(BaseModel):
                 (RoleRefSchema(key=role.key, name=role.name) for role in user.roles),
                 key=lambda role: role.name,
             ),
+            disabled=user.is_disabled,
             created_at=user.created_at,
             last_sign_in_at=last_sign_in_at,
             actions_total=actions_total,

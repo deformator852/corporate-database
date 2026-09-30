@@ -134,6 +134,54 @@ async def delete_user(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.post(
+    "/{user_id}/disable",
+    response_model=UserListItemSchema,
+    responses={
+        **ERROR_RESPONSES,
+        404: {"model": ErrorSchema},
+        409: {"model": ErrorSchema},
+    },
+)
+async def disable_user(
+    user_id: int,
+    actor: User = Depends(require_permission("users.disable")),
+    service: UserService = Depends(get_user_service),
+    audit: AuditService = Depends(get_audit_service),
+) -> UserListItemSchema:
+    user = await service.disable_user(user_id, actor_id=actor.id)
+    audit.record(
+        AuditAction.USER_DISABLE,
+        actor=actor,
+        target_type="user",
+        target_id=user.id,
+        target_label=user.email,
+    )
+    return UserListItemSchema.from_user(user)
+
+
+@router.post(
+    "/{user_id}/enable",
+    response_model=UserListItemSchema,
+    responses={**ERROR_RESPONSES, 404: {"model": ErrorSchema}},
+)
+async def enable_user(
+    user_id: int,
+    actor: User = Depends(require_permission("users.disable")),
+    service: UserService = Depends(get_user_service),
+    audit: AuditService = Depends(get_audit_service),
+) -> UserListItemSchema:
+    user = await service.enable_user(user_id, actor_id=actor.id)
+    audit.record(
+        AuditAction.USER_ENABLE,
+        actor=actor,
+        target_type="user",
+        target_id=user.id,
+        target_label=user.email,
+    )
+    return UserListItemSchema.from_user(user)
+
+
 async def _require_user(user_id: int, service: UserService) -> User:
     user = await service.get_user(user_id)
     if user is None:

@@ -113,7 +113,7 @@ def _download(console: Console, option: EmbeddingOption) -> None:
 
 def _choose(console: Console, language: str) -> EmbeddingOption:
     options = OPTIONS[language]
-    current = env_value(ENV_PATH, "EMBEDING_MODEL")
+    current = env_value(ENV_PATH, "EMBEDDING_MODEL")
     free = shutil.disk_usage("/").free
     table = Table(title=f"Embedding models for {LANGUAGES[language]} documents")
     table.add_column("#", justify="right")
@@ -164,7 +164,7 @@ def _choose(console: Console, language: str) -> EmbeddingOption:
 def _lock(console: Console, message: str, current: str | None) -> None:
     console.print(Panel(message, title="Locked", style="yellow"))
     if current:
-        console.print(f"Keeping EMBEDING_MODEL={current}.")
+        console.print(f"Keeping EMBEDDING_MODEL={current}.")
 
 
 class EmbeddingStep:
@@ -172,7 +172,7 @@ class EmbeddingStep:
 
     def run(self, console: Console) -> None:
         points = _rag_points()
-        current = env_value(ENV_PATH, "EMBEDING_MODEL")
+        current = env_value(ENV_PATH, "EMBEDDING_MODEL")
         if points is None:
             _lock(
                 console,
@@ -206,6 +206,6 @@ class EmbeddingStep:
             "It needs more disk and RAM."
         )
         selected = _choose(console, current_language())
-        upsert_env(ENV_PATH, "EMBEDING_MODEL", selected.key)
-        console.print(f"Wrote EMBEDING_MODEL={selected.key} to {ENV_PATH}")
+        upsert_env(ENV_PATH, "EMBEDDING_MODEL", selected.key)
+        console.print(f"Wrote EMBEDDING_MODEL={selected.key} to {ENV_PATH}")
         _download(console, selected)

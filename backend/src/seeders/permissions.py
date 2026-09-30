@@ -14,6 +14,11 @@ USER_PERMISSIONS = (
     ),
     ("users.create", "Create user", "Create a new user"),
     ("users.update", "Update user", "Update an existing user"),
+    (
+        "users.disable",
+        "Disable user",
+        "Block or allow a user's sign-in; the account and its history stay",
+    ),
     ("users.delete", "Delete user", "Delete a user"),
 )
 

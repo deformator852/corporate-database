@@ -1,11 +1,41 @@
 """Encryption at rest."""
 
+import os
+
 import pytest
 from sqlalchemy import text
 
+import encryption
 from conftest import run
-from encryption import decrypt_bytes, decrypt_text, encrypt_bytes, encrypt_text
+from encryption import (
+    current_fingerprint,
+    decrypt_bytes,
+    decrypt_text,
+    encrypt_bytes,
+    encrypt_text,
+    is_current_text,
+    reencrypt_text,
+)
 from exceptions import AppError
+
+OLD_KEY = os.environ["DATA_ENCRYPTION_KEY"]
+NEW_KEY = "rotated-encryption-key-" + "n" * 32
+
+
+@pytest.fixture
+def keys():
+    """Sets DATA_ENCRYPTION_KEY(_PREVIOUS) for one test, then restores them."""
+
+    def use(current: str, previous: str | None = None) -> None:
+        os.environ["DATA_ENCRYPTION_KEY"] = current
+        if previous is None:
+            os.environ.pop("DATA_ENCRYPTION_KEY_PREVIOUS", None)
+        else:
+            os.environ["DATA_ENCRYPTION_KEY_PREVIOUS"] = previous
+        encryption.reset_keys()
+
+    yield use
+    use(OLD_KEY)
 
 
 def test_roundtrip_and_random_nonce():
@@ -19,9 +49,20 @@ def test_ciphertext_is_bound_to_its_place():
         decrypt_bytes(encrypt_bytes(b"file", "documents/a"), "documents/b")
 
 
-def test_data_from_before_encryption_still_reads():
-    assert decrypt_text("plain") == "plain"
-    assert decrypt_bytes(b"%PDF-1.7") == b"%PDF-1.7"
+def test_unencrypted_values_are_rejected():
+    # Planted plain text must not reach users or the LLM as a document.
+    with pytest.raises(AppError, match="not encrypted"):
+        decrypt_text("plain")
+    with pytest.raises(AppError, match="not encrypted"):
+        decrypt_bytes(b"%PDF-1.7")
+
+
+def test_text_that_looks_encrypted_is_still_encrypted():
+    from encryption import EncryptedText
+
+    planted = encrypt_text("forged")
+    stored = EncryptedText().process_bind_param(planted, None)
+    assert stored != planted and decrypt_text(stored) == planted
 
 
 def test_document_text_is_stored_encrypted():
@@ -42,5 +83,121 @@ def test_document_text_is_stored_encrypted():
             return raw, loaded
 
     raw, loaded = run(scenario())
-    assert raw.startswith("enc:v1:") and "salary" not in raw
+    assert raw.startswith("enc:v2:") and "salary" not in raw
     assert loaded == "secret salary table"
+
+
+def test_rotation_reads_both_keys_and_writes_the_new_one(keys):
+    old = encrypt_text("before", "c")
+    keys(NEW_KEY, previous=OLD_KEY)
+    assert not is_current_text(old)
+    assert decrypt_text(old, "c") == "before"
+    fresh = encrypt_text("after", "c")
+    assert is_current_text(fresh)
+    assert decrypt_text(reencrypt_text(old, "c"), "c") == "before"
+    keys(NEW_KEY)  # rotation finished: the old key is gone
+    with pytest.raises(AppError):
+        decrypt_text(old, "c")
+    assert decrypt_text(fresh, "c") == "after"
+
+
+def test_fingerprint_does_not_reveal_the_key():
+    fingerprint = current_fingerprint()
+    assert len(fingerprint) == 19 and OLD_KEY not in fingerprint
+    assert fingerprint == encryption.key_fingerprint(OLD_KEY)
+    assert fingerprint != encryption.key_fingerprint(NEW_KEY)
+
+
+def test_startup_refuses_another_key(keys):
+    from database import AsyncSessionLocal
+    from services.encryption_key import stored_fingerprint, verify_encryption_key
+
+    async def verify() -> None:
+        async with AsyncSessionLocal() as session:
+            await verify_encryption_key(session)
+
+    async def stored() -> str | None:
+        async with AsyncSessionLocal() as session:
+            return await stored_fingerprint(session)
+
+    run(verify())  # records the fingerprint on first start
+    assert run(stored()) == current_fingerprint()
+    keys("some-other-key-" + "w" * 32)
+    with pytest.raises(AppError, match="not the key"):
+        run(verify())
+    keys(NEW_KEY, previous=OLD_KEY)  # mid-rotation is fine
+    run(verify())
+
+
+def test_rotate_key_reencrypts_the_database(keys, make_user):
+    from database import AsyncSessionLocal
+    from maintenance.rotate_key import _column
+    from models import ChatConversation, ChatMessageRecord
+    from services.encryption_key import save_fingerprint
+    from sqlalchemy import select
+
+    owner, _, _ = make_user()
+
+    async def seed() -> int:
+        async with AsyncSessionLocal() as session:
+            await save_fingerprint(session, current_fingerprint())
+            chat = ChatConversation(user_id=owner, title="Payroll question")
+            session.add(chat)
+            await session.flush()
+            session.add(ChatMessageRecord(conversation_id=chat.id, role="user", content="Who earns most?"))
+            await session.commit()
+            return chat.id
+
+    async def rotate() -> None:
+        for table, key, column in (("chat_conversations", "id", "title"), ("chat_messages", "id", "content")):
+            await _column(table, key, column)
+
+    async def read(chat_id: int) -> tuple[str, str, str]:
+        async with AsyncSessionLocal() as session:
+            raw = await session.scalar(text("SELECT content FROM chat_messages WHERE conversation_id = :i"), {"i": chat_id})
+            title = await session.scalar(select(ChatConversation.title).where(ChatConversation.id == chat_id))
+            content = await session.scalar(select(ChatMessageRecord.content).where(ChatMessageRecord.conversation_id == chat_id))
+            return raw, title, content
+
+    chat_id = run(seed())
+    keys(NEW_KEY, previous=OLD_KEY)
+    run(rotate())
+    keys(NEW_KEY)
+    raw, title, content = run(read(chat_id))
+    assert is_current_text(raw)
+    assert (title, content) == ("Payroll question", "Who earns most?")
+    run(rotate())  # nothing left: a second run is a no-op
+
+
+def test_backup_stream_roundtrip_and_tamper_detection(keys):
+    import io
+
+    from encryption import decrypt_stream, encrypt_stream
+
+    def seal(data: bytes) -> bytes:
+        out = io.BytesIO()
+        encrypt_stream(io.BytesIO(data), out)
+        return out.getvalue()
+
+    def unseal(blob: bytes) -> bytes:
+        out = io.BytesIO()
+        decrypt_stream(io.BytesIO(blob), out)
+        return out.getvalue()
+
+    big = os.urandom((1 << 20) * 2 + 123)  # three chunks
+    for data in (b"", b"pg_dump", big):
+        assert unseal(seal(data)) == data
+    blob = seal(big)
+    assert b"pg_dump" not in seal(b"pg_dump")
+    with pytest.raises(AppError, match="truncated|damaged"):
+        unseal(blob[: len(blob) // 2])  # cut at a chunk boundary or inside
+    first_chunk_end = 32 + 5 + (1 << 20) + 16
+    with pytest.raises(AppError, match="truncated"):
+        unseal(blob[:first_chunk_end])  # whole chunks, final one missing
+    flipped = bytearray(blob)
+    flipped[100] ^= 1
+    with pytest.raises(AppError, match="damaged"):
+        unseal(bytes(flipped))
+    keys(NEW_KEY)
+    with pytest.raises(AppError, match="made with the key"):
+        unseal(blob)

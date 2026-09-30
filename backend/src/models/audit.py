@@ -17,6 +17,8 @@ class AuditAction(StrEnum):
     USER_CREATE = "users.create"
     USER_UPDATE = "users.update"
     USER_DELETE = "users.delete"
+    USER_DISABLE = "users.disable"
+    USER_ENABLE = "users.enable"
     ROLE_CREATE = "roles.create"
     ROLE_UPDATE = "roles.update"
     ROLE_DELETE = "roles.delete"

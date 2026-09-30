@@ -1,9 +1,19 @@
+import secrets
 from pathlib import Path
 
 from rich.console import Console
 
 ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 EXAMPLE_PATH = ENV_PATH.with_name(".env.example")
+
+
+def random_secret(nbytes: int = 32) -> str:
+    """URL-safe random token that never starts with "-", which command-line
+    tools (mc, psql) would read as an option."""
+    while True:
+        token = secrets.token_urlsafe(nbytes)
+        if not token.startswith("-"):
+            return token
 
 
 def upsert_env(path: Path, key: str, value: str) -> None:
@@ -46,7 +56,7 @@ _MINIMAL_ENV = """\
 QDRANT_HOST=localhost
 QDRANT_PORT=6333
 APP_LANGUAGE=en
-EMBEDING_MODEL=multilingual-e5-base
+EMBEDDING_MODEL=multilingual-e5-base
 LLM_HOST=http://127.0.0.1:11434
 LLM_MODEL=llama3.1:8b
 """
@@ -61,3 +71,4 @@ def ensure_env(console: Console) -> None:
         return
     ENV_PATH.write_text(_MINIMAL_ENV)
     console.print(f"Created {ENV_PATH}.")
+

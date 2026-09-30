@@ -23,6 +23,12 @@ class User(TimestampMixin, Base):
     sessions_valid_after: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
     )
+    # Set: the account cannot sign in; it and its history stay (offboarding).
+    disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    @property
+    def is_disabled(self) -> bool:
+        return self.disabled_at is not None
 
     __table_args__ = (
         CheckConstraint("length(first_name) BETWEEN 2 AND 100"),

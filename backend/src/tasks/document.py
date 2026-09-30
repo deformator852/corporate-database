@@ -1,7 +1,8 @@
 import asyncio
 import logging
+from collections.abc import Callable, Coroutine
 
-from celery.exceptions import MaxRetriesExceededError, SoftTimeLimitExceeded
+from celery.exceptions import SoftTimeLimitExceeded
 from celery.signals import worker_ready
 
 # Imported at module level: broken code stops the worker from starting
@@ -41,30 +42,28 @@ def process_document(self, document_id: int) -> None:
         # Retrying would hang again; fail it right away.
         asyncio.run(fail_document_job(document_id, "Processing took too long."))
     except AppError as exc:
-        countdown = 5 * (2 ** self.request.retries)
         if exc.code == "not_found":
-            try:
-                raise self.retry(exc=exc, countdown=countdown)
-            except MaxRetriesExceededError:
-                asyncio.run(drop_incomplete_document_job(document_id))
-            return
-        if exc.status_code >= 500:
-            try:
-                raise self.retry(exc=exc, countdown=countdown)
-            except MaxRetriesExceededError:
-                asyncio.run(fail_document_job(document_id, exc.message))
-            return
-        asyncio.run(fail_document_job(document_id, exc.message))
+            # The file is gone: after the retries, drop the document.
+            _retry_or(self, exc, lambda: drop_incomplete_document_job(document_id))
+        elif exc.status_code >= 500:
+            _retry_or(self, exc, lambda: fail_document_job(document_id, exc.message))
+        else:
+            asyncio.run(fail_document_job(document_id, exc.message))
     except Exception as exc:
-        try:
-            raise self.retry(
-                exc=exc,
-                countdown=5 * (2 ** self.request.retries),
-            )
-        except MaxRetriesExceededError:
-            asyncio.run(
-                fail_document_job(document_id, "Could not process the document.")
-            )
+        _retry_or(
+            self, exc, lambda: fail_document_job(document_id, "Could not process the document.")
+        )
+
+
+def _retry_or(task, exc: Exception, give_up: Callable[[], Coroutine]) -> None:
+    """Retries with backoff, or runs `give_up` once the retries are used.
+    Counted here: past max_retries Celery re-raises `exc` itself instead of
+    MaxRetriesExceededError, which would leave the document queued forever."""
+    retries = task.request.retries
+    if retries >= task.max_retries:
+        asyncio.run(give_up())
+        return
+    raise task.retry(exc=exc, countdown=5 * (2**retries))
 
 
 @worker_ready.connect

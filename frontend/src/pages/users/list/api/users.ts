@@ -29,6 +29,16 @@ export async function updateUser(
     return data;
 }
 
+export async function disableUser(userId: number): Promise<UserListItem> {
+    const {data} = await api.post<UserListItem>(`/users/${userId}/disable`);
+    return data;
+}
+
+export async function enableUser(userId: number): Promise<UserListItem> {
+    const {data} = await api.post<UserListItem>(`/users/${userId}/enable`);
+    return data;
+}
+
 export async function deleteUser(userId: number): Promise<void> {
     await api.delete(`/users/${userId}`);
 }

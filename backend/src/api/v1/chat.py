@@ -30,14 +30,14 @@ from schemas.chat import (
     ChatSocketErrorSchema,
     ChatSourceSchema,
 )
-from schemas.error import ErrorSchema
+from schemas.error import ErrorSchema, validation_message
 from security import get_ws_payload
 from services.audit import AuditService
 from services.chat import ChatService
 from services.chat_history import ChatHistoryService
+from services.chat_limit import finish_chat_request, start_chat_request
 from services.embedding import EmbeddingModel, get_embedding_model
 from services.generator import OllamaGenerator
-from services.storage import ObjectStorage
 
 router = APIRouter(
     prefix="/chat",
@@ -106,7 +106,6 @@ async def chat_socket(
     ip = websocket.client.host if websocket.client else None
     embedder = get_embedding_model()
     generator = OllamaGenerator()
-    storage = ObjectStorage()
     receive = asyncio.create_task(websocket.receive_text())
     reply: asyncio.Task[ChatAnswerSchema] | None = None
     try:
@@ -139,7 +138,6 @@ async def chat_socket(
                     ip,
                     embedder,
                     generator,
-                    storage,
                 )
             if reply is not None and reply in done:
                 await _finish_reply(websocket, reply)
@@ -174,7 +172,6 @@ async def _on_client_message(
     ip: str | None,
     embedder: EmbeddingModel,
     generator: OllamaGenerator,
-    storage: ObjectStorage,
 ) -> asyncio.Task[ChatAnswerSchema] | None:
     try:
         incoming = IncomingMessage.validate_json(raw)
@@ -183,7 +180,7 @@ async def _on_client_message(
             ChatSocketErrorSchema(
                 type="error",
                 code="invalid",
-                message=t(_validation_message(exc)),
+                message=t(validation_message(exc.errors(), with_field=False)),
             ).model_dump()
         )
         return reply
@@ -208,9 +205,25 @@ async def _on_client_message(
             ).model_dump()
         )
         return reply
+    try:
+        request_id = await start_chat_request(user_id)
+    except AppError as exc:
+        await websocket.send_json(
+            ChatSocketErrorSchema(type="error", code=exc.code, message=t(exc.message)).model_dump()
+        )
+        return None
     return asyncio.create_task(
-        _generate(websocket, user_id, incoming, ip, embedder, generator, storage)
+        _answer(request_id, websocket, user_id, incoming, ip, embedder, generator)
     )
+
+
+async def _answer(request_id: int, *args) -> ChatAnswerSchema:
+    """The answer, with the user's chat slot freed however it ends
+    (done, failed, cancelled, socket closed)."""
+    try:
+        return await _generate(*args)
+    finally:
+        await asyncio.shield(finish_chat_request(request_id))
 
 
 async def _generate(
@@ -220,10 +233,9 @@ async def _generate(
     ip: str | None,
     embedder: EmbeddingModel,
     generator: OllamaGenerator,
-    storage: ObjectStorage,
 ) -> ChatAnswerSchema:
     async with AsyncSessionLocal() as session:
-        service = ChatService(session, embedder, generator, storage)
+        service = ChatService(session, embedder, generator)
         history = ChatHistoryService(session)
         question = ask.messages[-1].content
         # Saved before answering: the question is kept even if the answer
@@ -290,16 +302,3 @@ async def _finish_reply(
         )
         return
     await websocket.send_json(answer.model_dump())
-
-
-def _validation_message(exc: ValidationError) -> str:
-    errors = exc.errors()
-    if not errors:
-        return "Enter a message."
-    msg = errors[0].get("msg")
-    if not isinstance(msg, str) or not msg:
-        return "Enter a message."
-    prefix = "Value error, "
-    if msg.startswith(prefix):
-        return msg[len(prefix) :]
-    return msg

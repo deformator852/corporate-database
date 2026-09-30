@@ -90,7 +90,7 @@ _SAMPLES = {
 
 
 def _current_model() -> EmbeddingSpec | None:
-    return EMBEDDING_MODELS.get(env_value(ENV_PATH, "EMBEDING_MODEL") or "")
+    return EMBEDDING_MODELS.get(env_value(ENV_PATH, "EMBEDDING_MODEL") or "")
 
 
 def _estimate(size: int, overlap: int, dims: int) -> tuple[int, float]:

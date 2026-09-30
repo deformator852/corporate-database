@@ -96,3 +96,54 @@ def test_websocket_rejects_other_origins(client, make_user):
     assert connect("https://testserver") == "open"
     assert connect("https://evil.example") == "403"
     assert connect("https://testserver.evil.example") == "403"
+
+
+def test_disabled_user_is_signed_out_and_cannot_sign_in(client, make_user):
+    from fastapi.testclient import TestClient
+
+    import main
+
+    _, admin_email, admin_password = make_user(admin=True)
+    user_id, email, password = make_user(["documents.list"])
+    with TestClient(main.app, base_url="https://testserver") as employee:
+        login(employee, email, password)
+        login(client, admin_email, admin_password)
+        response = client.post(f"/api/v1/users/{user_id}/disable", headers=csrf(client))
+        assert response.status_code == 200 and response.json()["disabled"] is True
+        assert employee.get("/api/v1/auth/me").status_code == 401
+        refresh = employee.post(
+            "/api/v1/auth/refresh", headers=csrf(employee, "csrf_refresh_token")
+        )
+        assert refresh.status_code == 401
+        # Wrong password: the same answer as for anyone else.
+        assert login(employee, email, "wrong-password").status_code == 401
+        assert login(employee, email, password).status_code == 403
+        # The account and its history stay; enabling restores sign-in.
+        assert client.get(f"/api/v1/users/{user_id}").json()["disabled"] is True
+        assert client.post(f"/api/v1/users/{user_id}/enable", headers=csrf(client)).status_code == 200
+        assert login(employee, email, password).status_code == 200
+
+
+def test_cannot_disable_self_or_a_stronger_account(client, make_user):
+    admin_id, _, _ = make_user(admin=True)
+    user_id, email, password = make_user(["users.list", "users.disable"])
+    login(client, email, password)
+    assert client.post(f"/api/v1/users/{user_id}/disable", headers=csrf(client)).status_code == 409
+    assert client.post(f"/api/v1/users/{admin_id}/disable", headers=csrf(client)).status_code == 403
+
+
+def test_a_disabled_account_rejects_even_a_freshly_issued_token(client, make_user):
+    # Defense in depth: disabling also ends old sessions by time, but a token
+    # minted afterwards (clock skew, a bug) must still not work.
+    import time
+
+    from security import security
+
+    _, admin_email, admin_password = make_user(admin=True)
+    user_id, _, _ = make_user()
+    login(client, admin_email, admin_password)
+    client.post(f"/api/v1/users/{user_id}/disable", headers=csrf(client))
+    time.sleep(1.1)  # past the sessions cutoff second
+    token = security.create_access_token(uid=str(user_id))
+    client.cookies.set("my_token", token)
+    assert client.get("/api/v1/auth/me").status_code == 401

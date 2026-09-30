@@ -17,6 +17,10 @@ import {ChatMessages} from "@pages/home/ui/ChatMessages";
 import {useI18n} from "@/shared/i18n/I18nProvider";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
 
+/** Chat limits (backend services/chat_limit.py): the question was refused
+ * before it was saved or answered. */
+const NOT_ACCEPTED = new Set(["busy", "rate_limited"]);
+
 function nextId() {
     return crypto.randomUUID();
 }
@@ -95,6 +99,16 @@ function Home() {
                 }
                 setStatus("idle");
                 setError(null);
+                return;
+            }
+            if (caught instanceof ChatRequestError && NOT_ACCEPTED.has(caught.code)) {
+                // The server did not take the question (limit, another tab
+                // still answering): give it back to send later.
+                const question = history[history.length - 1];
+                setMessages((current) => current.filter((item) => item.id !== question.id));
+                setDraft(question.content);
+                setError(caught.message);
+                setStatus("refused");
                 return;
             }
             const message =

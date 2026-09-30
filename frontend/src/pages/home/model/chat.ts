@@ -39,7 +39,9 @@ export type ChatConversation = {
     }[];
 };
 
-export type ChatStatus = "idle" | "pending" | "error";
+/** "refused": the server did not accept the question (chat limits); it is
+ * back in the input, so there is nothing to retry. */
+export type ChatStatus = "idle" | "pending" | "error" | "refused";
 
 export const CHAT_HISTORY = 6;
 

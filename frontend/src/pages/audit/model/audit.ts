@@ -10,6 +10,8 @@ export const AUDIT_ACTIONS = [
     "auth.logout",
     "users.create",
     "users.update",
+    "users.disable",
+    "users.enable",
     "users.delete",
     "roles.create",
     "roles.update",

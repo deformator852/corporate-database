@@ -1,9 +1,7 @@
-import secrets
-
 from rich.console import Console
 from rich.panel import Panel
 
-from ..env import ENV_PATH, env_value, upsert_env
+from ..env import ENV_PATH, env_value, random_secret, upsert_env
 
 _DEFAULT = "minioadmin"
 
@@ -26,14 +24,14 @@ class StorageStep:
             root_user = "minio-root"
             written.append("MINIO_ROOT_USER")
         if _missing(root_password):
-            root_password = secrets.token_urlsafe(24)
+            root_password = random_secret(24)
             written.append("MINIO_ROOT_PASSWORD")
         # The app must never run with the root account.
         if _missing(app_user, root_user):
             app_user = "corporate-app"
             written.append("MINIO_ACCESS_KEY")
         if _missing(app_secret, root_password):
-            app_secret = secrets.token_urlsafe(24)
+            app_secret = random_secret(24)
             written.append("MINIO_SECRET_KEY")
 
         if not written:
@@ -51,7 +49,7 @@ class StorageStep:
         console.print(
             Panel(
                 "Apply the new credentials before starting the backend:\n"
-                "docker compose -f docker-compose.local.yml up -d minio minio-init\n\n"
+                "docker compose --env-file backend/.env -f docker-compose.local.yml up -d minio minio-init\n\n"
                 "Stored files are kept.",
                 title="Restart MinIO",
                 style="yellow",

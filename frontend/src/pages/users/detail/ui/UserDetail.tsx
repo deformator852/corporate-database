@@ -213,7 +213,14 @@ function UserDetailView({userId}: {userId: number}) {
                         {initials}
                     </span>
                     <div className="min-w-0 space-y-0.5">
-                        <h1 className="truncate text-xl sm:text-2xl">{name}</h1>
+                        <div className="flex min-w-0 items-center gap-2">
+                            <h1 className="truncate text-xl sm:text-2xl">{name}</h1>
+                            {profile.disabled ? (
+                                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                                    {t("users.disabled")}
+                                </span>
+                            ) : null}
+                        </div>
                         <p className="truncate text-sm text-muted-foreground">{profile.email}</p>
                     </div>
                 </div>

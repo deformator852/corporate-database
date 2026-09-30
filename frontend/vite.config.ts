@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import path from "node:path";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv } from "vite";
@@ -19,6 +20,11 @@ export default defineConfig(({ mode }) => ({
       "@pages": path.resolve(import.meta.dirname, "./src/pages"),
       "@layouts": path.resolve(import.meta.dirname, "./src/layouts"),
     },
+  },
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
+    restoreMocks: true,
   },
   server: {
     proxy: {

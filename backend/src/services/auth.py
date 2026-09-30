@@ -45,11 +45,16 @@ class AuthService:
                 "Email or password is wrong",
                 status_code=401,
             )
+        if user.is_disabled:
+            # Only after the right password: the message must not tell
+            # strangers which emails exist.
+            await self._record_failure(data.email)
+            raise AppError("account_disabled", "This account is disabled", status_code=403)
         self.audit.record(AuditAction.LOGIN, actor=user)
         return user
 
     async def session_user(self, payload: TokenPayload) -> User | None:
-        """The token's user, or None if deleted or signed out by a password change."""
+        """The token's user, or None if deleted, disabled or signed out by a password change."""
         try:
             user_id = int(payload.sub)
         except (TypeError, ValueError):

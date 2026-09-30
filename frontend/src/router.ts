@@ -51,14 +51,15 @@ const pageRoutes: RouteObject[] = [
 const routeKey = (route: RouteObject) =>
     route.index ? "" : route.path?.replace(/^\/+|\/+$/g, "");
 
-const routes: RouteObject[] = [
+export const routes: RouteObject[] = [
     {
-        path: "/login",
-        Component: Login,
-    },
-    {
+        // SessionGate sends a signed-in user from /login to the app.
         Component: SessionGate,
         children: [
+            {
+                path: "/login",
+                Component: Login,
+            },
             {
                 Component: AppLayout,
                 children: [

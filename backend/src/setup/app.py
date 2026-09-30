@@ -1,3 +1,4 @@
+import sys
 from collections.abc import Sequence
 
 from rich.console import Console
@@ -30,6 +31,15 @@ def run(steps: Sequence[Step], done: str, *, footer: str | None = None) -> None:
 
 def main() -> None:
     try:
-        run(SETUP_STEPS, "Setup complete.")
+        if sys.argv[1:2] == ["key"]:
+            from .key import main as key_main
+
+            key_main(sys.argv[2:])
+            return
+        run(
+            SETUP_STEPS,
+            "Setup complete.",
+            footer="Running already? Restart the backend and the worker (production: deploy/deploy.sh up).",
+        )
     except KeyboardInterrupt:
         raise SystemExit(130) from None

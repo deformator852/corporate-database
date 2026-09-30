@@ -66,8 +66,9 @@ def sessions_cutoff() -> datetime:
 
 
 def user_session_valid(user: User | None, payload: TokenPayload) -> bool:
-    """False for deleted users and tokens issued before a password change."""
-    if user is None:
+    """False for deleted or disabled users and tokens issued before a
+    password change."""
+    if user is None or user.is_disabled:
         return False
     if user.sessions_valid_after is None:
         return True

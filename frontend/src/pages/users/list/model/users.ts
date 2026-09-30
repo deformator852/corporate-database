@@ -13,6 +13,8 @@ export type UserListItem = {
     email: string;
     roles: RoleRef[];
     is_last_admin: boolean;
+    /** Cannot sign in; the account and its history stay. */
+    disabled: boolean;
 };
 
 export type UserListPage = {

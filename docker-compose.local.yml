@@ -1,5 +1,8 @@
 name: corporate-database-local
 
+# Start with backend/.env for the ${...} values (only Ollama uses them):
+#   docker compose --env-file backend/.env -f docker-compose.local.yml up -d
+
 services:
   postgres:
     image: postgres:17
@@ -16,12 +19,15 @@ services:
         export POSTGRES_USER="$$DB_USER"
         export POSTGRES_PASSWORD="$$DB_PASSWORD"
         export POSTGRES_DB="$$DB_NAME"
+        # Drop the rest of backend/.env (encryption key, other passwords);
+        # the image's own variables stay.
+        unset $$(compgen -e | grep -xE 'DB_.*|JWT_.*|DATA_.*|QDRANT_.*|MINIO_.*|LLM_.*|EMBEDDING_MODEL|APP_LANGUAGE|CHUNK_.*|TEXT_.*|API_DOCS|SITE_ADDRESS|TLS|CHAT_.*|RABBITMQ_(USER|PASSWORD|HOST|PORT)')
         # POSTGRES_PASSWORD only applies to a new volume. Re-apply it on every
         # start (local socket, trusted) so a password rotated in .env works.
         (
-          until pg_isready -q -h /var/run/postgresql -U "$$DB_USER" -d "$$DB_NAME"; do sleep 1; done
+          until pg_isready -q -h /var/run/postgresql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"; do sleep 1; done
           echo "ALTER ROLE CURRENT_USER PASSWORD :'pw';" |
-            psql -q -h /var/run/postgresql -U "$$DB_USER" -d "$$DB_NAME" -v pw="$$DB_PASSWORD"
+            psql -q -h /var/run/postgresql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v pw="$$POSTGRES_PASSWORD"
         ) &
         exec docker-entrypoint.sh postgres
     volumes:
@@ -77,12 +83,15 @@ services:
         : "$${RABBITMQ_PASSWORD:?is empty; run uv run setup in backend/}"
         export RABBITMQ_DEFAULT_USER="$$RABBITMQ_USER"
         export RABBITMQ_DEFAULT_PASS="$$RABBITMQ_PASSWORD"
+        # Drop the rest of backend/.env (encryption key, other passwords);
+        # the image's own variables stay.
+        unset $$(compgen -e | grep -xE 'DB_.*|JWT_.*|DATA_.*|QDRANT_.*|MINIO_.*|LLM_.*|EMBEDDING_MODEL|APP_LANGUAGE|CHUNK_.*|TEXT_.*|API_DOCS|SITE_ADDRESS|TLS|CHAT_.*|RABBITMQ_(USER|PASSWORD|HOST|PORT)')
         (
           until rabbitmqctl -q await_startup >/dev/null 2>&1; do sleep 2; done
-          rabbitmqctl -q add_user "$$RABBITMQ_USER" "$$RABBITMQ_PASSWORD" >/dev/null 2>&1 ||
-            rabbitmqctl -q change_password "$$RABBITMQ_USER" "$$RABBITMQ_PASSWORD"
-          rabbitmqctl -q set_user_tags "$$RABBITMQ_USER" administrator
-          rabbitmqctl -q set_permissions -p / "$$RABBITMQ_USER" ".*" ".*" ".*"
+          rabbitmqctl -q add_user "$$RABBITMQ_DEFAULT_USER" "$$RABBITMQ_DEFAULT_PASS" >/dev/null 2>&1 ||
+            rabbitmqctl -q change_password "$$RABBITMQ_DEFAULT_USER" "$$RABBITMQ_DEFAULT_PASS"
+          rabbitmqctl -q set_user_tags "$$RABBITMQ_DEFAULT_USER" administrator
+          rabbitmqctl -q set_permissions -p / "$$RABBITMQ_DEFAULT_USER" ".*" ".*" ".*"
         ) &
         exec docker-entrypoint.sh rabbitmq-server
     volumes:
@@ -142,7 +151,7 @@ services:
         set -euo pipefail
         : "$${MINIO_SECRET_KEY:?is empty; run uv run setup in backend/}"
         export MC_CONFIG_DIR=/tmp/mc
-        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null
+        mc alias set -- local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null
         mc mb --ignore-existing "local/$$MINIO_BUCKET" >/dev/null
         mc anonymous set none "local/$$MINIO_BUCKET" >/dev/null
         cat > /tmp/policy.json <<POLICY
@@ -151,8 +160,8 @@ services:
           "Resource": ["arn:aws:s3:::$$MINIO_BUCKET/*"]}]}
         POLICY
         mc admin policy create local corporate-app /tmp/policy.json >/dev/null
-        mc admin user add local "$$MINIO_ACCESS_KEY" "$$MINIO_SECRET_KEY" >/dev/null
-        mc admin policy attach local corporate-app --user "$$MINIO_ACCESS_KEY" >/dev/null
+        mc admin user add -- local "$$MINIO_ACCESS_KEY" "$$MINIO_SECRET_KEY" >/dev/null
+        mc admin policy attach local corporate-app --user="$$MINIO_ACCESS_KEY" >/dev/null
         echo "MinIO ready: bucket $$MINIO_BUCKET, app user $$MINIO_ACCESS_KEY"
 
   ollama:
@@ -169,6 +178,11 @@ services:
     environment:
       OLLAMA_KEEP_ALIVE: -1
       OLLAMA_IGPU_ENABLE: "1"
+      # LLM_PARALLEL answers at once (uv run configure); each reserves its own
+      # context memory, which the 8-bit cache (needs flash attention) halves.
+      OLLAMA_NUM_PARALLEL: ${LLM_PARALLEL:-4}
+      OLLAMA_FLASH_ATTENTION: "1"
+      OLLAMA_KV_CACHE_TYPE: q8_0
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:

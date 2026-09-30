@@ -1,5 +1,5 @@
 import {useEffect, useState} from "react";
-import {Pencil, Plus, Trash2} from "lucide-react";
+import {Ban, CircleCheck, Pencil, Plus, Trash2} from "lucide-react";
 import {Link, useLocation, useSearchParams} from "react-router";
 
 import {Button} from "@/components/ui/button";
@@ -16,7 +16,7 @@ import {useSessionStore} from "@/shared/auth/session-store";
 import {useI18n} from "@/shared/i18n/I18nProvider";
 import {can} from "@/shared/lib/api/me";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
-import {getUsersPage} from "@pages/users/list/api/users";
+import {enableUser, getUsersPage} from "@pages/users/list/api/users";
 import {
     USERS_PER_PAGE,
     type UserListItem,
@@ -24,6 +24,7 @@ import {
 } from "@pages/users/list/model/users";
 import type {UserDetailLinkState} from "@pages/users/detail/model/user";
 import {DeleteUserDialog} from "@pages/users/list/ui/DeleteUserDialog";
+import {DisableUserDialog} from "@pages/users/list/ui/DisableUserDialog";
 import {UserFormDialog} from "@pages/users/list/ui/UserFormDialog";
 
 function fullName(user: UserListItem) {
@@ -57,11 +58,15 @@ export function UsersList() {
     const canCreate = can("users.create");
     const canUpdate = can("users.update");
     const canDelete = can("users.delete");
-    const showActions = canUpdate || canDelete;
+    const canDisable = can("users.disable");
+    const showActions = canUpdate || canDisable || canDelete;
     const sessionUser = useSessionStore((state) => state.user);
     const [formOpen, setFormOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<UserListItem | null>(null);
     const [deletingUser, setDeletingUser] = useState<UserListItem | null>(null);
+    const [disablingUser, setDisablingUser] = useState<UserListItem | null>(null);
+    const [enablingId, setEnablingId] = useState<number | null>(null);
+    const [actionError, setActionError] = useState<string | null>(null);
 
     useEffect(() => {
         let cancelled = false;
@@ -132,6 +137,19 @@ export function UsersList() {
         setReloadKey((key) => key + 1);
     };
 
+    const handleEnable = async (user: UserListItem) => {
+        setEnablingId(user.id);
+        setActionError(null);
+        try {
+            await enableUser(user.id);
+            setReloadKey((key) => key + 1);
+        } catch (reason) {
+            setActionError(getApiErrorMessage(reason, t("users.enableError")));
+        } finally {
+            setEnablingId(null);
+        }
+    };
+
     const isSelf = (user: UserListItem) => {
         if (sessionUser == null) {
             return false;
@@ -155,6 +173,12 @@ export function UsersList() {
                     </Button>
                 ) : null}
             </div>
+
+            {actionError ? (
+                <p role="alert" className="text-sm text-destructive">
+                    {actionError}
+                </p>
+            ) : null}
 
             {status === "error" ? (
                 <div className="flex flex-col items-start gap-3 rounded-xl bg-card px-4 py-8 ring-1 ring-foreground/10">
@@ -207,6 +231,7 @@ export function UsersList() {
                                     items.map((user) => (
                                         <TableRow key={user.id}>
                                             <TableCell className="px-4 font-medium">
+                                                <span className="inline-flex flex-wrap items-center gap-2">
                                                 {canViewUser ? (
                                                     <Link
                                                         to={`/users/${user.id}`}
@@ -221,6 +246,12 @@ export function UsersList() {
                                                 ) : (
                                                     fullName(user)
                                                 )}
+                                                {user.disabled ? (
+                                                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                                                        {t("users.disabled")}
+                                                    </span>
+                                                ) : null}
+                                                </span>
                                             </TableCell>
                                             <TableCell className="text-muted-foreground">
                                                 {user.email}
@@ -247,6 +278,47 @@ export function UsersList() {
                                                             >
                                                                 <Pencil aria-hidden/>
                                                                 {t("common.edit")}
+                                                            </Button>
+                                                        ) : null}
+                                                        {canDisable && user.disabled ? (
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                aria-label={t("users.enableAria", {
+                                                                    name: fullName(user),
+                                                                })}
+                                                                disabled={enablingId === user.id}
+                                                                onClick={() => {
+                                                                    void handleEnable(user);
+                                                                }}
+                                                            >
+                                                                <CircleCheck aria-hidden/>
+                                                                {t("users.enable")}
+                                                            </Button>
+                                                        ) : null}
+                                                        {canDisable && !user.disabled ? (
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                aria-label={
+                                                                    isSelf(user)
+                                                                        ? t("users.cannotDisableSelf")
+                                                                        : t("users.disableAria", {
+                                                                              name: fullName(user),
+                                                                          })
+                                                                }
+                                                                disabled={isSelf(user)}
+                                                                title={
+                                                                    isSelf(user)
+                                                                        ? t("users.cannotDisableSelf")
+                                                                        : undefined
+                                                                }
+                                                                onClick={() => setDisablingUser(user)}
+                                                            >
+                                                                <Ban aria-hidden/>
+                                                                {t("users.disable")}
                                                             </Button>
                                                         ) : null}
                                                         {canDelete ? (
@@ -338,6 +410,16 @@ export function UsersList() {
                     }
                 }}
                 onDeleted={handleDeleted}
+            />
+            <DisableUserDialog
+                user={disablingUser}
+                open={disablingUser != null}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setDisablingUser(null);
+                    }
+                }}
+                onDisabled={handleSaved}
             />
         </div>
     );

@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -90,6 +92,34 @@ class UserService:
         await self.session.delete(user)
         return user
 
+    async def disable_user(self, user_id: int, *, actor_id: int) -> User:
+        """Blocks sign-in and ends every session at once; unlike deletion,
+        the account, its documents and its audit history stay."""
+        actor_keys = await user_permission_keys(self.session, actor_id)
+        user = await self._require_user(user_id)
+        if user.id == actor_id:
+            raise AppError(
+                "conflict",
+                "You cannot disable your own account",
+                status_code=409,
+            )
+        ensure_can_manage(actor_keys, role_keys(user.roles))
+        if user.is_disabled:
+            return user
+        await self._guard_last_admin(user, [])
+        user.disabled_at = datetime.now(UTC)
+        user.sessions_valid_after = sessions_cutoff()
+        await self.session.flush()
+        return user
+
+    async def enable_user(self, user_id: int, *, actor_id: int) -> User:
+        actor_keys = await user_permission_keys(self.session, actor_id)
+        user = await self._require_user(user_id)
+        ensure_can_manage(actor_keys, role_keys(user.roles))
+        user.disabled_at = None
+        await self.session.flush()
+        return user
+
     async def _require_user(self, user_id: int) -> User:
         user = await self.get_user(user_id)
         if user is None:
@@ -130,10 +160,12 @@ class UserService:
         return roles
 
     async def admin_ids(self) -> set[int]:
+        """Active admins; a disabled one cannot manage anything."""
         ids = await self.session.scalars(
             select(role_users.c.user_id)
             .join(Role, Role.id == role_users.c.role_id)
-            .where(Role.key == ADMIN_ROLE_KEY)
+            .join(User, User.id == role_users.c.user_id)
+            .where(Role.key == ADMIN_ROLE_KEY, User.disabled_at.is_(None))
         )
         return set(ids)
 
@@ -141,7 +173,7 @@ class UserService:
         return any(role.key == ADMIN_ROLE_KEY for role in roles)
 
     async def _guard_last_admin(self, user: User, next_roles: list[Role]) -> None:
-        if not self._is_admin(user.roles) or self._is_admin(next_roles):
+        if user.is_disabled or not self._is_admin(user.roles) or self._is_admin(next_roles):
             return
         admin_ids = await self.admin_ids()
         if admin_ids <= {user.id}:

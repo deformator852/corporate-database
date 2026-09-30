@@ -8,3 +8,16 @@ class ErrorSchema(BaseModel):
 
     code: str
     message: str
+
+
+def validation_message(errors: list[dict], *, with_field: bool = True) -> str:
+    """One readable line for the first validation error, e.g.
+    "password: String should have at least 8 characters"."""
+    if not errors:
+        return "Enter a message."
+    first = errors[0]
+    message = str(first.get("msg") or "Invalid value").removeprefix("Value error, ")
+    field = next((str(part) for part in reversed(first.get("loc", ())) if isinstance(part, str)), "")
+    if with_field and field and field not in {"body", "query", "path"}:
+        return f"{field}: {message}"
+    return message

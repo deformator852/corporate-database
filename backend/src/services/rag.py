@@ -131,7 +131,7 @@ class Rag:
         classification: str,
         chunks: list[str],
         vectors: list[list[float]],
-        starts: list[int] | None = None,
+        starts: list[int],
     ) -> None:
         await self.ensure_collection()
         points = [
@@ -147,7 +147,7 @@ class Rag:
                     "filename": filename,
                     "classification": classification,
                     # Offset of the chunk in the cleaned text, for exact joins.
-                    "start": starts[index] if starts else None,
+                    "start": starts[index],
                 },
             )
             for index, (chunk, vector) in enumerate(zip(chunks, vectors, strict=True))
@@ -217,43 +217,11 @@ class Rag:
                 payloads.append(_open_payload(payload))
         return payloads
 
-    async def payloads_for_document(self, document_id: int) -> list[dict[str, object]]:
-        try:
-            if not await self.client.collection_exists(COLLECTION_NAME):
-                return []
-            records, _offset = await self.client.scroll(
-                collection_name=COLLECTION_NAME,
-                scroll_filter=Filter(
-                    must=[
-                        FieldCondition(
-                            key="document_id",
-                            match=MatchValue(value=document_id),
-                        )
-                    ]
-                ),
-                limit=256,
-                with_payload=True,
-                with_vectors=False,
-            )
-        except UnexpectedResponse as exc:
-            if exc.status_code == 404:
-                return []
-            _raise_from_unexpected(exc)
-        except (RequestError, ResponseHandlingException) as exc:
-            _raise_unavailable(exc)
-        payloads: list[dict[str, object]] = []
-        for record in records:
-            payload = getattr(record, "payload", None)
-            if isinstance(payload, dict):
-                payloads.append(_open_payload(payload))
-        payloads.sort(key=_chunk_index)
-        return payloads
-
     async def chunks_by_index(
         self, document_id: int, indexes: Sequence[int]
-    ) -> dict[int, tuple[str, int | None]]:
-        """Text and start offset (None for chunks stored before offsets) of the
-        document's chunks at `indexes`; missing ones are left out."""
+    ) -> dict[int, tuple[str, int]]:
+        """Text and start offset of the document's chunks at `indexes`;
+        missing ones are left out."""
         if not indexes:
             return {}
         try:
@@ -275,7 +243,7 @@ class Rag:
             _raise_from_unexpected(exc)
         except (RequestError, ResponseHandlingException) as exc:
             _raise_unavailable(exc)
-        found: dict[int, tuple[str, int | None]] = {}
+        found: dict[int, tuple[str, int]] = {}
         for record in records:
             payload = _open_payload(record.payload or {})
             index, text, start = (
@@ -283,8 +251,8 @@ class Rag:
                 payload.get("text"),
                 payload.get("start"),
             )
-            if isinstance(index, int) and isinstance(text, str):
-                found[index] = (text, start if isinstance(start, int) else None)
+            if isinstance(index, int) and isinstance(text, str) and isinstance(start, int):
+                found[index] = (text, start)
         return found
 
     def _classification_filter(self, allowed_classifications: Sequence[str]) -> Filter:
@@ -374,22 +342,12 @@ class Rag:
         )
 
 
-def _chunk_index(payload: dict[str, object]) -> int:
-    raw = payload.get("chunk_index")
-    if isinstance(raw, int) and not isinstance(raw, bool):
-        return raw
-    if isinstance(raw, str) and raw.isdigit():
-        return int(raw)
-    return 0
-
-
 def _chunk_context(document_id: object, index: object) -> str:
     return f"chunk:{document_id}:{index}"
 
 
 def _open_payload(payload: dict[str, object]) -> dict[str, object]:
-    """Payload with its chunk text decrypted (plain text from before
-    encryption passes through)."""
+    """Payload with its chunk text decrypted."""
     text = payload.get("text")
     if not isinstance(text, str):
         return payload

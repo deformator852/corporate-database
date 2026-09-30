@@ -35,6 +35,8 @@ class RoleService:
         return list(roles), total or 0
 
     async def create_role(self, data: RoleCreateSchema, *, actor_id: int) -> Role:
+        # Unknown keys first: "you cannot grant" would be the wrong reason.
+        permissions = await self._permissions_by_keys(data.permission_keys)
         ensure_can_grant(
             await user_permission_keys(self.session, actor_id), data.permission_keys
         )
@@ -44,7 +46,7 @@ class RoleService:
             key=key,
             name=data.name,
             description=data.description,
-            permissions=await self._permissions_by_keys(data.permission_keys),
+            permissions=permissions,
         )
         self.session.add(role)
         await self._flush_role(role)
@@ -56,8 +58,8 @@ class RoleService:
         actor_keys = await user_permission_keys(self.session, actor_id)
         role = await self._require_role(key)
         ensure_can_manage(actor_keys, role_keys([role]))
-        ensure_can_grant(actor_keys, data.permission_keys)
         permissions = await self._permissions_by_keys(data.permission_keys)
+        ensure_can_grant(actor_keys, data.permission_keys)
         if key == ADMIN_ROLE_KEY and {p.key for p in permissions} != role_keys([role]):
             raise AppError(
                 "conflict",

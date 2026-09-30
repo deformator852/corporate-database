@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from authx.exceptions import JWTDecodeError
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 load_dotenv()
@@ -14,13 +15,15 @@ from api.v1.router import api_router
 from exceptions import AppError
 from i18n import t
 from extensions import plugins
-from schemas.error import ErrorSchema
+from schemas.error import ErrorSchema, validation_message
 from security import security
 from services.documents.events import consume_document_events
 from services.documents.hub import hub
 from database import AsyncSessionLocal
 from services.chat_history import ChatHistoryService
 from services.embedding import get_embedding_model
+from services.encryption_key import verify_encryption_key
+from services.chat_limit import close_open_chat_requests, purge_chat_requests
 from settings import chat_retention_days
 from services.generator import OllamaGenerator
 from services.notifications.events import consume_notification_events
@@ -47,7 +50,8 @@ _PURGE_EVERY_SECONDS = 6 * 3600
 
 
 async def purge_old_chats() -> None:
-    """Deletes saved chats idle longer than CHAT_RETENTION_DAYS, every 6 hours."""
+    """Every 6 hours: deletes saved chats idle longer than CHAT_RETENTION_DAYS
+    and chat limit records older than a day."""
     while True:
         try:
             days = chat_retention_days()
@@ -56,6 +60,7 @@ async def purge_old_chats() -> None:
                     removed = await ChatHistoryService(session).purge_older_than(days)
                 if removed:
                     logger.info("Deleted %s chat(s) older than %s days", removed, days)
+            await purge_chat_requests()
         except Exception:
             logger.warning("Chat retention cleanup failed", exc_info=True)
         await asyncio.sleep(_PURGE_EVERY_SECONDS)
@@ -63,6 +68,10 @@ async def purge_old_chats() -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # Fail fast: with the wrong key, new data would be unreadable later.
+    async with AsyncSessionLocal() as session:
+        await verify_encryption_key(session)
+    await close_open_chat_requests()
     warm_up_task = asyncio.create_task(warm_up())
     purge_task = asyncio.create_task(purge_old_chats())
     document_task = asyncio.create_task(consume_document_events(hub.broadcast))
@@ -130,6 +139,13 @@ for plugin in plugins():
 async def invalid_token_handler(_request: Request, _exc: JWTDecodeError) -> JSONResponse:
     body = ErrorSchema(code="unauthorized", message=t("Not authenticated"))
     return JSONResponse(status_code=401, content=body.model_dump())
+
+
+# Same `{code, message}` as every other error, so forms can show it.
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(_request: Request, exc: RequestValidationError) -> JSONResponse:
+    body = ErrorSchema(code="invalid", message=t(validation_message(list(exc.errors()))))
+    return JSONResponse(status_code=400, content=body.model_dump())
 
 
 @app.exception_handler(AppError)

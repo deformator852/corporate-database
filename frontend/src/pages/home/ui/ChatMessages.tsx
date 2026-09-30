@@ -102,6 +102,15 @@ export function ChatMessages({
                 </p>
             ) : null}
 
+            {status === "refused" && error ? (
+                <p
+                    role="status"
+                    className="mr-auto max-w-[min(100%,36rem)] rounded-2xl bg-muted px-3.5 py-2.5 text-sm text-muted-foreground"
+                >
+                    {error}
+                </p>
+            ) : null}
+
             {status === "error" && error ? (
                 <div className="mr-auto max-w-[min(100%,36rem)] space-y-2 rounded-2xl bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive">
                     <p>{error}</p>
