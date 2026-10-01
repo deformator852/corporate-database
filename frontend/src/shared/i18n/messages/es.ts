@@ -175,7 +175,7 @@ export const es: Record<MessageKey, string> = {
     "documents.upload.title": "Subir documento",
     "documents.upload.name": "Nombre",
     "documents.upload.classification": "Clasificación",
-    "documents.upload.dropHint": "PDF, Word, Excel, CSV, XML, JSON, Markdown u ODT. Hasta 32 MB.",
+    "documents.upload.dropHint": "PDF, Word, OpenDocument, Excel, CSV, XML, JSON, Markdown o texto plano. Hasta 32 MB.",
     "documents.upload.dropPrompt": "Arrastre un archivo aquí o elija uno",
     "documents.upload.submit": "Subir",
     "documents.upload.success": "Documento subido.",

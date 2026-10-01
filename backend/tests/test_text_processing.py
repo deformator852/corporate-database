@@ -28,7 +28,7 @@ def test_rewrite_must_keep_numbers_and_length():
 def _chunks():
     text = "\n".join(f"Row {i % 7}: status active, amount 100." for i in range(300))
     chunks, starts = _split_text(RecursiveChunker(tokenizer="character", chunk_size=300), text, 60)
-    return text, dict(enumerate(zip(chunks, starts)))
+    return text, dict(enumerate(zip(chunks, starts, strict=True)))
 
 
 def test_excerpts_with_offsets_are_exact_slices():

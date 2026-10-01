@@ -175,7 +175,7 @@ export const fr: Record<MessageKey, string> = {
     "documents.upload.title": "Téléverser un document",
     "documents.upload.name": "Nom",
     "documents.upload.classification": "Classification",
-    "documents.upload.dropHint": "PDF, Word, Excel, CSV, XML, JSON, Markdown ou ODT. Jusqu’à 32 Mo.",
+    "documents.upload.dropHint": "PDF, Word, OpenDocument, Excel, CSV, XML, JSON, Markdown ou texte brut. Jusqu’à 32 Mo.",
     "documents.upload.dropPrompt": "Déposez un fichier ici ou choisissez-en un",
     "documents.upload.submit": "Téléverser",
     "documents.upload.success": "Document téléversé.",

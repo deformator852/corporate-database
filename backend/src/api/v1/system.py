@@ -19,5 +19,5 @@ router = APIRouter(
     responses={401: {"model": ErrorSchema}, 403: {"model": ErrorSchema}},
     dependencies=[Depends(require_permission("system.view"))],
 )
-async def get_system_status(session: AsyncSession = Depends(get_db)) -> dict[str, Any]:
+async def get_system_status(session: AsyncSession = Depends(get_db, scope="function")) -> dict[str, Any]:
     return await system_status(session)

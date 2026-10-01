@@ -214,7 +214,7 @@ class Rag:
         for hit in hits:
             payload = getattr(hit, "payload", None)
             if isinstance(payload, dict):
-                payloads.append(_open_payload(payload))
+                payloads.append({**_open_payload(payload), "score": hit.score})
         return payloads
 
     async def chunks_by_index(

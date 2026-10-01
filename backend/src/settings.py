@@ -31,23 +31,28 @@ class EmbeddingSpec:
     dims: int
     query_prefix: str = ""
     passage_prefix: str = ""
+    # Search hits scoring lower are not relevant: the chat neither uses nor
+    # lists them. Scores differ per model, so each is calibrated with
+    # evals/search_relevance.py; None turns the filter off.
+    min_score: float | None = None
 
 
 _E5 = {"query_prefix": "query: ", "passage_prefix": "passage: "}
 _BGE_EN = {"query_prefix": "Represent this sentence for searching relevant passages: "}
 _SOLON = {"query_prefix": "query : "}
 
-# EMBEDDING_MODEL value → model spec.
+# EMBEDDING_MODEL value → model spec. min_score: calibrated with
+# evals/search_relevance.py on evals/dataset.LANG.json.
 EMBEDDING_MODELS = {
-    "multilingual-e5-small": EmbeddingSpec("intfloat/multilingual-e5-small", 384, **_E5),
-    "multilingual-e5-base": EmbeddingSpec("intfloat/multilingual-e5-base", 768, **_E5),
+    "multilingual-e5-small": EmbeddingSpec("intfloat/multilingual-e5-small", 384, **_E5, min_score=0.81),
+    "multilingual-e5-base": EmbeddingSpec("intfloat/multilingual-e5-base", 768, **_E5, min_score=0.785),
     "multilingual-e5-large": EmbeddingSpec("intfloat/multilingual-e5-large", 1024, **_E5),
-    "bge-small-en": EmbeddingSpec("BAAI/bge-small-en-v1.5", 384, **_BGE_EN),
-    "bge-base-en": EmbeddingSpec("BAAI/bge-base-en-v1.5", 768, **_BGE_EN),
-    "bge-large-en": EmbeddingSpec("BAAI/bge-large-en-v1.5", 1024, **_BGE_EN),
-    "solon-base": EmbeddingSpec("OrdalieTech/Solon-embeddings-base-0.1", 768, **_SOLON),
-    "solon-large": EmbeddingSpec("OrdalieTech/Solon-embeddings-large-0.1", 1024, **_SOLON),
-    "bge-m3": EmbeddingSpec("BAAI/bge-m3", 1024),
+    "bge-small-en": EmbeddingSpec("BAAI/bge-small-en-v1.5", 384, **_BGE_EN, min_score=0.54),
+    "bge-base-en": EmbeddingSpec("BAAI/bge-base-en-v1.5", 768, **_BGE_EN, min_score=0.48),
+    "bge-large-en": EmbeddingSpec("BAAI/bge-large-en-v1.5", 1024, **_BGE_EN, min_score=0.505),
+    "solon-base": EmbeddingSpec("OrdalieTech/Solon-embeddings-base-0.1", 768, **_SOLON, min_score=0.375),
+    "solon-large": EmbeddingSpec("OrdalieTech/Solon-embeddings-large-0.1", 1024, **_SOLON, min_score=0.39),
+    "bge-m3": EmbeddingSpec("BAAI/bge-m3", 1024, min_score=0.45),
 }
 
 

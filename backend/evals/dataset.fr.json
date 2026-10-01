@@ -1,0 +1,172 @@
+{
+  "documents": {
+    "travel": "Politique de déplacements professionnels. Les salariés réservent le train pour les trajets de moins de 600 kilomètres ; les trajets plus longs peuvent être réservés en avion en classe économique. L'indemnité de repas journalière en déplacement est de 47 EUR. Les réservations d'hôtel de plus de 180 EUR par nuit doivent être approuvées par le directeur financier. Les taxis ne sont remboursés que lorsqu'aucun transport public ne circule entre 23 h et 6 h. Les demandes de déplacement sont déposées au moins sept jours ouvrés avant le départ.",
+    "leave": "Politique de congés. Les salariés à temps plein ont 26 jours ouvrés de congés payés par an. Jusqu'à cinq jours non pris peuvent être reportés sur l'année suivante et doivent être pris avant le 31 mars. Le responsable hiérarchique valide les demandes dans le portail RH au moins deux semaines à l'avance. Le congé parental est accordé jusqu'à 16 semaines à plein salaire. Un arrêt maladie de plus de trois jours nécessite un certificat médical.",
+    "passwords": "Politique de mots de passe et de comptes informatiques. Les mots de passe comportent au moins 14 caractères et sont changés tous les 180 jours. L'authentification multifacteur est obligatoire pour la messagerie, le VPN et le portail RH. Les comptes sont bloqués après cinq tentatives de connexion échouées et débloqués par le support. Ne partagez jamais vos mots de passe, y compris avec l'équipe informatique. La perte d'un ordinateur portable est signalée au support dans l'heure.",
+    "expenses": "Procédure de remboursement des frais. Déposez les notes de frais dans le système financier dans les 30 jours suivant l'achat, avec un justificatif scanné pour chaque dépense de plus de 10 EUR. Les remboursements sont versés avec le salaire mensuel suivant. L'alcool, les amendes et les loisirs personnels ne sont jamais remboursés. Les relevés de la carte de crédit d'entreprise doivent être rapprochés avant le cinquième jour ouvré du mois.",
+    "onboarding": "Liste d'intégration des nouveaux salariés. Le premier jour, récupérez votre badge et votre ordinateur portable à l'accueil du rez-de-chaussée. Votre parrain vous présente l'équipe et vous montre les outils internes. Suivez la formation de sensibilisation à la sécurité et la formation à la protection des données dans les deux premières semaines. La période d'essai dure six mois, avec un entretien de bilan après trois mois.",
+    "parking": "Règles du parking du bureau. Les visiteurs se garent en zone C et paient 3 EUR de l'heure à l'horodateur près de l'entrée. Les salariés se garent aux niveaux -1 et -2 avec leur badge. Les voitures électriques se rechargent gratuitement aux bornes du niveau -1, quatre heures au maximum. Les vélos vont dans le local fermé à côté de l'entrée principale.",
+    "incident": "Réponse aux incidents de sécurité. Signalez tout e-mail d'hameçonnage suspect avec le bouton Signaler du client de messagerie et ne cliquez pas sur ses liens. Une infection par rançongiciel est signalée immédiatement à l'équipe sécurité par téléphone au poste 5555, et l'appareil est débranché du réseau. L'équipe sécurité informe le délégué à la protection des données sous 24 heures lorsque des données personnelles peuvent être touchées.",
+    "pricing": "Grille tarifaire 2026. L'offre Basique coûte 9 EUR par utilisateur et par mois et comprend 50 Go de stockage. L'offre Business coûte 19 EUR par utilisateur et par mois, avec 1 To de stockage et un support prioritaire. Les prix Enterprise sont négociés individuellement au-delà de 500 utilisateurs. La facturation annuelle donne 15 pour cent de remise sur toutes les offres.",
+    "retention": "Calendrier de conservation des données. Les factures et pièces comptables sont conservées dix ans. Les dossiers du personnel sont conservés cinq ans après le départ du salarié. Les candidatures refusées sont supprimées au bout de six mois. Les enregistrements des caméras du bureau sont écrasés après 72 heures, sauf s'ils sont nécessaires à une enquête.",
+    "canteen": "Guide de la cantine et des cuisines. La cantine est ouverte de 11 h 30 à 14 h les jours ouvrés et propose chaque jour un plat végétarien. Le déjeuner coûte 6,50 EUR avec le badge salarié. Le café et le thé des cuisines de chaque étage sont gratuits. Étiquetez vos aliments dans les réfrigérateurs partagés avec votre nom et la date ; les aliments sans étiquette sont retirés le vendredi."
+  },
+  "questions": [
+    {
+      "q": "Combien d'argent ai-je par jour pour manger en voyage d'affaires ?",
+      "doc": "travel"
+    },
+    {
+      "q": "Qui doit valider une chambre d'hôtel chère ?",
+      "doc": "travel"
+    },
+    {
+      "q": "Combien de jours de vacances ont les salariés à temps plein ?",
+      "doc": "leave"
+    },
+    {
+      "q": "Puis-je reporter mes vacances non prises à l'année prochaine ?",
+      "doc": "leave"
+    },
+    {
+      "q": "Quelle longueur doit faire un mot de passe ?",
+      "doc": "passwords"
+    },
+    {
+      "q": "Que se passe-t-il après plusieurs erreurs de connexion ?",
+      "doc": "passwords"
+    },
+    {
+      "q": "Jusqu'à quand dois-je rendre mes tickets de caisse ?",
+      "doc": "expenses"
+    },
+    {
+      "q": "L'entreprise rembourse-t-elle l'alcool ?",
+      "doc": "expenses"
+    },
+    {
+      "q": "Où est-ce que je récupère mon ordinateur le premier jour ?",
+      "doc": "onboarding"
+    },
+    {
+      "q": "Combien de temps dure la période d'essai des nouvelles recrues ?",
+      "doc": "onboarding"
+    },
+    {
+      "q": "Où les invités garent-ils leur voiture et combien ça coûte ?",
+      "doc": "parking"
+    },
+    {
+      "q": "Puis-je recharger ma voiture électrique au bureau ?",
+      "doc": "parking"
+    },
+    {
+      "q": "Que faire si je reçois un e-mail suspect ?",
+      "doc": "incident"
+    },
+    {
+      "q": "Quel numéro appeler si mon ordinateur a un rançongiciel ?",
+      "doc": "incident"
+    },
+    {
+      "q": "Combien coûte l'offre Business ?",
+      "doc": "pricing"
+    },
+    {
+      "q": "Y a-t-il une réduction pour un paiement à l'année ?",
+      "doc": "pricing"
+    },
+    {
+      "q": "Combien de temps gardons-nous les factures ?",
+      "doc": "retention"
+    },
+    {
+      "q": "Quand les vidéos des caméras sont-elles effacées ?",
+      "doc": "retention"
+    },
+    {
+      "q": "À quelle heure ouvre la cafétéria ?",
+      "doc": "canteen"
+    },
+    {
+      "q": "Combien coûte le repas avec le badge ?",
+      "doc": "canteen"
+    },
+    {
+      "q": "Quelle est l'indemnité de repas en déplacement et comment me faire rembourser mes frais ?",
+      "doc": [
+        "travel",
+        "expenses"
+      ]
+    },
+    {
+      "q": "Que faire de mon ordinateur le premier jour et quand changer son mot de passe ?",
+      "doc": [
+        "onboarding",
+        "passwords"
+      ]
+    },
+    {
+      "q": "Combien de temps garde-t-on les dossiers du personnel et combien de jours de congé puis-je reporter ?",
+      "doc": [
+        "retention",
+        "leave"
+      ]
+    },
+    {
+      "q": "Où les visiteurs se garent-ils et où peuvent-ils déjeuner ?",
+      "doc": [
+        "parking",
+        "canteen"
+      ]
+    },
+    {
+      "q": "Que couvre l'assurance dentaire ?",
+      "doc": null
+    },
+    {
+      "q": "Comment commander une voiture de fonction ?",
+      "doc": null
+    },
+    {
+      "q": "Quel est le système de primes de l'équipe commerciale ?",
+      "doc": null
+    },
+    {
+      "q": "Qui est le directeur général de l'entreprise ?",
+      "doc": null
+    },
+    {
+      "q": "Puis-je télétravailler le vendredi ?",
+      "doc": null
+    },
+    {
+      "q": "Quel est le code vestimentaire au bureau ?",
+      "doc": null
+    },
+    {
+      "q": "Quel temps fera-t-il demain à Paris ?",
+      "doc": null
+    },
+    {
+      "q": "Qui a gagné la Coupe du monde de football 2022 ?",
+      "doc": null
+    },
+    {
+      "q": "Écris un poème sur la mer.",
+      "doc": null
+    },
+    {
+      "q": "Quelle est la capitale de l'Australie ?",
+      "doc": null
+    },
+    {
+      "q": "Comment faire du pain au levain ?",
+      "doc": null
+    },
+    {
+      "q": "Explique l'intrication quantique avec des mots simples.",
+      "doc": null
+    }
+  ]
+}

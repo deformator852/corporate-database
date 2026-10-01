@@ -140,3 +140,21 @@ describe("Documents page", () => {
         expect(screen.queryByRole("button", {name: "Delete Travel policy?"})).not.toBeInTheDocument();
     });
 });
+
+describe("Upload name after a failed upload", () => {
+    it("takes the next file's name instead of keeping the rejected one", async () => {
+        const {user} = renderApp("/documents", sessionUser(WRITER), (s) => {
+            documents(s, []);
+            s.on("POST", "/documents", apiError(400, "The file content does not match its type."));
+        });
+        await user.upload(await screen.findByLabelText("File"), new File(["MZ"], "fake.pdf"));
+        await user.click(screen.getByRole("button", {name: "Upload"}));
+        await screen.findByRole("alert");
+        await user.upload(screen.getByLabelText("File"), new File(["text"], "policy.txt"));
+        expect(screen.getByLabelText("Name")).toHaveValue("policy");
+        await user.clear(screen.getByLabelText("Name"));
+        await user.type(screen.getByLabelText("Name"), "Travel policy");
+        await user.upload(screen.getByLabelText("File"), new File(["text"], "other.txt"));
+        expect(screen.getByLabelText("Name")).toHaveValue("Travel policy");  // a typed name stays
+    });
+});

@@ -3,7 +3,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from authx.exceptions import JWTDecodeError
+from authx.exceptions import AuthXException, CSRFError, MissingCSRFTokenError
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -16,7 +16,6 @@ from exceptions import AppError
 from i18n import t
 from extensions import plugins
 from schemas.error import ErrorSchema, validation_message
-from security import security
 from services.documents.events import consume_document_events
 from services.documents.hub import hub
 from database import AsyncSessionLocal
@@ -127,16 +126,22 @@ async def security_headers(request: Request, call_next):
         )
     return response
 app.include_router(api_router)
-security.handle_errors(app)
 for plugin in plugins():
     if hasattr(plugin, "setup"):
         plugin.setup(app)
 
 
-# authx answers an undecodable token (bad signature, e.g. after JWT_SECRET_KEY
-# changed) with 422; clients sign in again only on 401.
-@app.exception_handler(JWTDecodeError)
-async def invalid_token_handler(_request: Request, _exc: JWTDecodeError) -> JSONResponse:
+# Every authx error in the common `{code, message}` shape. A handler for the
+# base class also stops authx from installing its own (other shapes, and 422
+# for a bad signature, while clients sign in again only on 401).
+@app.exception_handler(AuthXException)
+async def auth_error_handler(_request: Request, exc: AuthXException) -> JSONResponse:
+    # authx re-raises a missing CSRF header as a plain MissingTokenError, so
+    # the message is the only sign left.
+    if isinstance(exc, (CSRFError, MissingCSRFTokenError)) or "CSRF token" in str(exc):
+        # The session is fine; the request is not. 401 would sign the user out.
+        body = ErrorSchema(code="forbidden", message=t("The request has no valid security token. Reload the page."))
+        return JSONResponse(status_code=403, content=body.model_dump())
     body = ErrorSchema(code="unauthorized", message=t("Not authenticated"))
     return JSONResponse(status_code=401, content=body.model_dump())
 

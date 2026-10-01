@@ -1,0 +1,172 @@
+{
+  "documents": {
+    "travel": "Business travel policy. Employees book trains for trips shorter than 600 kilometres; longer trips may be booked by plane in economy class. The daily meal allowance for business trips is 47 EUR. Hotel bookings above 180 EUR per night need approval from the finance director. Taxis are reimbursed only when no public transport runs between 23:00 and 06:00. Travel requests are submitted at least seven working days before departure.",
+    "leave": "Annual leave policy. Full-time employees receive 26 working days of paid leave per year. Up to five unused days can be carried over to the next year and must be taken before 31 March. Leave requests are approved by the line manager in the HR portal at least two weeks in advance. Parental leave is granted for up to 16 weeks at full pay. Sick leave longer than three days requires a doctor's certificate.",
+    "passwords": "IT password and account policy. Passwords must have at least 14 characters and are changed every 180 days. Multi-factor authentication is mandatory for email, VPN and the HR portal. Accounts are locked after five failed sign-in attempts and unlocked by the service desk. Never share passwords, including with IT staff. Lost laptops must be reported to the service desk within one hour.",
+    "expenses": "Expense reimbursement procedure. Submit expense reports in the finance system within 30 days of the purchase, with a scanned receipt for every item above 10 EUR. Reimbursements are paid with the next monthly salary. Alcohol, fines and personal entertainment are never reimbursed. Corporate credit card statements must be reconciled by the fifth working day of the month.",
+    "onboarding": "Onboarding checklist for new employees. On the first day, collect your badge and laptop from reception on the ground floor. Your buddy introduces you to the team and shows you the internal tools. Complete the security awareness course and the data protection training within the first two weeks. Your probation period lasts six months, with a review meeting after three months.",
+    "parking": "Office parking rules. Visitors park in zone C and pay 3 EUR per hour at the machine near the entrance. Employees park on levels -1 and -2 with their badge. Electric cars charge for free at the stations on level -1, for at most four hours. Bicycles go into the locked room next to the main entrance.",
+    "incident": "Security incident response. Report any suspected phishing email with the Report button in the mail client and do not click links in it. A ransomware infection must be reported to the security team immediately by phone on extension 5555, and the device must be disconnected from the network. The security team informs the data protection officer within 24 hours when personal data may be affected.",
+    "pricing": "Product price list 2026. The Basic plan costs 9 EUR per user per month and includes 50 GB of storage. The Business plan costs 19 EUR per user per month, with 1 TB of storage and priority support. Enterprise prices are negotiated individually for more than 500 users. Annual billing gives a 15 percent discount on all plans.",
+    "retention": "Data retention schedule. Invoices and accounting records are kept for ten years. Employee personnel files are kept for five years after the employee leaves. Job applications of rejected candidates are deleted after six months. CCTV recordings from the office cameras are overwritten after 72 hours unless they are needed for an investigation.",
+    "canteen": "Canteen and kitchen guide. The canteen is open from 11:30 to 14:00 on working days and serves a vegetarian dish every day. Lunch costs 6.50 EUR with the employee badge. Coffee and tea in the kitchens on every floor are free. Please label food in the shared fridges with your name and date; unlabeled food is removed on Fridays."
+  },
+  "questions": [
+    {
+      "q": "How much money do I get per day for food when travelling for work?",
+      "doc": "travel"
+    },
+    {
+      "q": "Who has to approve an expensive hotel room?",
+      "doc": "travel"
+    },
+    {
+      "q": "How many vacation days do full-time staff get?",
+      "doc": "leave"
+    },
+    {
+      "q": "Can I move unused holidays to next year?",
+      "doc": "leave"
+    },
+    {
+      "q": "How long must a password be?",
+      "doc": "passwords"
+    },
+    {
+      "q": "What happens after several wrong login attempts?",
+      "doc": "passwords"
+    },
+    {
+      "q": "Until when must I hand in my receipts?",
+      "doc": "expenses"
+    },
+    {
+      "q": "Is alcohol paid back by the company?",
+      "doc": "expenses"
+    },
+    {
+      "q": "Where do I pick up my laptop on my first day?",
+      "doc": "onboarding"
+    },
+    {
+      "q": "How long is the trial period for new hires?",
+      "doc": "onboarding"
+    },
+    {
+      "q": "Where should guests leave their car and what does it cost?",
+      "doc": "parking"
+    },
+    {
+      "q": "Can I charge my electric car at the office?",
+      "doc": "parking"
+    },
+    {
+      "q": "What do I do if I get a suspicious email?",
+      "doc": "incident"
+    },
+    {
+      "q": "Which number do I call when my computer is infected with ransomware?",
+      "doc": "incident"
+    },
+    {
+      "q": "How much does the Business plan cost?",
+      "doc": "pricing"
+    },
+    {
+      "q": "Is there a discount for paying yearly?",
+      "doc": "pricing"
+    },
+    {
+      "q": "How long do we keep invoices?",
+      "doc": "retention"
+    },
+    {
+      "q": "When are camera recordings deleted?",
+      "doc": "retention"
+    },
+    {
+      "q": "What time does the cafeteria open?",
+      "doc": "canteen"
+    },
+    {
+      "q": "How much is lunch with a badge?",
+      "doc": "canteen"
+    },
+    {
+      "q": "What is the meal allowance on business trips and how do I get my expenses paid back?",
+      "doc": [
+        "travel",
+        "expenses"
+      ]
+    },
+    {
+      "q": "What must I do with my laptop on the first day and when do I change its password?",
+      "doc": [
+        "onboarding",
+        "passwords"
+      ]
+    },
+    {
+      "q": "How long are personnel files kept and how many leave days can be carried over?",
+      "doc": [
+        "retention",
+        "leave"
+      ]
+    },
+    {
+      "q": "Where can visitors park and where can they have lunch?",
+      "doc": [
+        "parking",
+        "canteen"
+      ]
+    },
+    {
+      "q": "What does the dental insurance cover?",
+      "doc": null
+    },
+    {
+      "q": "How do I order a company car?",
+      "doc": null
+    },
+    {
+      "q": "What is the bonus scheme for sales staff?",
+      "doc": null
+    },
+    {
+      "q": "Who is the CEO of the company?",
+      "doc": null
+    },
+    {
+      "q": "Can I work from home on Fridays?",
+      "doc": null
+    },
+    {
+      "q": "What is the dress code at the office?",
+      "doc": null
+    },
+    {
+      "q": "What will the weather be in Paris tomorrow?",
+      "doc": null
+    },
+    {
+      "q": "Who won the football world cup in 2022?",
+      "doc": null
+    },
+    {
+      "q": "Write a poem about the sea.",
+      "doc": null
+    },
+    {
+      "q": "What is the capital of Australia?",
+      "doc": null
+    },
+    {
+      "q": "How do I bake sourdough bread?",
+      "doc": null
+    },
+    {
+      "q": "Explain quantum entanglement in simple words.",
+      "doc": null
+    }
+  ]
+}

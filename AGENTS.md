@@ -2,66 +2,80 @@
 
 On coding tasks, read and follow:
 
-- ~/.agents/skills/ponytail/SKILL.md
+- .skills/karpathy/SKILL.md — HOW to work: clarify ambiguity and state
+  assumptions before coding, make surgical changes only, match existing style,
+  define success criteria and verify (tests/run) before finishing.
+- .skills/ponytail/SKILL.md — WHAT to build: the smallest solution that
+  works. Check in order: is it needed at all → already in repo → stdlib →
+  platform feature → dependency → custom code. No speculative abstractions.
+
+Both apply to every coding task. Order: karpathy first (understand, scope),
+then ponytail (minimize the solution), then karpathy again (verify).
+
+On conflict:
+
+- Existing codebase conventions and readability beat ponytail's line-count golf.
+- Never minimize validation, error handling, security, or tests.
+- Mature/team repo → ponytail lite; prototypes/scripts → ponytail full.
 
 On writing any sort of documentation or text, also:
 
-- ~/.agents/skills/technical-writer/SKILL.md
+- .skills/technical-writer/SKILL.md
 
 On testing tasks, also:
 
-- ~/.agents/skills/qa/SKILL.md
+- .skills/qa/SKILL.md
 
 On react hook form work, also:
 
-- ~/.agents/skills/react-hook-form/SKILL.md
+- .skills/react-hook-form/SKILL.md
 
 On react frontend framework work, also:
 
-- ~/.agents/skills/react/SKILL.md
+- .skills/react/SKILL.md
 
 On UI/UX work — designing or reviewing anything that changes how the interface
 looks, feels, or is interacted with (layout, color, typography, spacing, style
 selection, accessibility, navigation patterns, animation, responsive behavior) —
 also:
 
-- ~/.agents/skills/ui-ux-pro-max/SKILL.md
+- .skills/ui-ux-pro-max/SKILL.md
 
 Skip it for pure logic changes (backend, state management, data fetching) that
 don't touch appearance or interaction.
 
 On shadcn work, also:
 
-- ~/.agents/skills/shadcn/SKILL.md
-- ~/.agents/skills/ui-styling/SKILL.md
+- .skills/shadcn/SKILL.md
+- .skills/ui-styling/SKILL.md
 
 On shadcn work also:
 
-- ~/.agents/skills/shadcn/SKILL.md
+- .skills/shadcn/SKILL.md
 
 On tailwind work also:
 
-- ~/.agents/skills/tailwind/SKILL.md
+- .skills/tailwind/SKILL.md
 
 On tanstack-query work also:
 
-- ~/.agents/skills/tanstack-query/SKILL.md
+- .skills/tanstack-query/SKILL.md
 
 On zod work also:
 
-- ~/.agents/skills/zod/SKILL.md
+- .skills/zod/SKILL.md
 
 On frontend work also:
 
-- ~/.agents/skills/frontend-ui-engineering/SKILL.md
+- .skills/frontend-ui-engineering/SKILL.md
 
 On TypeScript work, also:
 
-- ~/.agents/skills/typescript-clean-code/SKILL.md
+- .skills/typescript-clean-code/SKILL.md
 
 On Python work, also:
 
-- ~/.agents/skills/python-developer/SKILL.md
+- .skills/python-developer/SKILL.md
 
 Skip these for non-coding questions.
 
@@ -118,7 +132,7 @@ Document ACL (hierarchical): `standard` < `restricted` < `confidential` < `secre
 
 ## Naming and layers
 
-Python: one service per entity, singular (`UserService`). FastAPI routers stay thin; logic in services. Pydantic classes keep the `Schema` suffix; filenames are `user.py`, not `user_schema.py`. Inject with `Depends`, including `Form()` schemas for multipart.
+Python: one service per entity, singular (`UserService`). FastAPI routers stay thin; logic in services. Pydantic classes keep the `Schema` suffix; filenames are `user.py`, not `user_schema.py`. Inject with `Depends`, including `Form()` schemas for multipart. Inject the database session as `Depends(get_db, scope="function")`: the default scope commits after the response is sent, so clients would get 200 for unsaved changes and read stale data.
 
 ## Deployment and secrets
 
@@ -146,4 +160,4 @@ Frontend: `cd frontend && npm test` (Vitest, jsdom, Testing Library). `renderApp
 
 MinIO: the backend uses a least-privilege app user (`MINIO_ACCESS_KEY`: get/put/delete objects in `MINIO_BUCKET` only), never root. The bucket, policy and user are created by the `minio-init` compose service; the app must not create or list buckets. Object keys are `documents/<uuid>` with no filename. Uploads pass `services/documents/upload_check.py` (content matches extension, zip size limits) before conversion or storage.
 
-Pipeline: upload (convert `.doc` → `.docx` if needed) → Postgres row + MinIO in the same request → Celery → parse (original saved to `document_texts`) → rules cleanup (`services/documents/text_cleanup.py`) → chunk (`CHUNK_SIZE`/`CHUNK_OVERLAP`; set in `uv run setup`/`configure`, which warns when size + overlap exceeds the embedding model's input) → LLM cleanup (`TEXT_CLEANUP`, per-document time budget; skipped for CSV/JSON/XML/XLSX) → embed `EMBEDDING_MODEL` → Qdrant. Only the embedded text is LLM-rewritten; the Qdrant payload keeps the rules-cleaned chunk and answers use the original, so a bad rewrite never reaches users. A rewrite that loses any number or changes length too much is discarded. Queue failures notify; HTTP upload errors stay on the form. Celery tasks import at module level (a broken import must stop the worker, not lose jobs), dispose the DB engine at the end of each `asyncio.run` (pooled connections are bound to one event loop), and the worker re-queues every unfinished document on start (`worker_ready`); processing is idempotent, so duplicates are harmless. One worker process (`worker_concurrency=1`) is assumed. Chat is a WebSocket on the chat router (`/ws`), same cookie auth as other sockets. Client and server exchange typed JSON (`ask` / `delta` / `answer` / `error`); `{code, message}` on errors. The answer streams as `delta` pieces, then `answer` carries the full text. Client may send `cancel` while a reply is running; the server stops generation and replies `cancelled`. Send the last 4–6 messages; embed/search only the latest user question. Chats are saved per user (`chat_conversations`/`chat_messages`, encrypted, private to the owner, deleted after `CHAT_RETENTION_DAYS`); the `answer` carries `conversation_id` and `sources` (documents used), which open through `GET /documents/{id}/file` (same clearance rule as chat, audited as `documents.view`). A document longer than its share of the LLM context is sent as excerpts around the search hits (`services/chat.py`, `build_excerpt`), joined exactly by the chunk `start` offsets in the Qdrant payload. Answer from the full text of matching documents, read from `document_texts` (saved at processing time); never parse files per question. No LangChain. LLM via `LLM_HOST`, `LLM_MODEL` and a fixed `LLM_NUM_CTX` (never vary `num_ctx` per request: Ollama reloads the model); document context is cut to fit it. Chat is read-only: it must not create, change, or delete data, and it answers only about documents the user may see. Chat limits (`services/chat_limit.py`, `chat_requests`): one answer at a time per user across tabs and processes (partial unique index on open rows; freed in `_answer`'s `finally`, rows older than 15 min count as crashed), and `CHAT_QUESTIONS_PER_10_MIN` questions per user (default 20, 0 = off, set in setup/configure). Refusals are socket errors `busy` / `rate_limited`; the client puts the question back in the input. Ollama answers `LLM_PARALLEL` questions at once (`OLLAMA_NUM_PARALLEL`, flash attention, q8_0 KV cache); every slot reserves `LLM_NUM_CTX` of context memory, which the configure step estimates.
+Pipeline: upload (convert `.doc` → `.docx` if needed) → Postgres row + MinIO in the same request → Celery → parse (original saved to `document_texts`) → rules cleanup (`services/documents/text_cleanup.py`) → chunk (`CHUNK_SIZE`/`CHUNK_OVERLAP`; set in `uv run setup`/`configure`, which warns when size + overlap exceeds the embedding model's input) → LLM cleanup (`TEXT_CLEANUP`, per-document time budget; skipped for CSV/JSON/XML/XLSX) → embed `EMBEDDING_MODEL` → Qdrant. Only the embedded text is LLM-rewritten; the Qdrant payload keeps the rules-cleaned chunk and answers use the original, so a bad rewrite never reaches users. A rewrite that loses any number or changes length too much is discarded. Queue failures notify; HTTP upload errors stay on the form. Celery tasks import at module level (a broken import must stop the worker, not lose jobs), dispose the DB engine at the end of each `asyncio.run` (pooled connections are bound to one event loop), and the worker re-queues every unfinished document on start (`worker_ready`); processing is idempotent, so duplicates are harmless. One worker process (`worker_concurrency=1`) is assumed. Chat is a WebSocket on the chat router (`/ws`), same cookie auth as other sockets. Client and server exchange typed JSON (`ask` / `delta` / `answer` / `error`); `{code, message}` on errors. The answer streams as `delta` pieces, then `answer` carries the full text. Client may send `cancel` while a reply is running; the server stops generation and replies `cancelled`. Send the last 4–6 messages; embed/search only the latest user question. Chats are saved per user (`chat_conversations`/`chat_messages`, encrypted, private to the owner, deleted after `CHAT_RETENTION_DAYS`); the `answer` carries `conversation_id` and `sources` (documents used), which open through `GET /documents/{id}/file` (same clearance rule as chat, audited as `documents.view`). A document longer than its share of the LLM context is sent as excerpts around the search hits (`services/chat.py`, `build_excerpt`), joined exactly by the chunk `start` offsets in the Qdrant payload. Answer from the full text of matching documents, read from `document_texts` (saved at processing time); never parse files per question. No LangChain. LLM via `LLM_HOST`, `LLM_MODEL` and a fixed `LLM_NUM_CTX` (never vary `num_ctx` per request: Ollama reloads the model); document context is cut to fit it. Chat is read-only: it must not create, change, or delete data, and it answers only about documents the user may see. Relevance: search hits below the embedding model's `min_score` (settings.py, calibrated per model with `evals/search_relevance.py`) are not used; a new model gets its value from that script. Sources shown are the documents the model names in its closing `SOURCES:` line (cut from the text and the stream, `services/generator.py`) that the answer also draws on (shared fact words); `evals/chat_sources.py` measures this end to end. The audit log records every document the model read, not only the sources shown. Chat limits (`services/chat_limit.py`, `chat_requests`): one answer at a time per user across tabs and processes (partial unique index on open rows; freed in `_answer`'s `finally`, rows older than 15 min count as crashed), and `CHAT_QUESTIONS_PER_10_MIN` questions per user (default 20, 0 = off, set in setup/configure). Refusals are socket errors `busy` / `rate_limited`; the client puts the question back in the input. Ollama answers `LLM_PARALLEL` questions at once (`OLLAMA_NUM_PARALLEL`, flash attention, q8_0 KV cache); every slot reserves `LLM_NUM_CTX` of context memory, which the configure step estimates.

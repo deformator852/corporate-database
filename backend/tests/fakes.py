@@ -105,7 +105,7 @@ class FakeOllama:
         self.loaded: set[str] = set()
         self.calls: list[dict] = []
 
-    def client(self, *args, **kwargs) -> "FakeOllama":
+    def client(self, *args, **kwargs) -> FakeOllama:
         return self
 
     async def chat(self, *, model, messages, stream=False, **kwargs):
@@ -147,7 +147,7 @@ class FakeBroker:
             defaultdict(list)
         )
 
-    async def connect_robust(self, url: str) -> "_Connection":
+    async def connect_robust(self, url: str) -> _Connection:
         return _Connection(self)
 
     def events(self, exchange: str) -> list[dict]:
@@ -167,7 +167,7 @@ class _Connection:
         self.broker = broker
         self.is_closed = False
 
-    async def channel(self) -> "_Channel":
+    async def channel(self) -> _Channel:
         return _Channel(self.broker)
 
     async def close(self) -> None:
@@ -185,7 +185,7 @@ class _Channel:
             publish=lambda message, routing_key="": _async(broker._publish(name, message.body)),
         )
 
-    async def declare_queue(self, **kwargs) -> "_Queue":
+    async def declare_queue(self, **kwargs) -> _Queue:
         return _Queue(self.broker)
 
     async def close(self) -> None:

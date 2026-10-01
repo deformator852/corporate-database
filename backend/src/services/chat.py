@@ -10,6 +10,7 @@ from services.documents.access import retrieval_classifications, user_permission
 from services.embedding import EmbeddingModel
 from services.generator import OllamaGenerator, OnDelta, document_budget_chars
 from services.rag import Rag
+from settings import embedding_model
 
 _MAX_DOCS = 2
 # Chunks taken on each side of a search hit for excerpts of long documents.
@@ -53,32 +54,34 @@ class ChatService:
         user_id: int,
         messages: list[ChatMessageSchema],
         on_delta: OnDelta | None = None,
-    ) -> tuple[str, list[dict[str, object]]]:
-        """Answer text and the documents it was built from. Generated text also
+    ) -> tuple[str, list[dict[str, object]], list[dict[str, object]]]:
+        """Answer text, the documents it used (shown as sources) and every
+        document the model read (for the audit log). Generated text also
         streams to `on_delta` as it arrives."""
         keys = await user_permission_keys(self.session, user_id)
         allowed = retrieval_classifications(keys)
         if not allowed:
-            return await self.generator.complete(messages, [], on_delta), []
+            answer, _ = await self.generator.complete(messages, [], on_delta)
+            return answer, [], []
         query = messages[-1].content
         rag = Rag()
         try:
             vector = await asyncio.to_thread(self.embedder.embed_query, query)
-            chunks = await rag.search(
-                vector,
-                allowed_classifications=allowed,
-                limit=8,
+            chunks = _relevant(
+                await rag.search(vector, allowed_classifications=allowed, limit=8)
             )
             documents = await self._documents_for_reply(
                 query, chunks, allowed, rag
             )
             if documents and _wants_full_document(query):
-                return _dump(documents), documents
+                return _dump(documents), documents, documents
             prompt_documents = await self._fit_to_context(documents, chunks, rag)
         finally:
             await rag.client.close()
-        answer = await self.generator.complete(messages, prompt_documents, on_delta)
-        return answer, documents
+        answer, used = await self.generator.complete(messages, prompt_documents, on_delta)
+        used_ids = {document["document_id"] for document in used}
+        sources = [d for d in documents if d["document_id"] in used_ids]
+        return answer, sources, documents
 
     async def _fit_to_context(
         self,
@@ -193,6 +196,15 @@ class ChatService:
             select(DocumentText.text).where(DocumentText.document_id == document.id)
         )
         return _cap(text or "")
+
+
+def _relevant(hits: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Hits that score at least the model's `min_score`. Documents named in
+    the question are found separately and do not need a score."""
+    floor = embedding_model().min_score
+    if floor is None:
+        return hits
+    return [hit for hit in hits if float(hit.get("score") or 0) >= floor]
 
 
 def _cap(text: str) -> str:

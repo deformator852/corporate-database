@@ -64,10 +64,14 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
             return;
         }
         setSuccess(null);
-        setValue("file", next, {shouldValidate: true, shouldTouch: true});
-        if (!getValues("name").trim()) {
+        // Replace the name unless the user typed one: an empty name, or the
+        // one filled in from the previous file (e.g. after a failed upload).
+        const previous = getValues("file");
+        const name = getValues("name").trim();
+        if (!name || (previous instanceof File && name === fileStem(previous.name))) {
             setValue("name", fileStem(next.name), {shouldValidate: true});
         }
+        setValue("file", next, {shouldValidate: true, shouldTouch: true});
     }
 
     function handleDragOver(event: DragEvent<HTMLDivElement>) {

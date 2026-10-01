@@ -1,7 +1,9 @@
 import asyncio
 import logging
 from collections.abc import Callable, Coroutine
+from typing import Any
 
+from celery import Task
 from celery.exceptions import SoftTimeLimitExceeded
 from celery.signals import worker_ready
 
@@ -46,7 +48,8 @@ def process_document(self, document_id: int) -> None:
             # The file is gone: after the retries, drop the document.
             _retry_or(self, exc, lambda: drop_incomplete_document_job(document_id))
         elif exc.status_code >= 500:
-            _retry_or(self, exc, lambda: fail_document_job(document_id, exc.message))
+            message = exc.message  # `exc` is unbound once this block ends
+            _retry_or(self, exc, lambda: fail_document_job(document_id, message))
         else:
             asyncio.run(fail_document_job(document_id, exc.message))
     except Exception as exc:
@@ -55,7 +58,7 @@ def process_document(self, document_id: int) -> None:
         )
 
 
-def _retry_or(task, exc: Exception, give_up: Callable[[], Coroutine]) -> None:
+def _retry_or(task: Task, exc: Exception, give_up: Callable[[], Coroutine[Any, Any, None]]) -> None:
     """Retries with backoff, or runs `give_up` once the retries are used.
     Counted here: past max_retries Celery re-raises `exc` itself instead of
     MaxRetriesExceededError, which would leave the document queued forever."""

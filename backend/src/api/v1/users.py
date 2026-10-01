@@ -72,7 +72,7 @@ async def create_user(
         target_type="user",
         target_id=user.id,
         target_label=user.email,
-        details={"roles": [role.key for role in user.roles]},
+        details={"roles": [role.name for role in user.roles]},
     )
     return UserListItemSchema.from_user(user)
 
@@ -101,7 +101,7 @@ async def update_user(
         target_id=user.id,
         target_label=user.email,
         details={
-            "roles": [role.key for role in user.roles],
+            "roles": [role.name for role in user.roles],
             "password_changed": payload.password is not None,
         },
     )

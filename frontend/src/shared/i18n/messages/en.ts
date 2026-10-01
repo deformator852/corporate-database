@@ -192,7 +192,7 @@ export const en = {
     "documents.upload.name": "Name",
     "documents.upload.classification": "Classification",
     "documents.upload.dropHint":
-        "PDF, Word, Excel, CSV, XML, JSON, Markdown, or ODT. Up to 32 MB.",
+        "PDF, Word, OpenDocument, Excel, CSV, XML, JSON, Markdown or plain text. Up to 32 MB.",
     "documents.upload.dropPrompt": "Drop a file here or choose one",
     "documents.upload.submit": "Upload",
     "documents.upload.success": "Document uploaded.",

@@ -13,6 +13,10 @@ import {UserDetail} from "@pages/users/detail/ui/UserDetail";
 import {SystemStatusPage} from "@pages/system/ui/SystemStatusPage";
 import {extensions, mergeByKey} from "./extensions";
 
+/** `handle.can`: the permission a page needs. Without it the layout shows
+ * the not-found page, like the API does for things the user may not see. */
+export type RouteHandle = {can?: string};
+
 const pageRoutes: RouteObject[] = [
     {
         index: true,
@@ -21,14 +25,17 @@ const pageRoutes: RouteObject[] = [
     {
         path: "users",
         Component: UsersList,
+        handle: {can: "users.list"} satisfies RouteHandle,
     },
     {
         path: "roles",
         Component: RolesList,
+        handle: {can: "roles.list"} satisfies RouteHandle,
     },
     {
         path: "permissions",
         Component: PermissionsList,
+        handle: {can: "permissions.list"} satisfies RouteHandle,
     },
     {
         path: "documents",
@@ -37,14 +44,17 @@ const pageRoutes: RouteObject[] = [
     {
         path: "audit",
         Component: AuditLog,
+        handle: {can: "audit.list"} satisfies RouteHandle,
     },
     {
         path: "users/:userId",
         Component: UserDetail,
+        handle: {can: "users.view"} satisfies RouteHandle,
     },
     {
         path: "system",
         Component: SystemStatusPage,
+        handle: {can: "system.view"} satisfies RouteHandle,
     },
 ];
 

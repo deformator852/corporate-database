@@ -44,3 +44,11 @@ describe("Session", () => {
         expect(router.state.location.pathname).toBe("/login");
     });
 });
+
+describe("Pages need their permission", () => {
+    it("shows not-found instead of a page the user may not open, without calling its API", async () => {
+        const {server} = renderApp("/users", sessionUser(["documents.list"]));
+        expect(await screen.findByRole("heading", {name: "Page not found"})).toBeInTheDocument();
+        expect(server.sent("GET", "/users")).toHaveLength(0);
+    });
+});

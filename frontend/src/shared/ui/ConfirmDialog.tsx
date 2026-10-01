@@ -13,28 +13,34 @@ import {
 import {Button} from "@/components/ui/button";
 import {useI18n} from "@/shared/i18n/I18nProvider";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
-import {deleteUser} from "@pages/users/list/api/users";
-import type {UserListItem} from "@pages/users/list/model/users";
 
-type DeleteUserDialogProps = {
-    user: UserListItem | null;
+type ConfirmDialogProps = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onDeleted: () => void;
+    title: string;
+    description: string;
+    confirmLabel: string;
+    pendingLabel: string;
+    /** Shown when the server gives no message of its own. */
+    errorMessage: string;
+    /** The action; the dialog closes when it resolves and shows the error when it throws. */
+    onConfirm: () => Promise<void>;
 };
 
-export function DeleteUserDialog({
-    user,
+/** Confirmation for a destructive action (delete, disable). */
+export function ConfirmDialog({
     open,
     onOpenChange,
-    onDeleted,
-}: DeleteUserDialogProps) {
+    title,
+    description,
+    confirmLabel,
+    pendingLabel,
+    errorMessage,
+    onConfirm,
+}: ConfirmDialogProps) {
     const {t} = useI18n();
     const [pending, setPending] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const name = user
-        ? `${user.first_name} ${user.last_name}`
-        : t("common.thisUser");
 
     const handleOpenChange = (next: boolean) => {
         if (pending) {
@@ -46,18 +52,14 @@ export function DeleteUserDialog({
         onOpenChange(next);
     };
 
-    const handleDelete = async () => {
-        if (user == null) {
-            return;
-        }
+    const handleConfirm = async () => {
         setPending(true);
         setError(null);
         try {
-            await deleteUser(user.id);
-            onDeleted();
+            await onConfirm();
             onOpenChange(false);
         } catch (reason) {
-            setError(getApiErrorMessage(reason, t("users.delete.error")));
+            setError(getApiErrorMessage(reason, errorMessage));
         } finally {
             setPending(false);
         }
@@ -67,12 +69,8 @@ export function DeleteUserDialog({
         <AlertDialog open={open} onOpenChange={handleOpenChange}>
             <AlertDialogContent>
                 <AlertDialogHeader>
-                    <AlertDialogTitle>
-                        {t("users.delete.title", {name})}
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                        {t("users.delete.description")}
-                    </AlertDialogDescription>
+                    <AlertDialogTitle>{title}</AlertDialogTitle>
+                    <AlertDialogDescription>{description}</AlertDialogDescription>
                 </AlertDialogHeader>
                 {error ? (
                     <div
@@ -90,12 +88,12 @@ export function DeleteUserDialog({
                     <Button
                         type="button"
                         variant="destructive"
-                        disabled={pending || user == null}
+                        disabled={pending}
                         onClick={() => {
-                            void handleDelete();
+                            void handleConfirm();
                         }}
                     >
-                        {pending ? t("common.deleting") : t("users.delete.confirm")}
+                        {pending ? pendingLabel : confirmLabel}
                     </Button>
                 </AlertDialogFooter>
             </AlertDialogContent>

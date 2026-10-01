@@ -157,7 +157,7 @@ async def reencrypt_all(report: Callable[[str], None] = print) -> None:
     report(f"Search chunks: {await _chunks()} re-encrypted")
     async with AsyncSessionLocal() as session:
         await save_fingerprint(session, current_fingerprint())
-    report("Done: all data is sealed with the current key.")
+    report("Done: all data is encrypted with the current key.")
 
 
 async def main() -> None:

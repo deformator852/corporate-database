@@ -34,6 +34,10 @@ CHECK_TIMEOUT_SECONDS = 4
 Check = dict[str, Any]
 
 
+def _count(number: int, noun: str) -> str:
+    return f"{number} {noun}" if number == 1 else f"{number} {noun}s"
+
+
 def _ok(detail: str = "", **extra: Any) -> Check:
     return {"status": "ok", "detail": detail, **extra}
 
@@ -57,7 +61,8 @@ async def _search_index() -> Check:
         if not await rag.client.collection_exists(COLLECTION_NAME):
             return _warning("Collection not created yet (no documents indexed).", chunks=0)
         info = await rag.client.get_collection(COLLECTION_NAME)
-        return _ok(f"{info.points_count or 0} chunks indexed", chunks=info.points_count or 0)
+        chunks = info.points_count or 0
+        return _ok(f"{_count(chunks, 'chunk')} indexed", chunks=chunks)
     finally:
         await rag.client.close()
 
@@ -88,7 +93,11 @@ def _queue() -> Check:
             "workers": 0,
             "waiting": waiting,
         }
-    return _ok(f"{workers} worker(s), {waiting} job(s) waiting", workers=workers, waiting=waiting)
+    return _ok(
+        f"{_count(workers, 'worker')}, {_count(waiting, 'job')} waiting",
+        workers=workers,
+        waiting=waiting,
+    )
 
 
 async def _llm() -> Check:

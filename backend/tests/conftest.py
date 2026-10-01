@@ -171,6 +171,14 @@ def infra(monkeypatch):
     monkeypatch.setattr(rag, "_qdrant_client", lambda: stack.qdrant)
     monkeypatch.setattr(rag, "_indexes_ready", False)
     monkeypatch.setattr(embedding, "SentenceTransformer", FakeSentenceTransformer)
+    # The fake vectors score unlike the real model: no calibrated threshold.
+    import dataclasses
+
+    import settings
+
+    test_model = os.environ["EMBEDDING_MODEL"]
+    spec = settings.EMBEDDING_MODELS[test_model]
+    monkeypatch.setitem(settings.EMBEDDING_MODELS, test_model, dataclasses.replace(spec, min_score=None))
     monkeypatch.setattr(embedding, "_embedder", None)
     for module in (generator, text_cleanup, system):
         monkeypatch.setattr(module, "AsyncClient", stack.llm.client)

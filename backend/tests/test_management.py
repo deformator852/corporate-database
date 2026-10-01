@@ -178,6 +178,9 @@ def test_role_lifecycle(client, make_user):
         json={"description": "", "permission_keys": ["documents.list", "documents.restricted"]},
     )
     assert {p["key"] for p in updated.json()["permissions"]} == {"documents.list", "documents.restricted"}
+    # The audit log keeps readable names (they never change after creation).
+    entry = client.get("/api/v1/audit", params={"action": "roles.update", "q": name}).json()["items"][0]
+    assert entry["details"]["permissions"] == ["List documents", "Restricted documents"]
     duplicate = client.post("/api/v1/roles", headers=csrf(client), json={"name": name})
     assert duplicate.status_code == 409
 

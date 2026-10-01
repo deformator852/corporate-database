@@ -22,41 +22,41 @@ from services.storage import ObjectStorage
 from services.user import UserService
 
 
-def get_user_service(session: AsyncSession = Depends(get_db)) -> UserService:
+def get_user_service(session: AsyncSession = Depends(get_db, scope="function")) -> UserService:
     return UserService(session)
 
 
-def get_role_service(session: AsyncSession = Depends(get_db)) -> RoleService:
+def get_role_service(session: AsyncSession = Depends(get_db, scope="function")) -> RoleService:
     return RoleService(session)
 
 
 def get_permission_service(
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db, scope="function"),
 ) -> PermissionService:
     return PermissionService(session)
 
 
 def get_audit_service(
-    request: Request, session: AsyncSession = Depends(get_db)
+    request: Request, session: AsyncSession = Depends(get_db, scope="function")
 ) -> AuditService:
     return AuditService(session, request.client.host if request.client else None)
 
 
 def get_auth_service(
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db, scope="function"),
     audit: AuditService = Depends(get_audit_service),
 ) -> AuthService:
     return AuthService(session, audit)
 
 
 def get_notification_service(
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db, scope="function"),
 ) -> NotificationService:
     return NotificationService(session)
 
 
 def get_chat_history_service(
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db, scope="function"),
 ) -> ChatHistoryService:
     return ChatHistoryService(session)
 
@@ -66,7 +66,7 @@ def get_storage() -> ObjectStorage:
 
 
 def get_document_service(
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db, scope="function"),
     storage: ObjectStorage = Depends(get_storage),
 ) -> DocumentService:
     return DocumentService(session, storage)
@@ -74,7 +74,7 @@ def get_document_service(
 
 async def get_current_user(
     payload: TokenPayload = Depends(security.access_token_required),
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db, scope="function"),
 ) -> User:
     try:
         user_id = int(payload.sub)
@@ -90,7 +90,7 @@ async def get_current_user(
 def require_permission(*keys) -> Callable:
     async def checker(
         user: User = Depends(get_current_user),
-        session: AsyncSession = Depends(get_db),
+        session: AsyncSession = Depends(get_db, scope="function"),
     ):
         found = await session.scalar(
             select(Permission.id)
@@ -112,7 +112,7 @@ def require_permission(*keys) -> Callable:
 def require_role(*keys) -> Callable:
     async def checker(
         user: User = Depends(get_current_user),
-        session: AsyncSession = Depends(get_db),
+        session: AsyncSession = Depends(get_db, scope="function"),
     ) -> User:
         found = await session.scalar(
             select(Role.id)

@@ -69,7 +69,7 @@ async def create_role(
         target_type="role",
         target_id=role.key,
         target_label=role.name,
-        details={"permissions": sorted(p.key for p in role.permissions)},
+        details={"permissions": sorted(p.name for p in role.permissions)},
     )
     return RoleListItemSchema.from_role(role)
 
@@ -97,7 +97,7 @@ async def update_role(
         target_type="role",
         target_id=role.key,
         target_label=role.name,
-        details={"permissions": sorted(p.key for p in role.permissions)},
+        details={"permissions": sorted(p.name for p in role.permissions)},
     )
     return RoleListItemSchema.from_role(role)
 

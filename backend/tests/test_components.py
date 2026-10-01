@@ -87,7 +87,7 @@ def _odt(text: str) -> bytes:
         ("a.docx", _docx("Contract clause 3.2"), "Contract clause 3.2"),
         ("a.odt", _odt("Minutes of the board"), "Minutes of the board"),
         ("a.xlsx", _xlsx([["Name", "Salary"], ["Ana", 1200], [None, None]]), "Ana\t1200"),
-        ("a.csv", "Name,City\nAna,Madrid\n".encode(), "Ana\tMadrid"),
+        ("a.csv", b"Name,City\nAna,Madrid\n", "Ana\tMadrid"),
         ("a.json", '{"city": "París"}'.encode(), '"city": "París"'),
         ("a.xml", b"<root><item>Budget</item><item> </item></root>", "Budget"),
         ("a.md", "# Title\nÉté".encode(), "Été"),
@@ -148,13 +148,14 @@ def test_prompt_carries_documents_recent_history_and_language(monkeypatch):
     history = ["old question", "x" * 5000, *[f"turn {i}" for i in range(5)], "What is the budget?"]
     documents = [{"filename": "policy.txt", "text": "Budget is 500 EUR."}, {"name": "Empty", "text": " "}]
 
-    answer = run(OllamaGenerator(llm).complete(_messages(*history), documents))
+    answer, _ = run(OllamaGenerator(llm).complete(_messages(*history), documents))
 
     sent = llm.calls[0]["messages"]
     assert answer == llm.answer
     assert "Always reply in French" in sent[0]["content"]
     assert len(sent) == 1 + 6 and "old question" not in str(sent)  # last 6 messages only
-    assert sent[-1]["content"] == "Documents:\n[1] policy.txt\nBudget is 500 EUR.\n\nQuestion:\nWhat is the budget?"
+    assert sent[-1]["content"].startswith("Documents:\nDocument: policy.txt\nBudget is 500 EUR.\n\nQuestion:\nWhat is the budget?")
+    assert "SOURCES:" in sent[-1]["content"]
     assert all(len(m["content"]) <= 1501 for m in sent[1:-1])  # older turns are shortened
 
 
@@ -264,7 +265,7 @@ def test_a_fact_deep_in_a_long_document_reaches_the_llm(client, make_user, infra
 def test_system_page_reports_every_service(client, make_user, infra, monkeypatch):
     import services.system as system
 
-    monkeypatch.setattr(system, "_queue", lambda: {"status": "ok", "detail": "1 worker(s)", "workers": 1, "waiting": 0})
+    monkeypatch.setattr(system, "_queue", lambda: {"status": "ok", "detail": "1 worker", "workers": 1, "waiting": 0})
     infra.llm.loaded.add("llama3.1:8b")
     monkeypatch.setenv("LLM_MODEL", "llama3.1:8b")
     _, email, password = make_user(["system.view", "documents.list", "documents.create"])
@@ -320,7 +321,7 @@ def test_queue_check_counts_workers_and_jobs(monkeypatch):
     )
     monkeypatch.setattr(worker, "celery", fake)
     replies = {"celery@a": {"ok": "pong"}}
-    assert _queue() == {"status": "ok", "detail": "1 worker(s), 3 job(s) waiting", "workers": 1, "waiting": 3}
+    assert _queue() == {"status": "ok", "detail": "1 worker, 3 jobs waiting", "workers": 1, "waiting": 3}
     replies = {}
     assert _queue()["status"] == "down"
 
@@ -420,3 +421,129 @@ def test_idle_chats_and_old_limit_records_are_purged(make_user):
 
     removed, requests, old_kept, fresh_kept = run(scenario())
     assert removed >= 1 and requests >= 1 and not old_kept and fresh_kept
+
+
+def test_a_failed_commit_is_reported_not_answered_with_success(client, make_user, monkeypatch):
+    # The session commits before the response is sent: the client never sees
+    # 200 for a change that was not saved, and a refetch right after the
+    # response already reads the new state.
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    _, email, password = make_user(admin=True)
+    target_id, _, _ = make_user()
+    login(client, email, password)
+
+    async def failing_commit(self):
+        raise RuntimeError("database went away")
+
+    monkeypatch.setattr(AsyncSession, "commit", failing_commit)
+    client_no_raise = client.__class__(client.app, base_url="https://testserver", raise_server_exceptions=False)
+    client_no_raise.cookies = client.cookies
+    response = client_no_raise.post(f"/api/v1/users/{target_id}/disable", headers=csrf(client))
+    assert response.status_code == 500
+
+
+
+# Sources the model names
+
+
+DOCS = [
+    {"document_id": 1, "filename": "policy.txt", "name": "Travel policy", "text": "Meals: 47 EUR a day."},
+    {"document_id": 2, "filename": "canteen.txt", "name": "Canteen", "text": "Lunch costs 6.50 EUR."},
+]
+
+
+@pytest.mark.parametrize(
+    ("answer", "text", "used"),
+    [
+        ("Meals are 47 EUR a day.\nSOURCES: policy.txt", "Meals are 47 EUR a day.", [1]),
+        # Named, but the answer holds nothing from the canteen document: not a source.
+        ("Meals are 47 EUR a day.\n**Sources:** Travel policy; Canteen", "Meals are 47 EUR a day.", [1]),
+        ("I do not have relevant documents.\nSOURCES: none", "I do not have relevant documents.", []),
+        ("Meals are 47 EUR a day.", "Meals are 47 EUR a day.", [1]),  # no line: every supported document
+        ("I have no relevant documents.\nSOURCES: policy.txt", "I have no relevant documents.", []),
+    ],
+)
+def test_the_sources_line_is_cut_and_names_the_used_documents(answer, text, used):
+    llm = FakeOllama()
+    llm.answer = answer
+    streamed: list[str] = []
+
+    async def collect(piece: str) -> None:
+        streamed.append(piece)
+
+    content, documents = run(OllamaGenerator(llm).complete(_messages("Meal allowance?"), DOCS, collect))
+
+    assert content == text
+    assert "".join(streamed).strip() == text  # never shown, even while streaming
+    assert [d["document_id"] for d in documents] == used
+
+
+def test_a_sources_line_split_across_pieces_is_still_hidden():
+    from services.generator import _HideSourcesLine
+
+    shown: list[str] = []
+
+    async def collect(piece: str) -> None:
+        shown.append(piece)
+
+    async def scenario() -> None:
+        stream = _HideSourcesLine(collect)
+        for piece in ["Lunch costs 6.50", " EUR.\nSo", "urces", ": canteen", ".txt"]:
+            await stream.feed(piece)
+        await stream.flush()
+
+    run(scenario())
+    assert "".join(shown) == "Lunch costs 6.50 EUR.\n"
+
+
+def test_chat_lists_only_the_documents_the_model_used(client, make_user, infra):
+    _, email, password = make_user(["documents.list", "documents.create", "audit.list"])
+    login(client, email, password)
+    used = upload(client, "Meal rules", b"The meal allowance is 47 EUR per day.", "meals.txt").json()["id"]
+    unused = upload(client, "Meal plan", b"The canteen meal plan changes weekly.", "plan.txt").json()["id"]
+    process(used)
+    process(unused)
+    infra.llm.answer = "The allowance is 47 EUR per day.\nSOURCES: meals.txt"
+
+    headers = {"origin": "https://testserver", "cookie": f"my_token={client.cookies.get('my_token')}"}
+    with client.websocket_connect("/api/v1/chat/ws", headers=headers) as chat:
+        chat.send_json({"type": "ask", "messages": [{"role": "user", "content": "meal allowance"}]})
+        while (answer := chat.receive_json())["type"] != "answer":
+            pass
+
+    assert answer["content"] == "The allowance is 47 EUR per day."
+    assert [s["id"] for s in answer["sources"]] == [used]
+    read = client.get("/api/v1/audit", params={"action": "chat.answer"}).json()["items"][0]
+    assert {d["id"] for d in read["details"]["documents"]} >= {used, unused}  # the audit keeps all it read
+
+
+def test_hits_below_the_model_threshold_are_not_used(client, make_user, infra, monkeypatch):
+    import dataclasses
+
+    import settings
+
+    spec = settings.EMBEDDING_MODELS["multilingual-e5-small"]
+    monkeypatch.setitem(settings.EMBEDDING_MODELS, "multilingual-e5-small", dataclasses.replace(spec, min_score=0.99))
+    _, email, password = make_user(["documents.list", "documents.create"])
+    login(client, email, password)
+    process(upload(client, "Parking", b"Visitors park in zone C.", "parking.txt").json()["id"])
+    infra.llm.answer = "I do not have relevant documents."
+
+    headers = {"origin": "https://testserver", "cookie": f"my_token={client.cookies.get('my_token')}"}
+    with client.websocket_connect("/api/v1/chat/ws", headers=headers) as chat:
+        chat.send_json({"type": "ask", "messages": [{"role": "user", "content": "Where do visitors park?"}]})
+        while (answer := chat.receive_json())["type"] != "answer":
+            pass
+
+    assert answer["sources"] == []
+    assert "Visitors park" not in str(infra.llm.calls[-1]["messages"])
+
+
+def test_an_answer_that_repeats_the_question_is_judged_by_all_its_words():
+    from services.generator import _support
+
+    question = "Is alcohol paid back by the company?"
+    answer = "No, the company does not pay back alcohol."
+    assert _support(answer, question, {"text": "Alcohol, fines and entertainment are never paid back."}) >= 0.2
+    assert _support(answer, question, {"text": "Visitors park in zone C."}) == 0

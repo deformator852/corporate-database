@@ -1,0 +1,172 @@
+{
+  "documents": {
+    "travel": "Política de viajes de empresa. Los empleados reservan tren para viajes de menos de 600 kilómetros; los viajes más largos pueden reservarse en avión en clase turista. La dieta diaria de comida en viajes de trabajo es de 47 EUR. Las reservas de hotel de más de 180 EUR por noche necesitan la aprobación del director financiero. Los taxis solo se reembolsan cuando no hay transporte público entre las 23:00 y las 06:00. Las solicitudes de viaje se presentan al menos siete días laborables antes de la salida.",
+    "leave": "Política de vacaciones. Los empleados a tiempo completo tienen 26 días laborables de vacaciones pagadas al año. Hasta cinco días no disfrutados pueden pasarse al año siguiente y deben tomarse antes del 31 de marzo. El responsable directo aprueba las solicitudes en el portal de RR. HH. con al menos dos semanas de antelación. El permiso parental se concede hasta 16 semanas con el salario completo. Una baja por enfermedad de más de tres días requiere un certificado médico.",
+    "passwords": "Política de contraseñas y cuentas de TI. Las contraseñas deben tener al menos 14 caracteres y se cambian cada 180 días. La autenticación multifactor es obligatoria para el correo, la VPN y el portal de RR. HH. Las cuentas se bloquean tras cinco intentos de inicio de sesión fallidos y el servicio de soporte las desbloquea. Nunca comparta contraseñas, tampoco con el personal de TI. La pérdida de un portátil se comunica al servicio de soporte en el plazo de una hora.",
+    "expenses": "Procedimiento de reembolso de gastos. Presente las notas de gastos en el sistema financiero en un plazo de 30 días desde la compra, con un recibo escaneado de cada partida de más de 10 EUR. Los reembolsos se pagan con la siguiente nómina mensual. El alcohol, las multas y el ocio personal nunca se reembolsan. Los extractos de la tarjeta de crédito corporativa deben conciliarse antes del quinto día laborable del mes.",
+    "onboarding": "Lista de incorporación para nuevos empleados. El primer día, recoja su tarjeta de acceso y su portátil en la recepción de la planta baja. Su compañero de acogida le presenta al equipo y le enseña las herramientas internas. Complete el curso de concienciación en seguridad y la formación en protección de datos en las dos primeras semanas. El periodo de prueba dura seis meses, con una reunión de evaluación a los tres meses.",
+    "parking": "Normas del aparcamiento de la oficina. Los visitantes aparcan en la zona C y pagan 3 EUR por hora en la máquina junto a la entrada. Los empleados aparcan en los niveles -1 y -2 con su tarjeta. Los coches eléctricos cargan gratis en los puntos del nivel -1, durante un máximo de cuatro horas. Las bicicletas se guardan en el cuarto cerrado junto a la entrada principal.",
+    "incident": "Respuesta a incidentes de seguridad. Comunique cualquier correo sospechoso de phishing con el botón Notificar del cliente de correo y no haga clic en sus enlaces. Una infección de ransomware se comunica de inmediato al equipo de seguridad por teléfono en la extensión 5555, y el equipo se desconecta de la red. El equipo de seguridad informa al delegado de protección de datos en 24 horas cuando pueden verse afectados datos personales.",
+    "pricing": "Lista de precios de productos 2026. El plan Básico cuesta 9 EUR por usuario al mes e incluye 50 GB de almacenamiento. El plan Empresa cuesta 19 EUR por usuario al mes, con 1 TB de almacenamiento y soporte prioritario. Los precios Enterprise se negocian individualmente para más de 500 usuarios. La facturación anual da un 15 por ciento de descuento en todos los planes.",
+    "retention": "Calendario de conservación de datos. Las facturas y los registros contables se conservan diez años. Los expedientes del personal se conservan cinco años después de que el empleado se marche. Las candidaturas rechazadas se eliminan a los seis meses. Las grabaciones de las cámaras de la oficina se sobrescriben a las 72 horas, salvo que se necesiten para una investigación.",
+    "canteen": "Guía del comedor y la cocina. El comedor abre de 11:30 a 14:00 los días laborables y sirve un plato vegetariano cada día. La comida cuesta 6,50 EUR con la tarjeta de empleado. El café y el té de las cocinas de cada planta son gratuitos. Etiquete la comida de los frigoríficos compartidos con su nombre y la fecha; la comida sin etiqueta se retira los viernes."
+  },
+  "questions": [
+    {
+      "q": "¿Cuánto dinero me dan al día para comer cuando viajo por trabajo?",
+      "doc": "travel"
+    },
+    {
+      "q": "¿Quién tiene que aprobar una habitación de hotel cara?",
+      "doc": "travel"
+    },
+    {
+      "q": "¿Cuántos días de vacaciones tiene la plantilla a tiempo completo?",
+      "doc": "leave"
+    },
+    {
+      "q": "¿Puedo pasar las vacaciones no usadas al año que viene?",
+      "doc": "leave"
+    },
+    {
+      "q": "¿Qué longitud debe tener una contraseña?",
+      "doc": "passwords"
+    },
+    {
+      "q": "¿Qué pasa después de varios intentos de acceso incorrectos?",
+      "doc": "passwords"
+    },
+    {
+      "q": "¿Hasta cuándo tengo que entregar mis tickets de compra?",
+      "doc": "expenses"
+    },
+    {
+      "q": "¿La empresa devuelve el dinero del alcohol?",
+      "doc": "expenses"
+    },
+    {
+      "q": "¿Dónde recojo mi portátil el primer día?",
+      "doc": "onboarding"
+    },
+    {
+      "q": "¿Cuánto dura el periodo de prueba de las nuevas contrataciones?",
+      "doc": "onboarding"
+    },
+    {
+      "q": "¿Dónde dejan el coche los invitados y cuánto cuesta?",
+      "doc": "parking"
+    },
+    {
+      "q": "¿Puedo cargar mi coche eléctrico en la oficina?",
+      "doc": "parking"
+    },
+    {
+      "q": "¿Qué hago si recibo un correo sospechoso?",
+      "doc": "incident"
+    },
+    {
+      "q": "¿A qué número llamo si mi ordenador tiene ransomware?",
+      "doc": "incident"
+    },
+    {
+      "q": "¿Cuánto cuesta el plan Empresa?",
+      "doc": "pricing"
+    },
+    {
+      "q": "¿Hay descuento por pagar al año?",
+      "doc": "pricing"
+    },
+    {
+      "q": "¿Cuánto tiempo guardamos las facturas?",
+      "doc": "retention"
+    },
+    {
+      "q": "¿Cuándo se borran las grabaciones de las cámaras?",
+      "doc": "retention"
+    },
+    {
+      "q": "¿A qué hora abre la cafetería?",
+      "doc": "canteen"
+    },
+    {
+      "q": "¿Cuánto cuesta la comida con la tarjeta?",
+      "doc": "canteen"
+    },
+    {
+      "q": "¿Cuál es la dieta de comida en viajes de trabajo y cómo me devuelven los gastos?",
+      "doc": [
+        "travel",
+        "expenses"
+      ]
+    },
+    {
+      "q": "¿Qué hago con mi portátil el primer día y cuándo cambio su contraseña?",
+      "doc": [
+        "onboarding",
+        "passwords"
+      ]
+    },
+    {
+      "q": "¿Cuánto tiempo se guardan los expedientes del personal y cuántos días de vacaciones puedo pasar al año siguiente?",
+      "doc": [
+        "retention",
+        "leave"
+      ]
+    },
+    {
+      "q": "¿Dónde aparcan los visitantes y dónde pueden comer?",
+      "doc": [
+        "parking",
+        "canteen"
+      ]
+    },
+    {
+      "q": "¿Qué cubre el seguro dental?",
+      "doc": null
+    },
+    {
+      "q": "¿Cómo pido un coche de empresa?",
+      "doc": null
+    },
+    {
+      "q": "¿Cuál es el sistema de bonificaciones del equipo de ventas?",
+      "doc": null
+    },
+    {
+      "q": "¿Quién es el director general de la empresa?",
+      "doc": null
+    },
+    {
+      "q": "¿Puedo teletrabajar los viernes?",
+      "doc": null
+    },
+    {
+      "q": "¿Cuál es el código de vestimenta en la oficina?",
+      "doc": null
+    },
+    {
+      "q": "¿Qué tiempo hará mañana en París?",
+      "doc": null
+    },
+    {
+      "q": "¿Quién ganó el Mundial de fútbol de 2022?",
+      "doc": null
+    },
+    {
+      "q": "Escribe un poema sobre el mar.",
+      "doc": null
+    },
+    {
+      "q": "¿Cuál es la capital de Australia?",
+      "doc": null
+    },
+    {
+      "q": "¿Cómo se hace pan de masa madre?",
+      "doc": null
+    },
+    {
+      "q": "Explica el entrelazamiento cuántico con palabras sencillas.",
+      "doc": null
+    }
+  ]
+}

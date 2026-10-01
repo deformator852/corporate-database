@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
-# Production helper. Run from anywhere:
-#   deploy/deploy.sh build     build the backend and proxy images
-#   deploy/deploy.sh models    download the AI models (the only step that
-#                              uses the internet; run once and after a change)
-#   deploy/deploy.sh up        start or update the stack
-#   deploy/deploy.sh admin EMAIL [First Last]   create an administrator
-#   deploy/deploy.sh rotate-key  re-encrypt the data with a new key (first:
-#                              cd backend && uv run setup key rotate)
-#   deploy/deploy.sh backup [DIR]      encrypted copy of all data (default:
-#                              backups/); the app stops for its duration
-#   deploy/deploy.sh restore BACKUP    replace all data with a backup
-#   deploy/deploy.sh down      stop it (data volumes are kept)
-#   deploy/deploy.sh logs [service]
+# Production commands for Corpus. Run from any folder.
+#
+#   deploy/deploy.sh build                  Build the backend and proxy images.
+#   deploy/deploy.sh models                 Download the AI models. The only
+#                                           command that uses the internet.
+#   deploy/deploy.sh up                     Start Corpus, or apply an update.
+#   deploy/deploy.sh admin EMAIL [FIRST LAST]
+#                                           Create an administrator.
+#   deploy/deploy.sh backup [BACKUP-DIR]    Make an encrypted backup of all
+#                                           data (default: backups/). Corpus
+#                                           stops while it runs.
+#   deploy/deploy.sh restore BACKUP         Replace all data with a backup.
+#   deploy/deploy.sh rotate-key             Re-encrypt the data with a new key.
+#                                           First run: uv run setup key rotate
+#   deploy/deploy.sh down                   Stop Corpus. The data is kept.
+#   deploy/deploy.sh logs [SERVICE]         Follow the logs.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -106,5 +109,5 @@ case "${1:-up}" in
     ;;
   down) compose down ;;
   logs) shift; compose logs -f "$@" ;;
-  *) sed -n '2,15p' "$0"; exit 1 ;;
+  *) sed -n '2,17p' "$0"; exit 1 ;;
 esac

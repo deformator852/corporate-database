@@ -26,6 +26,10 @@ class Base(DeclarativeBase):
     pass
 
 async def get_db():
+    """Request session, committed when the endpoint returns. Depend on it with
+    `Depends(get_db, scope="function")`: the default scope would commit after
+    the response is sent, so a client could get 200 for an unsaved change and
+    read stale data right after it."""
     async with AsyncSessionLocal() as session:
         try:
             yield session

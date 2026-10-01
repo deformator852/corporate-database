@@ -245,10 +245,7 @@ export function AuditLog() {
                                                 <TableCell className="max-w-48 truncate">
                                                     {entry.target_label ?? t("common.noDataDash")}
                                                 </TableCell>
-                                                <TableCell
-                                                    className="max-w-sm truncate text-muted-foreground"
-                                                    title={details || undefined}
-                                                >
+                                                <TableCell className="min-w-48 whitespace-normal text-muted-foreground">
                                                     {details || t("common.noDataDash")}
                                                 </TableCell>
                                                 <TableCell className="px-4 whitespace-nowrap text-muted-foreground tabular-nums">

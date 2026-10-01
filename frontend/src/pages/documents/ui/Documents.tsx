@@ -6,6 +6,7 @@ import {can} from "@/shared/lib/api/me";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
 import {connectSocket} from "@/shared/lib/ws";
 import {
+    deleteDocument,
     documentsSocketUrl,
     getDocumentsPage,
 } from "@pages/documents/api/documents";
@@ -17,7 +18,7 @@ import {
     type DocumentListItem,
     type DocumentListPage,
 } from "@pages/documents/model/documents";
-import {DeleteDocumentDialog} from "@pages/documents/ui/DeleteDocumentDialog";
+import {ConfirmDialog} from "@/shared/ui/ConfirmDialog";
 import {DocumentList} from "@pages/documents/ui/DocumentList";
 import {DocumentUploadForm} from "@pages/documents/ui/DocumentUploadForm";
 
@@ -157,15 +158,23 @@ export function Documents() {
                 />
             ) : null}
 
-            <DeleteDocumentDialog
-                document={deleting}
+            <ConfirmDialog
                 open={deleting != null}
                 onOpenChange={(open) => {
                     if (!open) {
                         setDeleting(null);
                     }
                 }}
-                onDeleted={() => {
+                title={t("documents.delete.title", {name: deleting?.name ?? t("common.thisDocument")})}
+                description={t("documents.delete.description")}
+                confirmLabel={t("common.delete")}
+                pendingLabel={t("common.deleting")}
+                errorMessage={t("documents.delete.error")}
+                onConfirm={async () => {
+                    if (!deleting) {
+                        return;
+                    }
+                    await deleteDocument(deleting.id);
                     const items = data?.items ?? [];
                     if (items.length === 1 && page > 1) {
                         goToPage(page - 1);

@@ -1,32 +1,42 @@
-# React + TypeScript + Vite
+# Corpus frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The frontend is a React and TypeScript application built with Vite. This guide
+shows you how to run it on a development machine.
 
-Currently, two official plugins are available:
+## Prerequisites
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+* Node.js 22
+* The backend running on `http://127.0.0.1:8000`. See the
+  [backend guide](../backend/README.md).
 
-## React Compiler
+## Running the frontend
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1. Install the dependencies:
 
-## Expanding the Oxlint configuration
+   ```sh
+   cd frontend
+   npm install
+   ```
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+2. Start the development server:
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
+   ```sh
+   npm run dev
+   ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Open `http://localhost:5173`. The development server forwards `/api` requests
+and WebSockets to the backend. The interface language follows `APP_LANGUAGE`
+in `backend/.env`.
+
+## Checking your changes
+
+| Command | What it does |
+|---|---|
+| `npm test` | Runs the tests (Vitest and Testing Library) |
+| `npm run lint` | Runs Oxlint |
+| `npm run build` | Type-checks and builds the production bundle |
+
+## Customizing the interface
+
+Add pages, sidebar links, translations and themes in `src/custom/` without
+editing core files. See [Customizing Corpus](../documentations/customization/en.md).

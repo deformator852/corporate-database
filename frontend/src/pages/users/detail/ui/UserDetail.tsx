@@ -2,6 +2,7 @@ import {ArrowLeft} from "lucide-react";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {Link, useLocation, useParams} from "react-router";
 
+import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
 import {cn} from "cn";
@@ -216,9 +217,7 @@ function UserDetailView({userId}: {userId: number}) {
                         <div className="flex min-w-0 items-center gap-2">
                             <h1 className="truncate text-xl sm:text-2xl">{name}</h1>
                             {profile.disabled ? (
-                                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                                    {t("users.disabled")}
-                                </span>
+                                <Badge variant="secondary">{t("users.disabled")}</Badge>
                             ) : null}
                         </div>
                         <p className="truncate text-sm text-muted-foreground">{profile.email}</p>

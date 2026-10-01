@@ -76,3 +76,15 @@ describe("Notifications read state survives closing the tab", () => {
         expect(new Headers(init.headers).get("X-CSRF-TOKEN")).toBe("tok");
     });
 });
+
+describe("Enabling a user", () => {
+    it("shows a failure next to that user's row", async () => {
+        const {user} = renderApp("/users", sessionUser(["users.list", "users.disable"]), (s) => {
+            s.on("GET", "/users", {items: [{id: 2, first_name: "Ana", last_name: "López", email: "ana@acme.io", roles: [], is_last_admin: false, disabled: true}], page: 1, per_page: 20, total: 1, pages: 1});
+            s.on("POST", "/users/:id/enable", apiError(403, "You cannot change an account or role with more access than yours", "forbidden"));
+        });
+        await user.click(await screen.findByRole("button", {name: "Enable Ana López"}));
+        const row = screen.getByText("ana@acme.io").closest("tr") as HTMLElement;
+        expect(await within(row).findByRole("alert")).toHaveTextContent("more access than yours");
+    });
+});

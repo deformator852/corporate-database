@@ -1,3 +1,4 @@
+import re
 from collections.abc import Awaitable, Callable, Sequence
 
 import httpx
@@ -21,11 +22,30 @@ _SYSTEM = (
     "documents. Always reply in {language}, whatever the language of the "
     "question or documents. If the user asked for the full document, "
     "reproduce it completely as written. Otherwise answer concisely. Do not "
-    "invent sources."
+    "invent sources, and do not cite documents by name or number: the "
+    "interface lists the sources under your answer."
 )
 
 
 OnDelta = Callable[[str], Awaitable[None]]
+Document = dict[str, object]
+
+# The model ends an answer built on documents with this line; it is cut from
+# the text and tells which documents were really used (search alone cannot:
+# a second hit scores alike whether the answer needs it or not).
+_SOURCES_RULE = (
+    "After the answer, write one last line that starts with SOURCES: and lists "
+    "only the documents your answer took facts from, separated by semicolons. "
+    "Leave out every document you did not take a fact from. If no document "
+    "answers the question, write SOURCES: none."
+)
+_SOURCES_LINE = re.compile(r"^[\W_]*sources[\W_]*:(.*)$", re.IGNORECASE)
+# A source must also show in the answer: share of the answer's own words
+# (not taken from the question) found in the document. Measured with
+# evals/chat_sources.py: sources score 0.22-1.0, other documents mostly 0.
+# Small models tend to name every document they were given.
+_MIN_SUPPORT = 0.2
+_WORD = re.compile(r"\w+")
 
 # Rough chars per token for budgeting (Latin ~4, Cyrillic ~2.5).
 _CHARS_PER_TOKEN = 3
@@ -55,10 +75,13 @@ class OllamaGenerator:
     async def complete(
         self,
         messages: Sequence[ChatMessageSchema],
-        documents: Sequence[dict[str, object]],
+        documents: Sequence[Document],
         on_delta: OnDelta | None = None,
-    ) -> str:
-        """Full answer; each piece also goes to `on_delta` as it is generated."""
+    ) -> tuple[str, list[Document]]:
+        """The answer and the documents it used: named in the model's sources
+        line (every document when the line is missing) and holding facts of
+        the answer. Each piece of the answer also goes to `on_delta` as it is
+        generated, without the sources line."""
         num_ctx = llm_num_ctx()
         num_predict = num_ctx // 4
         payload = [
@@ -73,8 +96,10 @@ class OllamaGenerator:
         if context:
             payload[-1]["content"] = (
                 f"Documents:\n{context}\n\nQuestion:\n{payload[-1]['content']}"
+                f"\n\n{_SOURCES_RULE}"
             )
         parts: list[str] = []
+        stream_out = _HideSourcesLine(on_delta)
         try:
             stream = await self.client.chat(
                 model=llm_model(),
@@ -92,8 +117,7 @@ class OllamaGenerator:
                 if not piece:
                     continue
                 parts.append(piece)
-                if on_delta is not None:
-                    await on_delta(piece)
+                await stream_out.feed(piece)
         except ResponseError as exc:
             if exc.status_code == 404:
                 raise AppError(
@@ -112,14 +136,93 @@ class OllamaGenerator:
                 "Could not reach the chat model.",
                 status_code=503,
             ) from exc
-        content = "".join(parts).strip()
+        await stream_out.flush()
+        content, used = _split_sources("".join(parts), documents if context else [])
+        used = _supported(content, messages[-1].content, used)
         if not content:
             raise AppError(
                 "unavailable",
                 "The chat model returned an empty answer.",
                 status_code=503,
             )
-        return content
+        return content, used
+
+
+class _HideSourcesLine:
+    """Streams the answer on, except the closing sources line. A line is held
+    back only while it could still turn into that line."""
+
+    def __init__(self, on_delta: OnDelta | None) -> None:
+        self.on_delta = on_delta
+        self.line = ""
+        self.hidden = False
+
+    async def feed(self, piece: str) -> None:
+        if self.hidden:
+            return
+        self.line += piece
+        while "\n" in self.line and not self.hidden:
+            line, self.line = self.line.split("\n", 1)
+            if _SOURCES_LINE.match(line):
+                self.hidden = True
+                return
+            await self._emit(line + "\n")
+        if not self.hidden and not _could_be_sources(self.line):
+            await self._emit(self.line)
+            self.line = ""
+
+    async def flush(self) -> None:
+        if not self.hidden and self.line and not _SOURCES_LINE.match(self.line):
+            await self._emit(self.line)
+        self.line = ""
+
+    async def _emit(self, text: str) -> None:
+        if text and self.on_delta is not None:
+            await self.on_delta(text)
+
+
+def _could_be_sources(line: str) -> bool:
+    letters = re.sub(r"[\W_]", "", line).lower()
+    return bool(_SOURCES_LINE.match(line)) or (len(letters) <= len("sources") and "sources".startswith(letters))
+
+
+def _split_sources(text: str, documents: Sequence[Document]) -> tuple[str, list[Document]]:
+    """The answer without its sources line, and the documents that line names."""
+    lines = text.rstrip().split("\n")
+    for index in range(len(lines) - 1, -1, -1):
+        match = _SOURCES_LINE.match(lines[index].strip())
+        if match:
+            named = match.group(1).lower()
+            used = [d for d in documents if _named(d, named)]
+            return "\n".join(lines[:index]).strip(), used
+    return text.strip(), list(documents)
+
+
+def _words(text: str) -> set[str]:
+    """Words that can carry a fact: numbers and words of five letters or
+    more. Short ones ("does", "with", "pour") belong to the language."""
+    return {w.lower() for w in _WORD.findall(text) if len(w) >= 5 or w.isdigit()}
+
+
+def _support(answer: str, question: str, document: Document) -> float:
+    """Share of the answer's own words (beyond the question) in `document`."""
+    # An answer that only repeats the question ("No, alcohol is not paid
+    # back") is judged by all its words.
+    own = (_words(answer) - _words(question)) or _words(answer)
+    if not own:
+        return 0.0
+    return len(own & _words(str(document.get("text") or ""))) / len(own)
+
+
+def _supported(answer: str, question: str, documents: Sequence[Document]) -> list[Document]:
+    """Documents the answer draws on. No comparison between documents: a
+    two-part answer may take only a little from its second document."""
+    return [d for d in documents if _support(answer, question, d) >= _MIN_SUPPORT]
+
+
+def _named(document: Document, sources: str) -> bool:
+    names = (str(document.get("filename") or ""), str(document.get("name") or ""))
+    return any(name and name.lower() in sources for name in names)
 
 
 def _history(messages: Sequence[ChatMessageSchema]) -> list[dict[str, str]]:
@@ -152,8 +255,8 @@ def _context(documents: Sequence[dict[str, object]], budget: int) -> str:
         return ""
     share = budget // len(named)
     parts: list[str] = []
-    for index, (name, text) in enumerate(named, start=1):
+    for name, text in named:
         if len(text) > share:
             text = text[:share].rstrip() + "\n…"
-        parts.append(f"[{index}] {name}\n{text}")
+        parts.append(f"Document: {name}\n{text}")
     return "\n\n".join(parts)

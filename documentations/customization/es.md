@@ -1,88 +1,97 @@
-# Personalización
+# Personalizar Corpus
+
+Esta guía muestra cómo añadir páginas, endpoints de API, permisos, temas y
+traducciones a Corpus sin editar archivos del núcleo, para que las
+actualizaciones se integren sin conflictos.
 
 Otros idiomas: [English](en.md) · [Français](fr.md)
 
-## Cómo funciona
+## Acerca de las extensiones
 
-Todos sus cambios viven en dos carpetas. Las actualizaciones de upstream nunca
-incluyen archivos en ellas, así que una nueva versión se integra sin conflictos:
+Sus cambios viven en dos carpetas. Las actualizaciones nunca incluyen archivos
+en ellas, así que una nueva versión se integra sin conflictos.
 
 | Carpeta | Qué va ahí |
 |---|---|
-| `backend/src/custom/<name>/` | Paquetes Python: endpoints de API, modelos, permisos, tareas en segundo plano |
+| `backend/src/custom/EXTENSION/` | Paquetes Python: endpoints de API, modelos, permisos, tareas en segundo plano |
 | `backend/src/custom/migrations/` | Sus migraciones de Alembic |
-| `frontend/src/custom/<name>/index.ts(x)` | Páginas, enlaces de la barra lateral, traducciones, temas |
+| `frontend/src/custom/EXTENSION/index.ts(x)` | Páginas, enlaces de la barra lateral, traducciones, temas |
 
-`<name>` es cualquier nombre que elija (`crm`, `hr`, …). Puede tener varios. Se
-cargan en orden alfabético y se omiten las carpetas que empiezan por `_`. No hay
-que registrar nada en archivos del núcleo: ambas carpetas se detectan
-automáticamente.
+Sustituya EXTENSION por cualquier nombre de carpeta, por ejemplo `crm` o `hr`.
+Puede tener varias extensiones. Se cargan en orden alfabético y se omiten las
+carpetas cuyo nombre empieza por `_`. No hay que registrarlas en ningún sitio:
+Corpus encuentra ambas carpetas automáticamente.
 
 Puede seguir editando archivos del núcleo, pero cada edición puede causar un
 conflicto en la próxima actualización. Use primero una extensión y edite el
-núcleo solo cuando no exista un punto de extensión para ello (vea
-[Limitaciones](#limitaciones)).
+núcleo solo cuando no exista un punto de extensión para su cambio. Vea
+[Limitaciones](#limitaciones).
 
-## Obtener actualizaciones
+## Qué puede importar
 
-```sh
-git remote add upstream <upstream repo url>   # una vez
-git pull upstream main
-cd backend && uv run alembic upgrade heads     # "heads": ramas del núcleo + custom
-cd src && uv run python -m seeders.run         # permisos nuevos del núcleo y custom
-```
+Estos módulos se mantienen compatibles con versiones anteriores, y sus cambios
+incompatibles se indican en las notas de la versión:
 
-Después reinicie el backend, el worker de Celery y el servidor de desarrollo del
-frontend.
+* Backend: `database`, `models`, `api.deps`, `exceptions`, `settings`,
+  `extensions`, `worker`, `services.audit`
+* Frontend: `@/extensions`, `@/shared/*`, `@/components/ui/*`
 
-## Backend
+Todo lo demás, como los servicios o las partes internas de las páginas del
+núcleo, puede cambiar entre versiones.
 
-Un paquete `backend/src/custom/<name>/__init__.py` puede definir cualquiera de
-estos:
+## Puntos de extensión del backend
+
+Un paquete `backend/src/custom/EXTENSION/__init__.py` puede definir cualquiera
+de estos:
 
 | Nombre | Qué hace |
 |---|---|
-| `router` | `APIRouter` montado bajo `/api/v1` **antes** que los routers del núcleo |
-| `PERMISSIONS` | `((key, name, description), ...)` sembrados junto con los permisos del núcleo |
-| `setup(app)` | Se llama una vez con la aplicación FastAPI al arrancar |
-| modelos | Cualquier modelo SQLAlchemy importado por el paquete es visible para Alembic |
-| `tasks.py` | Si existe, lo carga el worker de Celery |
+| `router` | Un `APIRouter` montado en `/api/v1` **antes** que los routers del núcleo |
+| `PERMISSIONS` | `((key, name, description), ...)`, sembrados junto con los permisos del núcleo |
+| `setup(app)` | Una función que se llama una vez con la app de FastAPI al arrancar |
+| Modelos | Alembic ve cualquier modelo de SQLAlchemy que importe el paquete |
+| `tasks.py` | Un módulo que carga el worker de Celery, si existe |
 
-### Nuevos endpoints de API
+## Añadir endpoints de API
 
-```python
-# backend/src/custom/crm/api.py
-from fastapi import APIRouter, Depends
+1. Escriba el router:
 
-from api.deps import get_current_user, require_permission
-from models import User
+   ```python
+   # backend/src/custom/crm/api.py
+   from fastapi import APIRouter, Depends
 
-router = APIRouter(prefix="/crm", tags=["crm"])
+   from api.deps import get_current_user, require_permission
+   from models import User
 
-
-@router.get("/hello")
-async def hello(user: User = Depends(get_current_user)) -> dict[str, str]:
-    return {"hello": user.first_name}
+   router = APIRouter(prefix="/crm", tags=["crm"])
 
 
-@router.get("/report")
-async def report(_user: User = Depends(require_permission("crm.report"))) -> dict:
-    return {"ok": True}
-```
+   @router.get("/hello")
+   async def hello(user: User = Depends(get_current_user)) -> dict[str, str]:
+       return {"hello": user.first_name}
 
-```python
-# backend/src/custom/crm/__init__.py
-from .api import router
-```
 
-El endpoint queda en `/api/v1/crm/hello`. Siga las reglas del proyecto para
-autenticación y errores: `Depends(get_current_user)` / `require_permission(...)`
-y `raise AppError(code, message, status_code)` desde `exceptions`.
+   @router.get("/report")
+   async def report(_user: User = Depends(require_permission("crm.report"))) -> dict:
+       return {"ok": True}
+   ```
 
-### Reemplazar un endpoint del núcleo
+2. Expórtelo desde el paquete:
 
-Los routers custom se montan primero, así que una ruta con el mismo método y
-path tiene prioridad. Esto reemplaza `GET /api/v1/users`:
+   ```python
+   # backend/src/custom/crm/__init__.py
+   from .api import router
+   ```
+
+El endpoint queda disponible en `/api/v1/crm/hello`. Siga las reglas del
+proyecto para la autenticación y los errores: use `Depends(get_current_user)`
+o `require_permission(...)`, y lance `AppError(code, message, status_code)` de
+`exceptions`.
+
+## Reemplazar un endpoint del núcleo
+
+Los routers personalizados se montan primero, así que una ruta con el mismo
+método y la misma ruta gana. Esto reemplaza `GET /api/v1/users`:
 
 ```python
 router = APIRouter(prefix="/users", tags=["users"])
@@ -93,23 +102,34 @@ async def list_users(...):
     ...
 ```
 
-Mantenga el formato de respuesta que espera el frontend del núcleo, o reemplace
-también la página.
+Mantenga la forma de la respuesta que espera el frontend del núcleo, o
+reemplace también la página.
 
-### Permisos
+## Añadir permisos
 
-```python
-# backend/src/custom/crm/__init__.py
-PERMISSIONS = (
-    ("crm.report", "CRM report", "View the CRM report"),
-)
-```
+1. Declare los permisos. Use claves `recurso.acción` que no coincidan con los
+   recursos del núcleo.
 
-Tras `seeders.run` aparecen en la lista de permisos y se pueden asignar a roles.
-El rol admin los recibe automáticamente. Use claves `resource.action` que no
-coincidan con recursos del núcleo.
+   ```python
+   # backend/src/custom/crm/__init__.py
+   PERMISSIONS = (
+       ("crm.report", "Informe CRM", "Ver el informe CRM"),
+   )
+   ```
 
-### `setup(app)`: sustituciones, middleware, manejadores
+2. Siémbrelos:
+
+   ```sh
+   cd backend/src && uv run python -m seeders.run
+   ```
+
+Los permisos aparecen entonces en la página **Permisos** y se pueden asignar a
+roles. El rol Admin los recibe automáticamente.
+
+## Ejecutar código al arrancar
+
+`setup(app)` puede añadir middleware y manejadores de excepciones, o
+reemplazar cualquier dependencia que el núcleo inyecta con `Depends(...)`:
 
 ```python
 # backend/src/custom/crm/__init__.py
@@ -126,66 +146,90 @@ def setup(app: FastAPI) -> None:
         return response
 ```
 
-`app.dependency_overrides` sustituye cualquier función que el núcleo inyecta con
-`Depends(...)`, en todas partes a la vez.
+Una entrada en `app.dependency_overrides` reemplaza esa dependencia en todas
+partes a la vez.
 
-### Modelos y datos adicionales del usuario
+## Guardar sus propios datos
 
-No añada columnas a tablas del núcleo como `users`. Guarde sus datos en su propia
-tabla con una clave uno a uno. Así el núcleo puede cambiar sus tablas libremente.
+No añada columnas a tablas del núcleo como `users`. Guarde sus datos en su
+propia tabla con una clave uno a uno, para que el núcleo pueda cambiar sus
+tablas libremente.
 
-```python
-# backend/src/custom/crm/models.py
-from sqlalchemy import ForeignKey, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+1. Defina el modelo. Empiece el nombre de la tabla por `custom_` para evitar
+   conflictos con futuras tablas del núcleo.
 
-from database import Base
-from models import User
+   ```python
+   # backend/src/custom/crm/models.py
+   from sqlalchemy import ForeignKey, String
+   from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+   from database import Base
+   from models import User
 
 
-class UserProfile(Base):
-    __tablename__ = "custom_user_profiles"  # prefix avoids clashes with future core tables
+   class UserProfile(Base):
+       __tablename__ = "custom_user_profiles"
 
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
-    )
-    phone: Mapped[str | None] = mapped_column(String(32))
-    user: Mapped[User] = relationship(backref="profile")  # user.profile works too
-```
+       user_id: Mapped[int] = mapped_column(
+           ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+       )
+       phone: Mapped[str | None] = mapped_column(String(32))
+       user: Mapped[User] = relationship(backref="profile")  # user.profile también funciona
+   ```
 
-```python
-# backend/src/custom/crm/__init__.py
-from . import models  # noqa: F401  (registers the table)
-from .api import router
-```
+2. Importe el módulo en el paquete para que Alembic vea la tabla:
 
-Las tablas independientes (no vinculadas a usuarios) funcionan igual.
+   ```python
+   # backend/src/custom/crm/__init__.py
+   from . import models  # noqa: F401
+   from .api import router
+   ```
 
-### Migraciones
+3. Cree una migración. Vea [Crear migraciones](#crear-migraciones).
 
-Las migraciones custom están en su propia rama de Alembic, `custom`, así que las
-migraciones del núcleo nunca chocan con ellas.
+Las tablas no vinculadas a usuarios funcionan igual.
 
-```sh
-cd backend
-uv run alembic upgrade heads          # primero la base de datos al día
-mkdir -p src/custom/migrations
+## Crear migraciones
 
-# solo la primera migración custom: crea la rama "custom" tras el head del núcleo
-uv run alembic revision --autogenerate -m "crm profiles" \
-  --head base --branch-label custom --version-path src/custom/migrations \
-  --depends-on $(uv run alembic heads | awk '{print $1; exit}')
+Las migraciones personalizadas están en su propia rama de Alembic, `custom`,
+así que las migraciones del núcleo nunca chocan con ellas.
 
-# cada una de las siguientes
-uv run alembic revision --autogenerate -m "..." --head custom@head
+1. Ponga la base de datos al día:
 
-uv run alembic upgrade heads
-```
+   ```sh
+   cd backend
+   uv run alembic upgrade heads
+   mkdir -p src/custom/migrations
+   ```
 
-Use siempre `upgrade heads` (en plural). Revise cada archivo generado antes de
-aplicarlo.
+2. Genere la migración. Solo para la primera migración personalizada, inicie la
+   rama `custom` después del head del núcleo:
 
-### Tareas en segundo plano (Celery)
+   ```sh
+   uv run alembic revision --autogenerate -m "crm profiles" \
+     --head base --branch-label custom --version-path src/custom/migrations \
+     --depends-on $(uv run alembic heads | awk '{print $1; exit}')
+   ```
+
+   Para cada migración posterior:
+
+   ```sh
+   uv run alembic revision --autogenerate -m "MESSAGE" --head custom@head
+   ```
+
+3. Revise el archivo generado y aplíquelo:
+
+   ```sh
+   uv run alembic upgrade heads
+   ```
+
+Use siempre `upgrade heads`, en plural: aplica tanto la rama del núcleo como
+la personalizada.
+
+## Añadir tareas en segundo plano
+
+Escriba una tarea de Celery en `tasks.py` de su paquete. Empiece su `name` por
+el nombre de su extensión para evitar colisiones.
 
 ```python
 # backend/src/custom/crm/tasks.py
@@ -197,169 +241,194 @@ def sync() -> None:
     ...
 ```
 
-Llámela con `sync.delay()` desde su endpoint. Use un `name` con el prefijo de su
-extensión para evitar colisiones.
+Láncela desde su endpoint con `sync.delay()`.
 
-### Registro de auditoría
+## Registrar entradas de auditoría
 
-Registre sus propias acciones con `AuditService` desde
-`Depends(get_audit_service)` (`api.deps`):
-`audit.record("crm.export", actor=user, target_label=...)`. Aparecen en la
-página del registro con el nombre de la acción tal cual. Nunca registre
-contraseñas, tokens ni otros secretos.
+Registre sus propias acciones con `AuditService` de
+`Depends(get_audit_service)` en `api.deps`:
 
-## Frontend
+```python
+audit.record("crm.export", actor=user, target_label=...)
+```
 
-Un archivo `frontend/src/custom/<name>/index.tsx` exporta por defecto un
-`Extension` (tipo en `frontend/src/extensions.ts`):
+Las entradas aparecen en la página **Registro de auditoría** con el nombre de
+su acción. No registre nunca contraseñas, tokens ni otros secretos.
+
+## Puntos de extensión del frontend
+
+Un archivo `frontend/src/custom/EXTENSION/index.tsx` exporta por defecto una
+`Extension`. El tipo está en `frontend/src/extensions.ts`.
 
 | Campo | Qué hace |
 |---|---|
-| `routes` | Páginas dentro del layout de usuarios autenticados (cabecera + barra lateral) |
+| `routes` | Páginas dentro del diseño con sesión iniciada, con cabecera y barra lateral |
 | `nav` | Enlaces de la barra lateral, después de los del núcleo |
 | `messages` | Traducciones por idioma |
 | `themes` | Temas adicionales en el selector de temas |
-| `defaultTheme` | Tema para usuarios que aún no han elegido uno |
+| `defaultTheme` | El tema para los usuarios que no han elegido ninguno |
 
-### Nueva página con enlace en la barra lateral
+## Añadir una página
 
-```tsx
-// frontend/src/custom/crm/Report.tsx
-import {useI18n} from "@/shared/i18n/I18nProvider";
+1. Escriba la página:
 
-export function Report() {
-    const {t} = useI18n();
-    return <h1>{t("custom.crm.title")}</h1>;
-}
-```
+   ```tsx
+   // frontend/src/custom/crm/Report.tsx
+   import {useI18n} from "@/shared/i18n/I18nProvider";
 
-```tsx
-// frontend/src/custom/crm/index.tsx
-import type {Extension} from "@/extensions";
-import {Report} from "./Report";
+   export function Report() {
+       const {t} = useI18n();
+       return <h1>{t("custom.crm.title")}</h1>;
+   }
+   ```
 
-export default {
-    routes: [{path: "crm", Component: Report}],
-    nav: [{to: "/crm", labelKey: "custom.crm.title", end: true, can: "crm.report"}],
-    messages: {
-        en: {"custom.crm.title": "CRM report"},
-        es: {"custom.crm.title": "Informe CRM"},
-    },
-} satisfies Extension;
-```
+2. Regístrela con un enlace en la barra lateral y sus traducciones:
 
-`can` oculta el enlace a los usuarios sin ese permiso. Dentro de una página, use
-`can("crm.report")` de `@/shared/lib/api/me`. Llame a su backend con el cliente
-compartido `api` (`baseURL` `/api/v1`, con cookies).
+   ```tsx
+   // frontend/src/custom/crm/index.tsx
+   import type {Extension} from "@/extensions";
+   import {Report} from "./Report";
 
-### Reemplazar una página del núcleo
+   export default {
+       routes: [{path: "crm", Component: Report, handle: {can: "crm.report"}}],
+       nav: [{to: "/crm", labelKey: "custom.crm.title", end: true, can: "crm.report"}],
+       messages: {
+           en: {"custom.crm.title": "CRM report"},
+           es: {"custom.crm.title": "Informe CRM"},
+       },
+   } satisfies Extension;
+   ```
 
-Una ruta con el mismo `path` reemplaza la página del núcleo; `index: true`
-reemplaza la de inicio. Rutas del núcleo: `index` (inicio), `documents`,
-`users`, `roles`, `permissions`.
+`can` oculta el enlace a los usuarios sin ese permiso. Para bloquear también la
+página, añada `handle: {can: "crm.report"}` a la ruta: los usuarios sin el
+permiso ven la página de no encontrado. Dentro de una página,
+use `can("crm.report")` de `@/shared/lib/api/me`. Llame a su backend con el
+cliente compartido `api`: su URL base es `/api/v1` y envía las cookies de
+sesión.
+
+## Reemplazar una página del núcleo
+
+Una ruta con el mismo `path` reemplaza la página del núcleo, e `index: true`
+reemplaza el Inicio. Las rutas del núcleo son `index` (Inicio), `documents`,
+`users`, `users/:userId`, `roles`, `permissions`, `audit` y `system`.
 
 ```tsx
 routes: [{path: "users", Component: MyUsersPage}],
 ```
 
 Lo más sencillo es copiar la página del núcleo en `custom/`, editar la copia y
-registrarla bajo el mismo path. Su copia no recibe las correcciones de upstream
+registrarla con la misma ruta. Su copia no recibe las correcciones del núcleo
 para esa página, así que compárela con el núcleo tras cada actualización.
 
-### Enlaces de la barra lateral
+## Cambiar enlaces de la barra lateral
 
 Los elementos de `nav` se añaden después de los del núcleo. Un elemento con el
-mismo `to` reemplaza el enlace del núcleo, por ejemplo para renombrarlo o exigir
-otro permiso:
+mismo `to` reemplaza el enlace del núcleo, por ejemplo para renombrarlo o
+exigir otro permiso:
 
 ```tsx
 nav: [{to: "/documents", labelKey: "custom.nav.files", end: true, can: "documents.list"}],
 ```
 
-### Traducciones
+## Añadir traducciones
 
-- Las claves nuevas deben empezar por `custom.`, por ejemplo `custom.crm.title`.
-- Las claves del núcleo se pueden sobrescribir, por ejemplo
+* Las claves nuevas deben empezar por `custom.`, por ejemplo
+  `custom.crm.title`.
+* Puede sobrescribir claves del núcleo, por ejemplo
   `"nav.documents": "Archivos"`.
-- Idiomas: `en`, `es`, `fr`. Si falta una clave se usa `en` y, si
+* Los idiomas son `en`, `es` y `fr`. Una clave que falta usa `en` y, si
   tampoco existe, la propia clave.
-- La interfaz usa el idioma del sistema elegido en `uv run setup`
+* La interfaz usa el idioma del sistema elegido en `uv run setup`
   (`APP_LANGUAGE` en `backend/.env`).
 
-### Temas
+## Añadir temas
 
-Un tema es un conjunto de variables CSS bajo `[data-theme="<id>"]` más una
-entrada en `themes`. Ponga ambos en su carpeta `custom/`; upstream nunca los
-toca.
+Un tema es un conjunto de variables CSS bajo `[data-theme="THEME-ID"]` más una
+entrada en `themes`. Guarde ambos en su carpeta `custom/`.
 
-```css
-/* frontend/src/custom/brand/ocean.css */
-[data-theme="ocean"] {
-  --background: #ecfeff;
-  --foreground: #083344;
-  --primary: #0e7490;
-  --primary-foreground: #ffffff;
-  --ring: #0e7490;
-  /* any variable from :root in frontend/src/index.css */
-}
+1. Escriba el CSS. Sustituya THEME-ID por el ID de su tema, aquí `ocean`:
 
-[data-theme="ocean"] .app-header {
-  background-color: var(--primary);
-  color: var(--primary-foreground);
-}
-```
+   ```css
+   /* frontend/src/custom/brand/ocean.css */
+   [data-theme="ocean"] {
+     --background: #ecfeff;
+     --foreground: #083344;
+     --primary: #0e7490;
+     --primary-foreground: #ffffff;
+     --ring: #0e7490;
+     /* cualquier variable de :root en frontend/src/index.css */
+   }
 
-```tsx
-// frontend/src/custom/brand/index.ts
-import type {Extension} from "@/extensions";
-import "./ocean.css";
+   [data-theme="ocean"] .app-header {
+     background-color: var(--primary);
+     color: var(--primary-foreground);
+   }
+   ```
 
-export default {
-    themes: [
-        {id: "ocean", labelKey: "custom.theme.ocean"},
-        {id: "graphite", labelKey: "custom.theme.graphite", dark: true},
-    ],
-    defaultTheme: "ocean",
-    messages: {
-        en: {"custom.theme.ocean": "Ocean", "custom.theme.graphite": "Graphite"},
-    },
-} satisfies Extension;
-```
+2. Registre el tema e importe el CSS:
 
-- `id` es el valor de `data-theme` en `<html>`. Dele estilo solo en su archivo
+   ```tsx
+   // frontend/src/custom/brand/index.ts
+   import type {Extension} from "@/extensions";
+   import "./ocean.css";
+
+   export default {
+       themes: [
+           {id: "ocean", labelKey: "custom.theme.ocean"},
+           {id: "graphite", labelKey: "custom.theme.graphite", dark: true},
+       ],
+       defaultTheme: "ocean",
+       messages: {
+           es: {"custom.theme.ocean": "Océano", "custom.theme.graphite": "Grafito"},
+       },
+   } satisfies Extension;
+   ```
+
+Opciones del tema:
+
+* `id` es el valor de `data-theme` en `<html>`. Dele estilo solo en su archivo
   CSS, importado desde el módulo de la extensión.
-- La lista completa de variables (`--background`, `--primary`, `--sidebar`,
-  `--success`, …) está en `:root` de `frontend/src/index.css`. Las variables que
-  no defina conservan los valores del núcleo.
-- `dark: true` añade la clase `.dark` y un esquema de color oscuro para los
+* La lista completa de variables (`--background`, `--primary`, `--sidebar`,
+  `--success` y otras) está en `:root` de `frontend/src/index.css`. Las
+  variables que no defina conservan los valores del núcleo.
+* `dark: true` añade la clase `.dark` y un esquema de color oscuro para los
   controles del navegador.
-- Un tema con el mismo `id` que uno del núcleo (`neutral`, `slate`, `midnight`) reemplaza su
-  etiqueta y opciones; su CSS para él se carga después del CSS del núcleo y
-  tiene prioridad.
-- `defaultTheme` se aplica a los usuarios que aún no han elegido tema; la
-  elección guardada en el navegador se conserva.
+* Un tema con el mismo `id` que uno del núcleo (`neutral`, `slate`,
+  `midnight`) reemplaza su etiqueta y sus opciones. Su CSS se carga después
+  del CSS del núcleo y gana.
+* `defaultTheme` se aplica a los usuarios que aún no han elegido tema. Una
+  elección guardada en el navegador se mantiene.
 
-## Qué se puede importar con seguridad
+## Obtener actualizaciones
 
-Estos módulos mantienen compatibilidad hacia atrás, y los cambios
-incompatibles se indican en las notas de la versión:
+1. Añada el repositorio principal una vez. Sustituya UPSTREAM-URL por su
+   dirección.
 
-- Backend: `database`, `models`, `api.deps`, `exceptions`, `settings`,
-  `extensions`, `worker`, `services.audit`
-- Frontend: `@/extensions`, `@/shared/*`, `@/components/ui/*`
+   ```sh
+   git remote add upstream UPSTREAM-URL
+   ```
 
-Todo lo demás (servicios, partes internas de las páginas del núcleo) puede
-cambiar entre versiones.
+2. Descargue la actualización, aplique las migraciones del núcleo y de sus
+   extensiones, y siembre los permisos nuevos:
+
+   ```sh
+   git pull upstream main
+   cd backend && uv run alembic upgrade heads
+   cd src && uv run python -m seeders.run
+   ```
+
+3. Reinicie el backend, el worker de Celery y el servidor de desarrollo del
+   frontend.
 
 ## Limitaciones
 
-Esto todavía requiere editar archivos del núcleo:
+Estos cambios todavía requieren editar archivos del núcleo:
 
-- La cabecera, el layout general, la página de inicio de sesión y otras páginas
-  fuera del layout de usuarios autenticados
-- Ocultar un enlace del núcleo en la barra lateral (se puede reemplazar, no
-  quitar)
-- Añadir una parte a una página del núcleo (una columna, un botón) sin
-  reemplazar la página
-- El prompt de sistema del asistente de chat y el procesamiento de documentos
-  (los endpoints se pueden reemplazar, los pasos internos no)
+* La cabecera, el diseño general, la página de inicio de sesión y otras
+  páginas fuera del diseño con sesión iniciada
+* Ocultar un enlace del núcleo en la barra lateral. Puede reemplazarlo, pero
+  no quitarlo.
+* Añadir una parte a una página del núcleo, como una columna o un botón, sin
+  reemplazar la página entera
+* El prompt de sistema del asistente y el flujo de procesamiento de
+  documentos. Puede reemplazar endpoints, pero no sus pasos internos.

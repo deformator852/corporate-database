@@ -14,6 +14,7 @@ _ES = {
     # Auth and sessions
     "Email or password is wrong": "El correo o la contraseña no son correctos",
     "Not authenticated": "No has iniciado sesión",
+    "The request has no valid security token. Reload the page.": "La solicitud no tiene un token de seguridad válido. Vuelva a cargar la página.",
     "Insufficient permissions": "No tienes permisos suficientes",
     "Cross-origin socket": "Conexión de otro origen rechazada",
     "Too many failed sign-in attempts. Try again in {minutes} minutes.": "Demasiados intentos fallidos. Vuelve a intentarlo dentro de {minutes} minutos.",
@@ -74,6 +75,7 @@ _FR = {
     # Auth and sessions
     "Email or password is wrong": "E-mail ou mot de passe incorrect",
     "Not authenticated": "Vous n’êtes pas connecté",
+    "The request has no valid security token. Reload the page.": "La requête n’a pas de jeton de sécurité valide. Rechargez la page.",
     "Insufficient permissions": "Autorisations insuffisantes",
     "Cross-origin socket": "Connexion d’une autre origine refusée",
     "Too many failed sign-in attempts. Try again in {minutes} minutes.": "Trop de tentatives de connexion échouées. Réessayez dans {minutes} minutes.",

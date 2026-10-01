@@ -1,5 +1,6 @@
 import asyncio
-from typing import Annotated
+from collections.abc import Coroutine
+from typing import Annotated, Any
 
 from fastapi import (
     APIRouter,
@@ -213,15 +214,17 @@ async def _on_client_message(
         )
         return None
     return asyncio.create_task(
-        _answer(request_id, websocket, user_id, incoming, ip, embedder, generator)
+        _answer(request_id, _generate(websocket, user_id, incoming, ip, embedder, generator))
     )
 
 
-async def _answer(request_id: int, *args) -> ChatAnswerSchema:
-    """The answer, with the user's chat slot freed however it ends
-    (done, failed, cancelled, socket closed)."""
+async def _answer(
+    request_id: int, answer: Coroutine[Any, Any, ChatAnswerSchema]
+) -> ChatAnswerSchema:
+    """`answer`, with the user's chat slot freed however it ends (done,
+    failed, cancelled, socket closed)."""
     try:
-        return await _generate(*args)
+        return await answer
     finally:
         await asyncio.shield(finish_chat_request(request_id))
 
@@ -249,22 +252,22 @@ async def _generate(
                 ChatDeltaSchema(type="delta", content=piece).model_dump()
             )
 
-        content, documents = await service.reply(user_id, ask.messages, send_delta)
+        content, used, read = await service.reply(user_id, ask.messages, send_delta)
         sources = [
             ChatSourceSchema(id=int(d["document_id"]), name=str(d["name"]), filename=str(d["filename"]))
-            for d in documents
+            for d in used
         ]
         await history.add_message(
             conversation, "assistant", content, [source.model_dump() for source in sources]
         )
-        if documents:
+        if read:
             # Who read which documents through the assistant; not the question.
             actor = await session.get(User, user_id)
             AuditService(session, ip).record(
                 AuditAction.CHAT_ANSWER,
                 actor=actor,
                 target_type="document",
-                target_label=", ".join(str(d["name"]) for d in documents),
+                target_label=", ".join(str(d["name"]) for d in read),
                 details={
                     "documents": [
                         {
@@ -272,7 +275,7 @@ async def _generate(
                             "name": d["name"],
                             "classification": d["classification"],
                         }
-                        for d in documents
+                        for d in read
                     ]
                 },
             )

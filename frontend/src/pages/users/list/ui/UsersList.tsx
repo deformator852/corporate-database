@@ -16,15 +16,15 @@ import {useSessionStore} from "@/shared/auth/session-store";
 import {useI18n} from "@/shared/i18n/I18nProvider";
 import {can} from "@/shared/lib/api/me";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
-import {enableUser, getUsersPage} from "@pages/users/list/api/users";
+import {deleteUser, disableUser, enableUser, getUsersPage} from "@pages/users/list/api/users";
 import {
     USERS_PER_PAGE,
     type UserListItem,
     type UserListPage,
 } from "@pages/users/list/model/users";
 import type {UserDetailLinkState} from "@pages/users/detail/model/user";
-import {DeleteUserDialog} from "@pages/users/list/ui/DeleteUserDialog";
-import {DisableUserDialog} from "@pages/users/list/ui/DisableUserDialog";
+import {Badge} from "@/components/ui/badge";
+import {ConfirmDialog} from "@/shared/ui/ConfirmDialog";
 import {UserFormDialog} from "@pages/users/list/ui/UserFormDialog";
 
 function fullName(user: UserListItem) {
@@ -66,7 +66,8 @@ export function UsersList() {
     const [deletingUser, setDeletingUser] = useState<UserListItem | null>(null);
     const [disablingUser, setDisablingUser] = useState<UserListItem | null>(null);
     const [enablingId, setEnablingId] = useState<number | null>(null);
-    const [actionError, setActionError] = useState<string | null>(null);
+    // Shown in the row whose "Enable" failed.
+    const [enableError, setEnableError] = useState<{id: number; message: string} | null>(null);
 
     useEffect(() => {
         let cancelled = false;
@@ -139,12 +140,12 @@ export function UsersList() {
 
     const handleEnable = async (user: UserListItem) => {
         setEnablingId(user.id);
-        setActionError(null);
+        setEnableError(null);
         try {
             await enableUser(user.id);
             setReloadKey((key) => key + 1);
         } catch (reason) {
-            setActionError(getApiErrorMessage(reason, t("users.enableError")));
+            setEnableError({id: user.id, message: getApiErrorMessage(reason, t("users.enableError"))});
         } finally {
             setEnablingId(null);
         }
@@ -173,12 +174,6 @@ export function UsersList() {
                     </Button>
                 ) : null}
             </div>
-
-            {actionError ? (
-                <p role="alert" className="text-sm text-destructive">
-                    {actionError}
-                </p>
-            ) : null}
 
             {status === "error" ? (
                 <div className="flex flex-col items-start gap-3 rounded-xl bg-card px-4 py-8 ring-1 ring-foreground/10">
@@ -232,25 +227,23 @@ export function UsersList() {
                                         <TableRow key={user.id}>
                                             <TableCell className="px-4 font-medium">
                                                 <span className="inline-flex flex-wrap items-center gap-2">
-                                                {canViewUser ? (
-                                                    <Link
-                                                        to={`/users/${user.id}`}
-                                                        state={linkState}
-                                                        className="underline-offset-4 hover:underline"
-                                                        aria-label={t("userDetail.openAria", {
-                                                            name: fullName(user),
-                                                        })}
-                                                    >
-                                                        {fullName(user)}
-                                                    </Link>
-                                                ) : (
-                                                    fullName(user)
-                                                )}
-                                                {user.disabled ? (
-                                                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                                                        {t("users.disabled")}
-                                                    </span>
-                                                ) : null}
+                                                    {canViewUser ? (
+                                                        <Link
+                                                            to={`/users/${user.id}`}
+                                                            state={linkState}
+                                                            className="underline-offset-4 hover:underline"
+                                                            aria-label={t("userDetail.openAria", {
+                                                                name: fullName(user),
+                                                            })}
+                                                        >
+                                                            {fullName(user)}
+                                                        </Link>
+                                                    ) : (
+                                                        fullName(user)
+                                                    )}
+                                                    {user.disabled ? (
+                                                        <Badge variant="secondary">{t("users.disabled")}</Badge>
+                                                    ) : null}
                                                 </span>
                                             </TableCell>
                                             <TableCell className="text-muted-foreground">
@@ -346,6 +339,11 @@ export function UsersList() {
                                                             </Button>
                                                         ) : null}
                                                     </div>
+                                                    {enableError?.id === user.id ? (
+                                                        <p role="alert" className="mt-1 text-right text-xs text-destructive">
+                                                            {enableError.message}
+                                                        </p>
+                                                    ) : null}
                                                 </TableCell>
                                             ) : null}
                                         </TableRow>
@@ -401,25 +399,47 @@ export function UsersList() {
                 onOpenChange={setFormOpen}
                 onSaved={handleSaved}
             />
-            <DeleteUserDialog
-                user={deletingUser}
+            <ConfirmDialog
                 open={deletingUser != null}
                 onOpenChange={(open) => {
                     if (!open) {
                         setDeletingUser(null);
                     }
                 }}
-                onDeleted={handleDeleted}
+                title={t("users.delete.title", {
+                    name: deletingUser ? fullName(deletingUser) : t("common.thisUser"),
+                })}
+                description={t("users.delete.description")}
+                confirmLabel={t("users.delete.confirm")}
+                pendingLabel={t("common.deleting")}
+                errorMessage={t("users.delete.error")}
+                onConfirm={async () => {
+                    if (deletingUser) {
+                        await deleteUser(deletingUser.id);
+                        handleDeleted();
+                    }
+                }}
             />
-            <DisableUserDialog
-                user={disablingUser}
+            <ConfirmDialog
                 open={disablingUser != null}
                 onOpenChange={(open) => {
                     if (!open) {
                         setDisablingUser(null);
                     }
                 }}
-                onDisabled={handleSaved}
+                title={t("users.disableDialog.title", {
+                    name: disablingUser ? fullName(disablingUser) : t("common.thisUser"),
+                })}
+                description={t("users.disableDialog.description")}
+                confirmLabel={t("users.disableDialog.confirm")}
+                pendingLabel={t("common.disabling")}
+                errorMessage={t("users.disableDialog.error")}
+                onConfirm={async () => {
+                    if (disablingUser) {
+                        await disableUser(disablingUser.id);
+                        handleSaved();
+                    }
+                }}
             />
         </div>
     );

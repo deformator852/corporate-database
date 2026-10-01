@@ -147,3 +147,15 @@ def test_a_disabled_account_rejects_even_a_freshly_issued_token(client, make_use
     token = security.create_access_token(uid=str(user_id))
     client.cookies.set("my_token", token)
     assert client.get("/api/v1/auth/me").status_code == 401
+
+
+def test_auth_errors_use_the_common_shape(client, make_user):
+    user_id, email, password = make_user(["users.disable"])
+    login(client, email, password)
+    # A change without the CSRF header: refused, but the session stays valid.
+    missing_csrf = client.post(f"/api/v1/users/{user_id}/disable")
+    assert missing_csrf.status_code == 403
+    assert missing_csrf.json()["code"] == "forbidden"
+    assert client.get("/api/v1/auth/me").status_code == 200
+    client.cookies.clear()
+    assert client.get("/api/v1/auth/me").json() == {"code": "unauthorized", "message": "Not authenticated"}

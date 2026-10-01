@@ -1,10 +1,12 @@
 import {LogOut} from "lucide-react";
 import {useState} from "react";
-import {Link, Outlet, useLocation} from "react-router";
+import {Link, Outlet, useLocation, useMatches} from "react-router";
 
 import {Button} from "@/components/ui/button";
 import {useSessionStore} from "@/shared/auth/session-store";
-import {signOut} from "@/shared/lib/api/me";
+import {can, signOut} from "@/shared/lib/api/me";
+import NotFound from "@/pages/not-found/ui/NotFound";
+import type {RouteHandle} from "@/router";
 import {Logo} from "@/shared/ui/Logo";
 import type {SessionUser} from "@/shared/auth/types";
 import {useI18n} from "@/shared/i18n/I18nProvider";
@@ -16,6 +18,10 @@ export default function AppLayout() {
     const user = useSessionStore((state) => state.user);
     const location = useLocation();
     const pane = location.pathname === "/";
+    const allowed = useMatches().every((match) => {
+        const permission = (match.handle as RouteHandle | undefined)?.can;
+        return !permission || can(permission, user);
+    });
 
     if (!user) {
         return null;
@@ -51,7 +57,7 @@ export default function AppLayout() {
                                 : "container app-layout__content"
                         }
                     >
-                        <Outlet />
+                        {allowed ? <Outlet /> : <NotFound />}
                     </div>
                 </main>
             </div>

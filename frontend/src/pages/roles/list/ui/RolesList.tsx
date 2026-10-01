@@ -21,7 +21,8 @@ import {
     type RoleListItem,
     type RoleListPage,
 } from "@pages/roles/list/model/roles";
-import {DeleteRoleDialog} from "@pages/roles/list/ui/DeleteRoleDialog";
+import {ConfirmDialog} from "@/shared/ui/ConfirmDialog";
+import {deleteRole} from "@pages/roles/list/api/roles";
 import {RoleFormDialog} from "@pages/roles/list/ui/RoleFormDialog";
 
 function parsePage(value: string | null): number {
@@ -304,15 +305,24 @@ export function RolesList() {
                 onOpenChange={setFormOpen}
                 onSaved={handleSaved}
             />
-            <DeleteRoleDialog
-                role={deletingRole}
+            <ConfirmDialog
                 open={deletingRole != null}
                 onOpenChange={(open) => {
                     if (!open) {
                         setDeletingRole(null);
                     }
                 }}
-                onDeleted={handleDeleted}
+                title={t("roles.delete.title", {name: deletingRole?.name ?? t("common.thisRole")})}
+                description={t("roles.delete.description")}
+                confirmLabel={t("roles.delete.confirm")}
+                pendingLabel={t("common.deleting")}
+                errorMessage={t("roles.delete.error")}
+                onConfirm={async () => {
+                    if (deletingRole) {
+                        await deleteRole(deletingRole.key);
+                        handleDeleted();
+                    }
+                }}
             />
         </div>
     );

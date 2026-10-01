@@ -294,7 +294,7 @@ async def _with_processor(
 ) -> None:
     storage = ObjectStorage()
     parser = DocumentParser()
-    # Sizes come from .env (CHUNK_SIZE, CHUNK_OVERLAP) at job time.
+    # Sizes come from CHUNK_SIZE / CHUNK_OVERLAP, read when the worker starts.
     chunker = RecursiveChunker(tokenizer="character", chunk_size=chunk_size())
     embedder = EmbeddingModel()
     rag = Rag()
