@@ -116,6 +116,46 @@ describe("Assistant chat", () => {
         expect(screen.getByText("Ask about your documents", {selector: "p"})).toBeInTheDocument();
     });
 
+    it("groups saved chats by age like ChatGPT", async () => {
+        const today = new Date().toISOString();
+        await openChat((s) =>
+            s.on("GET", "/chat/conversations", {
+                items: [
+                    {...SAVED, id: 8, title: "Leave policy?", created_at: today, updated_at: today},
+                    {...SAVED, updated_at: "2020-01-01T09:00:00Z"},
+                ],
+                total: 2,
+            }),
+        );
+        const history = screen.getByRole("complementary", {name: "History"});
+        expect(await within(history).findByRole("region", {name: "Today"})).toHaveTextContent("Leave policy?");
+        expect(within(history).getByRole("region", {name: "Older"})).toHaveTextContent("Travel budget?");
+    });
+
+    it("hides the chat column and remembers it", async () => {
+        const {user} = await openChat((s) => s.on("GET", "/chat/conversations", {items: [SAVED], total: 1}));
+        await user.click(screen.getByRole("button", {name: "Hide chats"}));
+
+        expect(screen.queryByRole("complementary", {name: "History"})).not.toBeInTheDocument();
+        expect(localStorage.getItem("chat-history-shown")).toBe("0");
+    });
+
+    it("opens saved chats from a side panel on phones", async () => {
+        const {user} = await openChat((s) => {
+            s.on("GET", "/chat/conversations", {items: [SAVED], total: 1});
+            s.on("GET", "/chat/conversations/:id", {
+                ...SAVED,
+                messages: [{id: 2, role: "assistant", content: "500 EUR per trip.", sources: [], created_at: SAVED.created_at}],
+            });
+        });
+        await user.click(screen.getByRole("button", {name: "Show chats"}));
+        const panel = await screen.findByRole("dialog", {name: "History"});
+
+        await user.click(await within(panel).findByRole("button", {name: "Travel budget?"}));
+        expect(await screen.findByText("500 EUR per trip.")).toBeInTheDocument();
+        await waitFor(() => expect(screen.queryByRole("dialog", {name: "History"})).not.toBeInTheDocument());
+    });
+
     it("explains when saved chats cannot be loaded", async () => {
         await openChat((s) => s.on("GET", "/chat/conversations", apiError(503, "Service unavailable")));
         const history = screen.getByRole("complementary", {name: "History"});

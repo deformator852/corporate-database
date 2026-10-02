@@ -197,13 +197,14 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
                 <Field data-invalid={!!errors.file || undefined}>
                     <FieldLabel htmlFor="document-file">{t("common.file")}</FieldLabel>
                     <div
-                        className={`cursor-pointer rounded-lg border border-dashed px-4 py-6 text-center transition-colors ${
+                        className={`relative cursor-pointer rounded-lg border border-dashed px-4 py-6 text-center transition-colors ${
                             dragging
                                 ? "border-ring bg-accent"
                                 : "border-input"
                         }`}
-                        onClick={() => {
-                            if (!isSubmitting) {
+                        onClick={(event) => {
+                            // The input's own click bubbles up here: do not reopen it.
+                            if (!isSubmitting && event.target !== fileInputRef.current) {
                                 fileInputRef.current?.click();
                             }
                         }}
@@ -216,20 +217,23 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
                         <p className="mt-1 text-sm text-muted-foreground">
                             {file ? file.name : t("documents.upload.dropHint")}
                         </p>
+                        {/* Inside the drop zone, not a direct child of Field: Field gives
+                            direct .sr-only children their natural width, which widened
+                            the page on phones. */}
+                        <input
+                            id="document-file"
+                            ref={fileInputRef}
+                            type="file"
+                            accept={DOCUMENT_ACCEPT}
+                            disabled={isSubmitting}
+                            className="sr-only"
+                            aria-invalid={!!errors.file || undefined}
+                            aria-describedby={errors.file ? fileErrorId : undefined}
+                            onChange={(event) => {
+                                assignFile(event.target.files?.[0]);
+                            }}
+                        />
                     </div>
-                    <input
-                        id="document-file"
-                        ref={fileInputRef}
-                        type="file"
-                        accept={DOCUMENT_ACCEPT}
-                        disabled={isSubmitting}
-                        className="sr-only"
-                        aria-invalid={!!errors.file || undefined}
-                        aria-describedby={errors.file ? fileErrorId : undefined}
-                        onChange={(event) => {
-                            assignFile(event.target.files?.[0]);
-                        }}
-                    />
                     <FieldError id={fileErrorId} errors={[errors.file]} />
                 </Field>
             </FieldGroup>

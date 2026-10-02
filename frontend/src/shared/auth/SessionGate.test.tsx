@@ -1,4 +1,4 @@
-import {screen} from "@testing-library/react";
+import {screen, waitFor, within} from "@testing-library/react";
 import {describe, expect, it} from "vitest";
 
 import {apiError} from "@/test/api";
@@ -50,5 +50,22 @@ describe("Pages need their permission", () => {
         const {server} = renderApp("/users", sessionUser(["documents.list"]));
         expect(await screen.findByRole("heading", {name: "Page not found"})).toBeInTheDocument();
         expect(server.sent("GET", "/users")).toHaveLength(0);
+    });
+});
+
+describe("Phone menu", () => {
+    it("opens from the header, lists the allowed sections and closes after choosing one", async () => {
+        const {user, router} = renderApp("/", sessionUser(["documents.list"]), (s) =>
+            s.on("GET", "/documents", {items: [], page: 1, per_page: 20, total: 0, pages: 0}),
+        );
+
+        await user.click(await screen.findByRole("button", {name: "Open menu"}));
+        const menu = await screen.findByRole("dialog", {name: "Navigation"});
+        expect([...menu.querySelectorAll("a")].map((a) => a.textContent)).toEqual(["Home", "Documents"]);
+
+        await user.click(within(menu).getByRole("link", {name: "Documents"}));
+
+        expect(router.state.location.pathname).toBe("/documents");
+        await waitFor(() => expect(screen.queryByRole("dialog", {name: "Navigation"})).not.toBeInTheDocument());
     });
 });

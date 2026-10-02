@@ -259,18 +259,15 @@
     width: 100%;
   }
 
+  /* Phones use the header menu button instead (MobileNav). */
   .app-layout__sidebar {
-    flex-shrink: 0;
-    border-bottom: 1px solid var(--sidebar-border, var(--border));
-    background-color: var(--sidebar, var(--background));
-    padding-block: 0.75rem;
-    padding-inline: var(--gutter);
+    display: none;
   }
 
   .app-layout__nav {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.25rem;
+    flex-direction: column;
+    gap: 0.125rem;
   }
 
   .app-layout__nav-link {
@@ -329,17 +326,13 @@
     }
 
     .app-layout__sidebar {
+      display: block;
+      flex-shrink: 0;
       width: var(--sidebar-width);
-      border-bottom: none;
+      background-color: var(--sidebar, var(--background));
       border-inline-end: 1px solid var(--sidebar-border, var(--border));
       padding-block: 1rem;
       padding-inline: 0.75rem;
-    }
-
-    .app-layout__nav {
-      flex-direction: column;
-      flex-wrap: nowrap;
-      gap: 0.125rem;
     }
 
     .app-layout__nav-link {

@@ -1,7 +1,8 @@
-import {History, X} from "lucide-react";
+import {PanelLeft, SquarePen, X} from "lucide-react";
 import {useCallback, useEffect, useRef, useState} from "react";
 
 import {Button} from "@/components/ui/button";
+import {Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger} from "@/components/ui/sheet";
 import {connectChatSocket, type ChatSocket} from "@pages/home/api/chat";
 import {deleteConversation, getConversation, listConversations} from "@pages/home/api/history";
 import {
@@ -21,6 +22,17 @@ import {getApiErrorMessage} from "@/shared/lib/api/errors";
  * before it was saved or answered. */
 const NOT_ACCEPTED = new Set(["busy", "rate_limited"]);
 
+/** Remembers whether the desktop history column is shown. */
+const HISTORY_SHOWN_KEY = "chat-history-shown";
+
+function readHistoryShown() {
+    try {
+        return localStorage.getItem(HISTORY_SHOWN_KEY) !== "0";
+    } catch {
+        return true;
+    }
+}
+
 function nextId() {
     return crypto.randomUUID();
 }
@@ -38,7 +50,8 @@ function Home() {
     const [conversationId, setConversationId] = useState<number | null>(null);
     const [conversations, setConversations] = useState<ChatConversationItem[] | null>(null);
     const [historyError, setHistoryError] = useState<string | null>(null);
-    // Phones: the history is a panel over the chat, opened from its header.
+    // Desktop: a column that can be hidden. Phones: a panel sliding in from the left.
+    const [historyShown, setHistoryShown] = useState(readHistoryShown);
     const [historyOpen, setHistoryOpen] = useState(false);
 
     const reloadHistory = useCallback(() => {
@@ -192,6 +205,16 @@ function Home() {
         />
     );
 
+    function toggleHistory() {
+        const next = !historyShown;
+        setHistoryShown(next);
+        try {
+            localStorage.setItem(HISTORY_SHOWN_KEY, next ? "1" : "0");
+        } catch {
+            // Storage is blocked: the choice lasts until reload.
+        }
+    }
+
     function handleRetry() {
         if (status === "pending") {
             return;
@@ -202,46 +225,71 @@ function Home() {
     return (
         <div className="flex h-full min-h-0 flex-1 gap-4 overflow-hidden">
             <h1 className="sr-only">{t("chat.title")}</h1>
-            <aside
-                aria-label={t("chat.history")}
-                className="hidden w-64 shrink-0 overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 md:block"
-            >
-                {history}
-            </aside>
+            {historyShown ? (
+                <aside
+                    id="chat-history"
+                    aria-label={t("chat.history")}
+                    className="hidden w-64 shrink-0 overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 md:block"
+                >
+                    {history}
+                </aside>
+            ) : null}
             <section
                 aria-label={t("chat.panelLabel")}
                 className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10"
             >
-                <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-2.5">
-                    <p className="truncate text-sm font-medium">{t("chat.title")}</p>
+                <header className="flex shrink-0 items-center gap-1 border-b border-border px-2 py-1.5">
                     <Button
                         type="button"
                         variant="ghost"
-                        size="sm"
-                        className="md:hidden"
-                        aria-expanded={historyOpen}
-                        onClick={() => setHistoryOpen(true)}
+                        size="icon"
+                        className="hidden md:inline-flex"
+                        aria-label={t(historyShown ? "chat.hideHistory" : "chat.showHistory")}
+                        aria-controls="chat-history"
+                        aria-expanded={historyShown}
+                        onClick={toggleHistory}
                     >
-                        <History aria-hidden />
-                        {t("chat.history")}
+                        <PanelLeft aria-hidden />
+                    </Button>
+                    <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
+                        <SheetTrigger
+                            render={
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="md:hidden"
+                                    aria-label={t("chat.showHistory")}
+                                />
+                            }
+                        >
+                            <PanelLeft aria-hidden />
+                        </SheetTrigger>
+                        <SheetContent side="left" showCloseButton={false} className="gap-0 p-0">
+                            <div className="flex items-center justify-between border-b px-4 py-2">
+                                <SheetTitle>{t("chat.history")}</SheetTitle>
+                                <SheetClose
+                                    render={<Button type="button" variant="ghost" size="icon" aria-label={t("common.close")} />}
+                                >
+                                    <X aria-hidden />
+                                </SheetClose>
+                            </div>
+                            <div className="min-h-0 flex-1">{history}</div>
+                        </SheetContent>
+                    </Sheet>
+                    <p className="min-w-0 flex-1 truncate px-1 text-sm font-medium">{t("chat.title")}</p>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className={historyShown ? "md:hidden" : undefined}
+                        aria-label={t("chat.newChat")}
+                        disabled={pending}
+                        onClick={startNewChat}
+                    >
+                        <SquarePen aria-hidden />
                     </Button>
                 </header>
-                {historyOpen ? (
-                    <div className="absolute inset-0 z-20 flex flex-col bg-card md:hidden">
-                        <div className="flex justify-end border-b px-2 py-1.5">
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                aria-label={t("common.close")}
-                                onClick={() => setHistoryOpen(false)}
-                            >
-                                <X />
-                            </Button>
-                        </div>
-                        <div className="min-h-0 flex-1">{history}</div>
-                    </div>
-                ) : null}
                 <ChatMessages
                     messages={messages}
                     streaming={streaming}

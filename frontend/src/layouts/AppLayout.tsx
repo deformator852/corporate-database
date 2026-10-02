@@ -12,7 +12,7 @@ import type {SessionUser} from "@/shared/auth/types";
 import {useI18n} from "@/shared/i18n/I18nProvider";
 import {ThemeSwitcher} from "@/theme/ThemeSwitcher";
 import {NotificationBell} from "@/widgets/notifications/ui/NotificationBell";
-import {Sidebar} from "@/widgets/sidebar/ui/Sidebar.tsx";
+import {MobileNav, Sidebar} from "@/widgets/sidebar/ui/Sidebar.tsx";
 
 export default function AppLayout() {
     const user = useSessionStore((state) => state.user);
@@ -31,9 +31,12 @@ export default function AppLayout() {
         <div className="app app-layout">
             <header className="app-header app-layout__header">
                 <div className="app-header__inner">
-                    <Link to="/" className="min-w-0 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+                    <div className="flex min-w-0 items-center gap-1">
+                        <MobileNav />
+                        <Link to="/" className="min-w-0 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
                         <Logo />
-                    </Link>
+                        </Link>
+                    </div>
                     <div className="flex shrink-0 items-center gap-0.5">
                         <NotificationBell />
                         <ThemeSwitcher />

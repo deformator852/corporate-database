@@ -69,6 +69,7 @@ beforeEach(() => {
     useSessionStore.setState({user: null, status: "idle", error: null});
     FakeWebSocket.instances = [];
     FakeIntersectionObserver.instances = [];
+    localStorage.clear();
     document.cookie.split("; ").forEach((cookie) => {
         document.cookie = `${cookie.split("=")[0]}=; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
     });
