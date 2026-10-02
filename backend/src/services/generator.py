@@ -8,8 +8,6 @@ from exceptions import AppError
 from schemas.chat import ChatMessageSchema
 from settings import LANGUAGES, language, llm_host, llm_model, llm_num_ctx
 
-_HISTORY = 6
-_HISTORY_CHARS = 1500
 _TIMEOUT = httpx.Timeout(180.0)
 
 _SYSTEM = (
@@ -49,15 +47,20 @@ _WORD = re.compile(r"\w+")
 
 # Rough chars per token for budgeting (Latin ~4, Cyrillic ~2.5).
 _CHARS_PER_TOKEN = 3
-# Room for the system prompt and chat history.
-_PROMPT_OVERHEAD_TOKENS = 1536
+# Room for the system prompt, the sources rule and the prompt labels.
+_PROMPT_OVERHEAD_TOKENS = 512
+
+
+def _documents_tokens(num_ctx: int) -> int:
+    """A quarter of the context is the answer, a quarter the chat history
+    (with the question); documents get the rest."""
+    return num_ctx - num_ctx // 4 - num_ctx // 4 - _PROMPT_OVERHEAD_TOKENS
 
 
 def document_budget_chars(documents: int) -> int:
     """Characters of document text one of `documents` documents may take in
     the prompt; longer ones are sent as excerpts (services/chat.py)."""
-    num_ctx = llm_num_ctx()
-    budget = (num_ctx - num_ctx // 4 - _PROMPT_OVERHEAD_TOKENS) * _CHARS_PER_TOKEN
+    budget = _documents_tokens(llm_num_ctx()) * _CHARS_PER_TOKEN
     return budget // max(documents, 1)
 
 
@@ -89,9 +92,9 @@ class OllamaGenerator:
                 "role": "system",
                 "content": _SYSTEM.format(language=LANGUAGES[language()]),
             },
-            *_history(messages),
+            *_history(messages, num_ctx // 4 * _CHARS_PER_TOKEN),
         ]
-        budget = (num_ctx - num_predict - _PROMPT_OVERHEAD_TOKENS) * _CHARS_PER_TOKEN
+        budget = _documents_tokens(num_ctx) * _CHARS_PER_TOKEN
         context = _context(documents, budget)
         if context:
             payload[-1]["content"] = (
@@ -225,16 +228,21 @@ def _named(document: Document, sources: str) -> bool:
     return any(name and name.lower() in sources for name in names)
 
 
-def _history(messages: Sequence[ChatMessageSchema]) -> list[dict[str, str]]:
-    selected = list(messages[-_HISTORY:])
-    payload: list[dict[str, str]] = []
-    last_index = len(selected) - 1
-    for index, message in enumerate(selected):
+def _history(messages: Sequence[ChatMessageSchema], budget: int) -> list[dict[str, str]]:
+    """The question and the earlier messages, newest first, that fit `budget`
+    characters; the oldest one kept may be cut, older ones are left out."""
+    question = messages[-1]
+    kept = [{"role": question.role, "content": question.content}]
+    left = budget - len(question.content)
+    for message in reversed(messages[:-1]):
+        if left <= 0:
+            break
         content = message.content
-        if index != last_index and len(content) > _HISTORY_CHARS:
-            content = content[:_HISTORY_CHARS].rstrip() + "…"
-        payload.append({"role": message.role, "content": content})
-    return payload
+        if len(content) > left:
+            content = content[:left].rstrip() + "…"
+        kept.append({"role": message.role, "content": content})
+        left -= len(content)
+    return kept[::-1]
 
 
 def _context(documents: Sequence[dict[str, object]], budget: int) -> str:

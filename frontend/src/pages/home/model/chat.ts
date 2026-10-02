@@ -43,7 +43,9 @@ export type ChatConversation = {
  * back in the input, so there is nothing to retry. */
 export type ChatStatus = "idle" | "pending" | "error" | "refused";
 
-export const CHAT_HISTORY = 6;
+/** Most messages the server accepts (ChatRequestSchema); it keeps the newest
+ * that fit a quarter of the model context. */
+export const CHAT_HISTORY = 40;
 
 export class ChatRequestError extends Error {
     readonly code: string;

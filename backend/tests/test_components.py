@@ -56,6 +56,20 @@ def _docx(text: str) -> bytes:
     return buffer.getvalue()
 
 
+def _docx_table(rows: list[list[str]]) -> bytes:
+    from docx import Document
+
+    document = Document()
+    document.add_paragraph("Budgets")
+    table = document.add_table(rows=len(rows), cols=len(rows[0]))
+    for cells, values in zip(table.rows, rows, strict=True):
+        for cell, value in zip(cells.cells, values, strict=True):
+            cell.text = value
+    buffer = io.BytesIO()
+    document.save(buffer)
+    return buffer.getvalue()
+
+
 def _xlsx(rows: list[list[object]]) -> bytes:
     from openpyxl import Workbook
 
@@ -85,6 +99,7 @@ def _odt(text: str) -> bytes:
     [
         ("a.pdf", _pdf("Invoice 42 total 900"), "Invoice 42 total 900"),
         ("a.docx", _docx("Contract clause 3.2"), "Contract clause 3.2"),
+        ("a.docx", _docx_table([["Department", "Budget"], ["Sales", "1.2M"]]), "Budgets\nDepartment\tBudget\nSales\t1.2M"),
         ("a.odt", _odt("Minutes of the board"), "Minutes of the board"),
         ("a.xlsx", _xlsx([["Name", "Salary"], ["Ana", 1200], [None, None]]), "Ana\t1200"),
         ("a.csv", b"Name,City\nAna,Madrid\n", "Ana\tMadrid"),
@@ -134,6 +149,32 @@ def test_old_word_files_are_converted_on_upload(client, make_user, infra, tmp_pa
     assert next(i for i in items if i["id"] == response.json()["id"])["status"] == "completed"
 
 
+def test_docx_named_doc_is_taken_as_docx(client, make_user, infra):
+    _, email, password = make_user(["documents.list", "documents.create"])
+    login(client, email, password)
+
+    response = upload(client, "Memo", _docx("Quarterly memo about vacation days"), "memo.doc")
+
+    assert response.status_code == 201
+    assert response.json()["converted"] is True and response.json()["filename"] == "memo.docx"
+    process(response.json()["id"])
+    items = client.get("/api/v1/documents", params={"per_page": 100}).json()["items"]
+    assert next(i for i in items if i["id"] == response.json()["id"])["status"] == "completed"
+
+
+def test_other_zip_named_doc_is_rejected(client, make_user, infra):
+    _, email, password = make_user(["documents.list", "documents.create"])
+    login(client, email, password)
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("xl/workbook.xml", "<x/>")
+
+    response = upload(client, "Sheet", buffer.getvalue(), "sheet.doc")
+
+    assert response.status_code == 400
+    assert response.json()["message"] == "The file content does not match its type."
+
+
 # LLM client
 
 
@@ -145,7 +186,7 @@ def _messages(*contents: str) -> list[ChatMessageSchema]:
 def test_prompt_carries_documents_recent_history_and_language(monkeypatch):
     monkeypatch.setenv("APP_LANGUAGE", "fr")
     llm = FakeOllama()
-    history = ["old question", "x" * 5000, *[f"turn {i}" for i in range(5)], "What is the budget?"]
+    history = ["old question", "old answer", *[f"turn {i}" for i in range(9)], "What is the budget?"]
     documents = [{"filename": "policy.txt", "text": "Budget is 500 EUR."}, {"name": "Empty", "text": " "}]
 
     answer, _ = run(OllamaGenerator(llm).complete(_messages(*history), documents))
@@ -153,10 +194,23 @@ def test_prompt_carries_documents_recent_history_and_language(monkeypatch):
     sent = llm.calls[0]["messages"]
     assert answer == llm.answer
     assert "Always reply in French" in sent[0]["content"]
-    assert len(sent) == 1 + 6 and "old question" not in str(sent)  # last 6 messages only
+    assert [m["content"] for m in sent[1:-1]] == history[:-1]  # the whole chat fits
     assert sent[-1]["content"].startswith("Documents:\nDocument: policy.txt\nBudget is 500 EUR.\n\nQuestion:\nWhat is the budget?")
     assert "SOURCES:" in sent[-1]["content"]
-    assert all(len(m["content"]) <= 1501 for m in sent[1:-1])  # older turns are shortened
+
+
+def test_history_keeps_the_newest_messages_within_a_quarter_of_the_context(monkeypatch):
+    monkeypatch.setenv("LLM_NUM_CTX", "4096")  # history: 1024 tokens = 3072 chars
+    llm = FakeOllama()
+    history = ["first question", "a" * 2000, "second question", "b" * 2000, "Third question?"]
+
+    run(OllamaGenerator(llm).complete(_messages(*history), []))
+
+    sent = [m["content"] for m in llm.calls[0]["messages"][1:]]
+    assert sent[1:] == ["second question", "b" * 2000, "Third question?"]
+    assert sent[0].endswith("…") and set(sent[0][:-1]) == {"a"}  # the oldest kept is cut
+    assert "first question" not in sent
+    assert sum(len(content) for content in sent) <= 3072 + 1
 
 
 def test_long_documents_are_cut_to_fit_the_context(monkeypatch):
@@ -168,7 +222,7 @@ def test_long_documents_are_cut_to_fit_the_context(monkeypatch):
 
     prompt = llm.calls[0]["messages"][-1]["content"]
     assert prompt.count("…") == 2 and len(prompt) < 4096 * 3
-    assert document_budget_chars(2) == (4096 - 1024 - 1536) * 3 // 2
+    assert document_budget_chars(2) == (4096 - 1024 - 1024 - 512) * 3 // 2
 
 
 @pytest.mark.parametrize(
@@ -522,13 +576,13 @@ def test_hits_below_the_model_threshold_are_not_used(client, make_user, infra, m
     import dataclasses
 
     import settings
+    from services.chat import NO_DOCUMENTS_ANSWER
 
     spec = settings.EMBEDDING_MODELS["multilingual-e5-small"]
     monkeypatch.setitem(settings.EMBEDDING_MODELS, "multilingual-e5-small", dataclasses.replace(spec, min_score=0.99))
     _, email, password = make_user(["documents.list", "documents.create"])
     login(client, email, password)
     process(upload(client, "Parking", b"Visitors park in zone C.", "parking.txt").json()["id"])
-    infra.llm.answer = "I do not have relevant documents."
 
     headers = {"origin": "https://testserver", "cookie": f"my_token={client.cookies.get('my_token')}"}
     with client.websocket_connect("/api/v1/chat/ws", headers=headers) as chat:
@@ -536,8 +590,8 @@ def test_hits_below_the_model_threshold_are_not_used(client, make_user, infra, m
         while (answer := chat.receive_json())["type"] != "answer":
             pass
 
-    assert answer["sources"] == []
-    assert "Visitors park" not in str(infra.llm.calls[-1]["messages"])
+    assert answer["sources"] == [] and answer["content"] == NO_DOCUMENTS_ANSWER
+    assert not any(call["stream"] for call in infra.llm.calls)  # the model is not asked
 
 
 def test_an_answer_that_repeats_the_question_is_judged_by_all_its_words():

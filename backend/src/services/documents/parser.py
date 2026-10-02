@@ -9,6 +9,7 @@ from typing import Protocol
 from xml.etree import ElementTree
 
 from docx import Document as DocxFile
+from docx.table import Table
 from openpyxl import load_workbook
 from pypdf import PdfReader
 
@@ -33,7 +34,14 @@ class PdfExtractor:
 class DocxExtractor:
     def extract(self, content: bytes) -> str:
         document = DocxFile(io.BytesIO(content))
-        return "\n".join(paragraph.text for paragraph in document.paragraphs)
+        lines: list[str] = []
+        # Paragraphs and tables in document order; a table row is one line.
+        for block in document.iter_inner_content():
+            if isinstance(block, Table):
+                lines += ["\t".join(cell.text for cell in row.cells) for row in block.rows]
+            else:
+                lines.append(block.text)
+        return "\n".join(lines)
 
 
 class OdtExtractor:

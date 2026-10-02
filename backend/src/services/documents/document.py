@@ -116,13 +116,16 @@ class DocumentService:
                 raise AppError("invalid", "The file is empty.", status_code=400)
             if len(content) > MAX_BYTES:
                 raise AppError("invalid", "The file is too large.", status_code=400)
-            check_upload(content, suffix)
-
             converted = suffix == DOC_SUFFIX
             filename = Path(original_name).name
             if converted:
-                content = await convert_doc_to_docx(content)
                 filename = str(Path(filename).with_suffix(".docx"))
+                if content.startswith(b"PK\x03\x04"):
+                    # A .docx renamed to .doc, which Word opens as is.
+                    suffix = ".docx"
+            check_upload(content, suffix)
+            if suffix == DOC_SUFFIX:
+                content = await convert_doc_to_docx(content)
                 suffix = ".docx"
 
             content_type = CONTENT_TYPES.get(suffix, "application/octet-stream")

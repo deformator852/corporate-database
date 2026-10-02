@@ -173,27 +173,63 @@ def test_chat_can_reproduce_a_document_named_in_the_question(client, make_user, 
     assert not any(call["stream"] for call in infra.llm.calls)  # as stored, not retold by the LLM
 
 
-def test_chat_without_matching_documents_still_answers(client, make_user, infra):
+def test_chat_says_it_does_not_know_without_documents(client, make_user, infra):
+    from services.chat import NO_DOCUMENTS_ANSWER
+
     _, email, password = make_user([])  # may not read any document
     login(client, email, password)
-    infra.llm.answer = "I do not have relevant documents."
 
     with client.websocket_connect("/api/v1/chat/ws", headers=_ws(client)) as chat:
         chat.send_json(_ask("Salary of the CEO?"))
+        deltas, answer = _collect(chat)
+
+    assert answer["sources"] == [] and "".join(deltas) == answer["content"] == NO_DOCUMENTS_ANSWER
+    assert infra.llm.calls == []  # a model without documents invents answers
+
+
+def test_follow_up_questions_find_documents_through_the_previous_one(client, make_user, infra, monkeypatch):
+    import dataclasses
+    import os
+
+    import settings
+    from services.chat import NO_DOCUMENTS_ANSWER
+
+    _, email, password = make_user(WRITER)
+    login(client, email, password)
+    budgets = b"Department budget: engineering 5000000, sales 3500000."
+    document_id = upload(client, "Budgets", budgets, "budgets.txt").json()["id"]
+    process(document_id)
+    key = os.environ["EMBEDDING_MODEL"]
+    monkeypatch.setitem(settings.EMBEDDING_MODELS, key, dataclasses.replace(settings.EMBEDDING_MODELS[key], min_score=0.1))
+    infra.llm.answer = "Sales got 3500000.\nSOURCES: Budgets"
+    follow_up = {"role": "user", "content": "What about the other one?"}
+    history = [
+        {"role": "user", "content": "Engineering department budget?"},
+        {"role": "assistant", "content": "Engineering got 5000000."},
+        follow_up,
+    ]
+
+    with client.websocket_connect("/api/v1/chat/ws", headers=_ws(client)) as chat:
+        chat.send_json({"type": "ask", "messages": [follow_up], "conversation_id": None})
+        _, alone = _collect(chat)
+        chat.send_json({"type": "ask", "messages": history, "conversation_id": None})
         _, answer = _collect(chat)
 
-    assert answer["sources"] == [] and answer["content"] == "I do not have relevant documents."
+    assert alone["content"] == NO_DOCUMENTS_ANSWER
+    assert [source["id"] for source in answer["sources"]] == [document_id]
+    assert "3500000" in infra.llm.calls[-1]["messages"][-1]["content"]
 
 
 def test_chat_reports_a_missing_model(client, make_user, infra):
     from fakes import model_missing
 
-    _, email, password = make_user([])
+    _, email, password = make_user(WRITER)
     login(client, email, password)
+    process(upload(client, "Travel policy", POLICY.encode(), "policy.txt").json()["id"])
     infra.llm.error = model_missing()
 
     with client.websocket_connect("/api/v1/chat/ws", headers=_ws(client)) as chat:
-        chat.send_json(_ask("Hello?"))
+        chat.send_json(_ask("What is the travel budget?"))
         reply = chat.receive_json()
 
     assert reply == {"type": "error", "code": "unavailable", "message": "The chat model is not available."}

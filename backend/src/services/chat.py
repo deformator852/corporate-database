@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.document import Document, DocumentStatus
 from models.document_text import DocumentText
+from i18n import t
 from schemas.chat import ChatMessageSchema
 from services.documents.access import retrieval_classifications, user_permission_keys
 from services.embedding import EmbeddingModel
@@ -16,6 +17,9 @@ _MAX_DOCS = 2
 # Chunks taken on each side of a search hit for excerpts of long documents.
 _EXCERPT_RADIUS = 3
 _MAX_CHARS = 100_000
+# Said without asking the model when no document passes the search: given
+# only the chat history, a small model invents an answer that looks sourced.
+NO_DOCUMENTS_ANSWER = "I don't know: none of the documents you can access answer this."
 _DUMP_MARKERS = (
     "full content",
     "full text",
@@ -60,28 +64,43 @@ class ChatService:
         streams to `on_delta` as it arrives."""
         keys = await user_permission_keys(self.session, user_id)
         allowed = retrieval_classifications(keys)
-        if not allowed:
-            answer, _ = await self.generator.complete(messages, [], on_delta)
-            return answer, [], []
         query = messages[-1].content
-        rag = Rag()
-        try:
-            vector = await asyncio.to_thread(self.embedder.embed_query, query)
-            chunks = _relevant(
-                await rag.search(vector, allowed_classifications=allowed, limit=8)
-            )
-            documents = await self._documents_for_reply(
-                query, chunks, allowed, rag
-            )
-            if documents and _wants_full_document(query):
-                return _dump(documents), documents, documents
-            prompt_documents = await self._fit_to_context(documents, chunks, rag)
-        finally:
-            await rag.client.close()
+        documents: list[dict[str, object]] = []
+        if allowed:
+            rag = Rag()
+            try:
+                chunks = await self._search(_search_queries(messages), allowed, rag)
+                documents = await self._documents_for_reply(
+                    query, chunks, allowed, rag
+                )
+                if documents and _wants_full_document(query):
+                    return _dump(documents), documents, documents
+                prompt_documents = await self._fit_to_context(documents, chunks, rag)
+            finally:
+                await rag.client.close()
+        if not documents:
+            answer = t(NO_DOCUMENTS_ANSWER)
+            if on_delta is not None:
+                await on_delta(answer)
+            return answer, [], []
         answer, used = await self.generator.complete(messages, prompt_documents, on_delta)
         used_ids = {document["document_id"] for document in used}
         sources = [d for d in documents if d["document_id"] in used_ids]
         return answer, sources, documents
+
+    async def _search(
+        self, queries: list[str], allowed: tuple[str, ...], rag: Rag
+    ) -> list[dict[str, object]]:
+        """Relevant hits of all `queries`, each chunk once with its best score."""
+        best: dict[tuple[object, object], dict[str, object]] = {}
+        for query in queries:
+            vector = await asyncio.to_thread(self.embedder.embed_query, query)
+            for hit in await rag.search(vector, allowed_classifications=allowed, limit=8):
+                key = (hit.get("document_id"), hit.get("chunk_index"))
+                if key not in best or float(hit.get("score") or 0) > float(best[key].get("score") or 0):
+                    best[key] = hit
+        ranked = sorted(best.values(), key=lambda hit: -float(hit.get("score") or 0))
+        return _relevant(ranked)
 
     async def _fit_to_context(
         self,
@@ -196,6 +215,14 @@ class ChatService:
             select(DocumentText.text).where(DocumentText.document_id == document.id)
         )
         return _cap(text or "")
+
+
+def _search_queries(messages: list[ChatMessageSchema]) -> list[str]:
+    """The question, and with the previous one for follow-ups such as "what
+    about sales?", which alone match no document."""
+    question = messages[-1].content
+    earlier = [m.content for m in messages[:-1] if m.role == "user"]
+    return [question, f"{earlier[-1]}\n{question}"] if earlier else [question]
 
 
 def _relevant(hits: list[dict[str, object]]) -> list[dict[str, object]]:
