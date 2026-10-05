@@ -69,12 +69,13 @@ uv run pytest
 
 `evals/` holds company documents and questions in English, Spanish and French,
 including questions with no answer in them. Run these after changing the
-embedding model, the AI model or the chat prompt:
+embedding model, the AI model, the chat prompt or the cleanup rules:
 
 ```sh
 cd backend
 uv run python evals/search_relevance.py MODEL   # calibrates min_score of an embedding model
 uv run python evals/chat_sources.py LANGUAGE    # checks the sources the chat shows (needs Ollama)
+uv run python evals/text_cleanup.py LANGUAGE    # what cleanup rules give search on noisy documents
 ```
 
 Put the `min_score` it prints into the model's entry in `src/settings.py`.

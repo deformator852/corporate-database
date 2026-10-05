@@ -1,6 +1,6 @@
 from enum import StrEnum
 
-from sqlalchemy import CheckConstraint, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, String, Text, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -11,10 +11,13 @@ class DocumentStatus(StrEnum):
     QUEUED = "queued"
     PARSING = "parsing"
     CHUNKING = "chunking"
-    CLEANING = "cleaning"
     EMBEDDING = "embedding"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+# Processing is over; any other status means the document still waits.
+DONE_STATUSES = (DocumentStatus.COMPLETED, DocumentStatus.FAILED)
 
 
 class DocumentClassification(StrEnum):
@@ -45,12 +48,17 @@ class Document(TimestampMixin, Base):
         nullable=True,
     )
     user: Mapped["User | None"] = relationship()
+    # Completed, but the owner has not been told yet: told in one notice
+    # once none of their documents is waiting (services/notifications).
+    ready_unannounced: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false()
+    )
 
     __table_args__ = (
         CheckConstraint("length(name) BETWEEN 1 AND 200"),
         CheckConstraint("progress BETWEEN 0 AND 100"),
         CheckConstraint(
-            "status IN ('queued','parsing','chunking','cleaning','embedding',"
+            "status IN ('queued','parsing','chunking','embedding',"
             "'completed','failed')"
         ),
         CheckConstraint(

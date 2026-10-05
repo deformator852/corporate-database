@@ -1,6 +1,4 @@
 import asyncio
-import logging
-import time
 from pathlib import Path
 from collections.abc import Awaitable, Callable
 
@@ -11,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import AsyncSessionLocal, engine
 from exceptions import AppError
 from i18n import t
-from models.document import Document, DocumentStatus
+from models.document import DONE_STATUSES, Document, DocumentStatus
 from models.document_text import DocumentText
 from models.notification import Notification, NotificationType
 from services.documents.events import DocumentEventPublisher
@@ -21,21 +19,16 @@ from services.notifications.events import NotificationEventPublisher
 from services.documents.parser import DocumentParser
 from services.rag import Rag
 from services.storage import ObjectStorage
-from services.documents.text_cleanup import LlmCleaner, basic_clean
+from services.documents.text_cleanup import basic_clean, repeated_lines
 from settings import (
     chunk_overlap,
     chunk_size,
-    text_cleanup_budget_seconds,
     text_cleanup_mode,
 )
 
 EMBED_BATCH_SIZE = 8
-_DONE = {DocumentStatus.COMPLETED, DocumentStatus.FAILED}
-# Data, not prose: no LLM rewrite and no line-dropping rules, which could
-# only lose values there.
+# Data, not prose: no line-dropping rules, which could only lose values there.
 _STRUCTURED = frozenset({".csv", ".json", ".xml", ".xlsx"})
-
-logger = logging.getLogger(__name__)
 
 
 def _split_text(
@@ -81,7 +74,7 @@ class DocumentProcessor:
 
     async def run(self, document_id: int) -> None:
         document = await self._require(document_id)
-        if document is None or document.status in _DONE:
+        if document is None or document.status in DONE_STATUSES:
             return
         try:
             content = await asyncio.to_thread(self.storage.get, document.object_key)
@@ -93,17 +86,20 @@ class DocumentProcessor:
             await self._set(document, DocumentStatus.CHUNKING, 25)
             mode = text_cleanup_mode()
             structured = Path(document.filename).suffix.lower() in _STRUCTURED
-            if mode != "off":
-                text = basic_clean(text, structured=structured)
-            # `chunks` go to the Qdrant payload (rules only, faithful);
-            # `searchable` is what gets embedded.
+            # `chunks` go to the Qdrant payload as written: search results and
+            # long-document excerpts must show the document, not a cleanup
+            # that dropped a table value. Only `searchable` (embedded) is cleaned.
             chunks, starts = _split_text(self.chunker, text, chunk_overlap())
             if not chunks:
                 raise AppError("invalid", "The document has no text.", status_code=400)
             searchable = chunks
-            if mode == "llm" and not structured:
-                searchable = await self._llm_clean(document, chunks)
-            await self._set(document, DocumentStatus.EMBEDDING, 60)
+            if mode != "off":
+                repeated = repeated_lines(text)
+                searchable = [
+                    basic_clean(chunk, structured=structured, repeated=repeated) or chunk
+                    for chunk in chunks
+                ]
+            await self._set(document, DocumentStatus.EMBEDDING, 30)
             vectors: list[list[float]] = []
             total = len(searchable)
             for start in range(0, total, EMBED_BATCH_SIZE):
@@ -112,7 +108,7 @@ class DocumentProcessor:
                     await asyncio.to_thread(self.embedder.embed_passages, batch)
                 )
                 done = min(start + EMBED_BATCH_SIZE, total)
-                progress = 60 + int(35 * done / total)
+                progress = 30 + int(65 * done / total)
                 await self._set(document, DocumentStatus.EMBEDDING, progress)
             await self.rag.upsert_chunks(
                 document_id=document.id,
@@ -124,12 +120,9 @@ class DocumentProcessor:
                 vectors=vectors,
             )
             document.error_message = None
+            document.ready_unannounced = True
             await self._set(document, DocumentStatus.COMPLETED, 100)
-            await self._notify(
-                document,
-                NotificationType.DOCUMENT_COMPLETED,
-                t('"{name}" is ready.', name=document.name),
-            )
+            await self._announce_ready(document)
         except AppError as exc:
             if exc.code == "not_found":
                 raise
@@ -146,41 +139,13 @@ class DocumentProcessor:
                 NotificationType.DOCUMENT_PROCESS_FAILED,
                 t(exc.message),
             )
+            await self._announce_ready(document)
         except Exception:
             try:
                 await self.rag.delete_document(document.id)
             except AppError:
                 pass
             raise
-
-    async def _llm_clean(self, document: Document, chunks: list[str]) -> list[str]:
-        """LLM-cleaned chunks for embedding, within the per-document time
-        budget; chunks past the budget keep their rules-only text."""
-        await self._set(document, DocumentStatus.CLEANING, 30)
-        cleaner = LlmCleaner()
-        deadline = time.monotonic() + text_cleanup_budget_seconds()
-        cleaned: list[str] = []
-        total = len(chunks)
-        progress = 30
-        for index, chunk in enumerate(chunks, start=1):
-            if time.monotonic() < deadline:
-                chunk = await cleaner.clean(chunk)
-            cleaned.append(chunk)
-            next_progress = 30 + int(30 * index / total)
-            if next_progress != progress:
-                progress = next_progress
-                await self._set(document, DocumentStatus.CLEANING, progress)
-        rewritten = sum(a != b for a, b in zip(chunks, cleaned, strict=True))
-        logger.info(
-            "Document %s cleanup: %s of %s chunks rewritten, %s rewrites rejected, "
-            "%s past the time budget",
-            document.id,
-            rewritten,
-            total,
-            cleaner.rejected,
-            max(0, total - cleaner.attempted),
-        )
-        return cleaned
 
     async def fail(self, document_id: int, message: str) -> None:
         document = await self._require(document_id)
@@ -197,10 +162,11 @@ class DocumentProcessor:
             NotificationType.DOCUMENT_PROCESS_FAILED,
             t(message),
         )
+        await self._announce_ready(document)
 
     async def drop_incomplete(self, document_id: int) -> None:
         document = await self._require(document_id)
-        if document is None or document.status in _DONE:
+        if document is None or document.status in DONE_STATUSES:
             return
         try:
             await self.rag.delete_document(document.id)
@@ -215,9 +181,12 @@ class DocumentProcessor:
             NotificationType.DOCUMENT_PROCESS_FAILED,
             t('Could not process "{name}".', name=document.name),
         )
+        user_id = document.user_id
         await self.session.delete(document)
         await self.session.commit()
         await self._emit(notification)
+        if user_id is not None:
+            await self.notifications.announce_ready(user_id)
 
     async def _create_notice(
         self,
@@ -240,6 +209,10 @@ class DocumentProcessor:
             return
         await self.session.commit()
         await self._emit(notification)
+
+    async def _announce_ready(self, document: Document) -> None:
+        if document.user_id is not None:
+            await self.notifications.announce_ready(document.user_id)
 
     async def _emit(self, notification: Notification | None) -> None:
         if notification is None:
@@ -269,7 +242,7 @@ async def unfinished_document_ids() -> list[int]:
         async with AsyncSessionLocal() as session:
             ids = await session.scalars(
                 select(Document.id)
-                .where(Document.status.not_in(_DONE))
+                .where(Document.status.not_in(DONE_STATUSES))
                 .order_by(Document.id)
             )
             return list(ids)

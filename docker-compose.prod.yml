@@ -46,7 +46,6 @@ x-worker-env: &worker-env
   LLM_MODEL: ${LLM_MODEL:?is empty; run uv run setup in backend/}
   LLM_NUM_CTX: ${LLM_NUM_CTX:-}
   TEXT_CLEANUP: ${TEXT_CLEANUP:-}
-  TEXT_CLEANUP_BUDGET_SECONDS: ${TEXT_CLEANUP_BUDGET_SECONDS:-}
   CHUNK_SIZE: ${CHUNK_SIZE:-}
   CHUNK_OVERLAP: ${CHUNK_OVERLAP:-}
 

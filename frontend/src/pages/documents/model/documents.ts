@@ -1,4 +1,7 @@
 export const MAX_DOCUMENT_BYTES = 32 * 1024 * 1024;
+/** Files per upload, so a whole folder dropped by mistake is caught at once.
+ * The server also limits each user's documents waiting to be processed. */
+export const MAX_UPLOAD_FILES = 50;
 export const DOCUMENTS_PER_PAGE = 20;
 
 export const DOCUMENT_EXTENSIONS = [
@@ -21,7 +24,6 @@ export const DOCUMENT_STATUSES = [
     "queued",
     "parsing",
     "chunking",
-    "cleaning",
     "embedding",
     "completed",
     "failed",
@@ -69,7 +71,6 @@ export const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
     queued: "Queued",
     parsing: "Parsing",
     chunking: "Chunking",
-    cleaning: "Cleaning up",
     embedding: "Embedding",
     completed: "Completed",
     failed: "Failed",
@@ -79,10 +80,9 @@ export const DOCUMENT_STATUS_RANK: Record<DocumentStatus, number> = {
     queued: 0,
     parsing: 1,
     chunking: 2,
-    cleaning: 3,
-    embedding: 4,
-    completed: 5,
-    failed: 5,
+    embedding: 3,
+    completed: 4,
+    failed: 4,
 };
 
 export function isDocumentStatus(value: string): value is DocumentStatus {

@@ -2,6 +2,8 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from exceptions import AppError
+from i18n import t
+from models.document import DONE_STATUSES, Document
 from models.notification import Notification, NotificationType
 from services.notifications.events import NotificationEventPublisher
 
@@ -55,6 +57,44 @@ class NotificationService:
         await self.session.flush()
         await self.session.refresh(notification)
         return notification
+
+    async def announce_ready(self, user_id: int) -> None:
+        """Tells the user which documents became ready, once none of theirs
+        is still waiting: a batch upload gets one notice, not one per file.
+        Failures are told one by one, each with its reason."""
+        waiting = await self.session.scalar(
+            select(func.count())
+            .select_from(Document)
+            .where(Document.user_id == user_id, Document.status.not_in(DONE_STATUSES))
+        )
+        if waiting:
+            return
+        ready = list(
+            await self.session.scalars(
+                select(Document).where(
+                    Document.user_id == user_id,
+                    Document.ready_unannounced.is_(True),
+                )
+            )
+        )
+        if not ready:
+            return
+        for document in ready:
+            document.ready_unannounced = False
+        if len(ready) == 1:
+            notification = await self.create(
+                user_id,
+                NotificationType.DOCUMENT_COMPLETED,
+                t('"{name}" is ready.', name=ready[0].name),
+            )
+        else:
+            notification = await self.create(
+                user_id,
+                NotificationType.DOCUMENTS_COMPLETED,
+                t("{count} documents are ready.", count=len(ready)),
+            )
+        await self.session.commit()
+        await self.emit(notification)
 
     async def mark_read(self, user_id: int, ids: list[int]) -> None:
         await self.session.execute(

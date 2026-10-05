@@ -144,7 +144,6 @@ def infra(monkeypatch):
     (tests/fakes.py), wired in where the app creates its clients."""
     import aio_pika
 
-    import services.documents.text_cleanup as text_cleanup
     import services.embedding as embedding
     import services.generator as generator
     import services.rag as rag
@@ -180,7 +179,7 @@ def infra(monkeypatch):
     spec = settings.EMBEDDING_MODELS[test_model]
     monkeypatch.setitem(settings.EMBEDDING_MODELS, test_model, dataclasses.replace(spec, min_score=None))
     monkeypatch.setattr(embedding, "_embedder", None)
-    for module in (generator, text_cleanup, system):
+    for module in (generator, system):
         monkeypatch.setattr(module, "AsyncClient", stack.llm.client)
     monkeypatch.setattr(aio_pika, "connect_robust", stack.broker.connect_robust)
     monkeypatch.setattr(CeleryDocumentQueue, "enqueue", lambda self, i: stack.queue.enqueue(i))

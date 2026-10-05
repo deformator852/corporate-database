@@ -54,6 +54,8 @@ _ES = {
     "Could not process the document.": "No se pudo procesar el documento.",
     "Processing took too long.": "El procesamiento tardó demasiado.",
     '"{name}" is ready.': "«{name}» está listo.",
+    "{count} documents are ready.": "{count} documentos están listos.",
+    "Too many of your documents are waiting to be processed. Upload more when some are ready.": "Demasiados documentos suyos esperan su procesamiento. Suba más cuando algunos estén listos.",
     'Could not process "{name}".': "No se pudo procesar «{name}».",
     # Search and assistant
     "Could not reach Qdrant.": "No se pudo conectar con el índice de búsqueda.",
@@ -116,6 +118,8 @@ _FR = {
     "Could not process the document.": "Impossible de traiter le document.",
     "Processing took too long.": "Le traitement a pris trop de temps.",
     '"{name}" is ready.': "« {name} » est prêt.",
+    "{count} documents are ready.": "{count} documents sont prêts.",
+    "Too many of your documents are waiting to be processed. Upload more when some are ready.": "Trop de vos documents attendent leur traitement. Téléversez-en d’autres quand certains seront prêts.",
     'Could not process "{name}".': "Impossible de traiter « {name} ».",
     # Search and assistant
     "Could not reach Qdrant.": "Impossible de joindre l’index de recherche.",

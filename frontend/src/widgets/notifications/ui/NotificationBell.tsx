@@ -333,10 +333,7 @@ export function NotificationBell() {
                                     <div className="min-w-0 flex-1 pr-6">
                                         <p className="flex items-center gap-1.5 font-medium">
                                             {isNew ? (
-                                                <span
-                                                    className="size-2 shrink-0 rounded-full bg-primary"
-                                                    aria-label={t("notifications.new")}
-                                                />
+                                                <span className="sr-only">{t("notifications.new")}</span>
                                             ) : null}
                                             <span className="truncate">
                                                 {t(notificationTypeKey(item.type))}

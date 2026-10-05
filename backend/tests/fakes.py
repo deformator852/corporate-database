@@ -94,12 +94,11 @@ class FakeSentenceTransformer:
 
 
 class FakeOllama:
-    """Scripted Ollama. `answer` streams in pieces for chat; cleanup calls
-    (non-streaming) get `cleanup(passage)`; `error` raises on every call."""
+    """Scripted Ollama. `answer` streams in pieces for chat; `error` raises
+    on every call."""
 
     def __init__(self) -> None:
         self.answer = "The travel budget is 500 EUR."
-        self.cleanup = lambda passage: passage
         self.error: Exception | None = None
         self.installed = {"llama3.1:8b"}
         self.loaded: set[str] = set()
@@ -112,10 +111,7 @@ class FakeOllama:
         self.calls.append({"model": model, "messages": messages, "stream": stream, **kwargs})
         if self.error is not None:
             raise self.error
-        if stream:
-            return self._stream(self.answer)
-        passage = messages[-1]["content"].split("<<<\n", 1)[-1].rsplit("\n>>>", 1)[0]
-        return SimpleNamespace(message=SimpleNamespace(content=self.cleanup(passage)))
+        return self._stream(self.answer)
 
     async def _stream(self, text: str):
         for piece in re.findall(r"\S+\s*", text):

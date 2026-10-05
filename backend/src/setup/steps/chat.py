@@ -25,7 +25,7 @@ the rest wait in line. The model is loaded once, but every simultaneous answer \
 reserves its own context memory (table below; RAM, or GPU memory with a GPU). \
 The answers share the processor, so each is written somewhat slower while the \
 total is higher. With a GPU, 4-8 works well; on a CPU-only server more than 2 \
-gains little. Document cleanup during upload also takes one slot."""
+gains little."""
 
 
 def _int_env(key: str, default: int) -> int:

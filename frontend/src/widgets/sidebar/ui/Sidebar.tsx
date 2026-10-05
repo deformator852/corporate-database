@@ -31,6 +31,7 @@ function NavLinks({className, onNavigate}: {className: string; onNavigate?: () =
                             `app-layout__nav-link${isActive ? " app-layout__nav-link--active" : ""}`
                         }
                     >
+                        {item.icon ? <item.icon className="app-layout__nav-icon" aria-hidden/> : null}
                         {t(item.labelKey)}
                     </NavLink>
                 ) : null,

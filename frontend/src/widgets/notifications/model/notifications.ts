@@ -3,6 +3,7 @@ export const NOTIFICATION_READ_BATCH_MS = 2000;
 
 export const NOTIFICATION_TYPES = [
     "document.completed",
+    "documents.completed",
     "document.store_failed",
     "document.queue_failed",
     "document.process_failed",
@@ -47,7 +48,7 @@ export function isNotificationItem(value: unknown): value is NotificationItem {
 }
 
 export function isFailure(type: NotificationType): boolean {
-    return type !== "document.completed";
+    return type.endsWith("_failed");
 }
 
 export {formatDateTime as formatNotificationTime, formatRelativeTime} from "@/shared/lib/time";

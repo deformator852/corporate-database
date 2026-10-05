@@ -39,6 +39,23 @@ describe("Roles page", () => {
         expect(screen.getByRole("button", {name: "Delete Legal"})).toBeEnabled();
     });
 
+    it("loads more permissions at the end of the picker list", async () => {
+        const many = Array.from({length: 12}, (_, i) => ({key: `p.${i}`, name: `Permission ${i}`, description: "", roles: []}));
+        const {user} = renderApp("/roles", sessionUser(MANAGER), (s) => {
+            roles(s, [ADMIN]);
+            s.on("GET", "/permissions", (req) => {
+                const page = Number(req.params.page ?? 1);
+                return {items: many.slice((page - 1) * 10, page * 10), page, per_page: 10, total: 12, pages: 2};
+            });
+        });
+
+        await user.click(await screen.findByRole("button", {name: "Create role"}));
+        const dialog = await screen.findByRole("dialog");
+
+        // jsdom has no layout: the list counts as scrolled to its end.
+        expect(await within(dialog).findByRole("checkbox", {name: "Permission 11"})).toBeInTheDocument();
+    });
+
     it("creates a role: key follows the name, permissions come from a searchable catalog", async () => {
         const {user, server} = renderApp("/roles", sessionUser(MANAGER), (s) => {
             roles(s, [ADMIN]);

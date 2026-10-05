@@ -9,6 +9,8 @@ from models.mixins import TimestampMixin
 
 class NotificationType(StrEnum):
     DOCUMENT_COMPLETED = "document.completed"
+    # Several of the user's documents became ready (one notice per batch).
+    DOCUMENTS_COMPLETED = "documents.completed"
     DOCUMENT_STORE_FAILED = "document.store_failed"
     DOCUMENT_QUEUE_FAILED = "document.queue_failed"
     DOCUMENT_PROCESS_FAILED = "document.process_failed"
@@ -31,6 +33,7 @@ class Notification(TimestampMixin, Base):
         CheckConstraint(
             "type IN ("
             "'document.completed',"
+            "'documents.completed',"
             "'document.store_failed',"
             "'document.queue_failed',"
             "'document.process_failed'"

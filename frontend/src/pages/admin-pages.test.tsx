@@ -127,6 +127,16 @@ describe("Notifications", () => {
         return {items, page: 1, per_page: 20, total: items.length, pages: 1, unread_count: unread};
     }
 
+    it("shows one notice for a batch of ready documents", async () => {
+        const {user} = renderApp("/", sessionUser(), (s) =>
+            s.on("GET", "/notifications", page([{...NOTE, type: "documents.completed", message: "12 documents are ready."}], 1)),
+        );
+        await user.click(await screen.findByRole("button", {name: "Notifications, 1 unread"}));
+        const panel = await screen.findByRole("dialog", {name: "Notifications"});
+        expect(within(panel).getByText("Documents ready")).toBeInTheDocument();
+        expect(within(panel).getByText("12 documents are ready.")).toBeInTheDocument();
+    });
+
     it("counts unread items, marks them read once seen, and dismisses one", async () => {
         const {user, server} = renderApp("/", sessionUser(), (s) => {
             s.on("GET", "/notifications", page([NOTE, {...NOTE, id: 4, message: "Older", read: true}], 1));
@@ -138,7 +148,7 @@ describe("Notifications", () => {
         await user.click(bell);
         const panel = await screen.findByRole("dialog", {name: "Notifications"});
         expect(within(panel).getByText('"Travel policy" is ready.')).toBeInTheDocument();
-        expect(within(panel).getByLabelText("New")).toBeInTheDocument();
+        expect(within(panel).getByText("New")).toBeInTheDocument();
 
         act(() => scrollToEnd());
         await waitFor(() => expect(server.sent("POST", "/notifications/read")[0]?.body).toEqual({ids: [5]}), {timeout: 3000});

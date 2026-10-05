@@ -216,26 +216,19 @@ DEFAULT_LLM_PARALLEL = 4
 MAX_LLM_PARALLEL = 16
 
 
-TEXT_CLEANUP_MODES = ("llm", "rules", "off")
+TEXT_CLEANUP_MODES = ("rules", "off")
 
 
 def text_cleanup_mode() -> str:
-    """How chunks are cleaned before embedding: rules and then the LLM, rules
-    only, or not at all."""
-    value = (os.getenv("TEXT_CLEANUP") or "llm").strip()
+    """How chunks are cleaned before embedding: by rules, or not at all."""
+    value = (os.getenv("TEXT_CLEANUP") or "rules").strip()
     if value not in TEXT_CLEANUP_MODES:
         raise AppError(
             "misconfigured",
-            "TEXT_CLEANUP must be llm, rules or off.",
+            "TEXT_CLEANUP must be rules or off.",
             status_code=500,
         )
     return value
-
-
-def text_cleanup_budget_seconds() -> int:
-    """LLM cleanup time per document. Chunks past it get rules only, so large
-    files still finish inside the worker's time limit."""
-    return max(0, _int_env("TEXT_CLEANUP_BUDGET_SECONDS", 480))
 
 
 def llm_model() -> str:

@@ -42,7 +42,7 @@ PRESETS: tuple[ChunkPreset, ...] = (
         80,
         'Exact facts: amounts, dates, one clause ("what is the amount in 3.2")',
         "About 2x the chunks of Balanced: more disk and RAM in Qdrant, "
-        "longer upload and LLM cleanup. One chunk can lose its context "
+        "longer processing. One chunk can lose its context "
         "(a clause without its heading). Search speed barely changes.",
     ),
     ChunkPreset(

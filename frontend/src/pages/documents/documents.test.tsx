@@ -141,6 +141,83 @@ describe("Documents page", () => {
     });
 });
 
+describe("Uploading several files", () => {
+    function accept(id: number, form: FormData) {
+        const file = form.get("file") as File;
+        if (file.name === "fake.pdf") {
+            return apiError(400, "The file content does not match its type.");
+        }
+        return {id, name: form.get("name"), filename: file.name, status: "queued", progress: 0, classification: "standard", error_message: null, created_at: "2026-09-30T10:00:00Z", converted: false};
+    }
+
+    it("uploads each file under its own name and keeps the ones that failed", async () => {
+        let id = 10;
+        const {user, server} = renderApp("/documents", sessionUser(WRITER), (s) => {
+            documents(s, []);
+            s.on("POST", "/documents", (req) => accept(id++, req.body as FormData));
+        });
+        await user.upload(await screen.findByLabelText("File"), [
+            new File(["a"], "Budget.xlsx"),
+            new File(["MZ"], "fake.pdf"),
+            new File(["b"], "Travel policy.txt"),
+        ]);
+        expect(screen.getByText("3 files selected")).toBeInTheDocument();
+        expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();  // named after the files
+
+        await user.click(screen.getByRole("button", {name: "Upload"}));
+
+        expect(await screen.findByRole("alert")).toHaveTextContent("1 of 3 files were not uploaded.");
+        const names = server.sent("POST", "/documents").map((r) => (r.body as FormData).get("name"));
+        expect(names).toEqual(["Budget", "fake", "Travel policy"]);
+        const left = screen.getByRole("listitem");  // only the failed file stays
+        expect(left).toHaveTextContent("fake.pdf");
+        expect(left).toHaveTextContent("The file content does not match its type.");
+        expect(await screen.findAllByText("Queued")).toHaveLength(2);
+    });
+
+    it("checks every file before sending any and lets one be removed", async () => {
+        const {server} = renderApp("/documents", sessionUser(WRITER), (s) => {
+            documents(s, []);
+            s.on("POST", "/documents", (req) => accept(10, req.body as FormData));
+        });
+        const user = userEvent.setup({applyAccept: false});
+        await user.upload(await screen.findByLabelText("File"), [new File(["a"], "notes.txt"), new File(["#!"], "run.sh"), new File(["b"], "plan.md")]);
+        await user.click(screen.getByRole("button", {name: "Upload"}));
+        expect(await screen.findByText("This file type is not supported.")).toBeInTheDocument();
+        expect(server.sent("POST", "/documents")).toHaveLength(0);
+
+        await user.click(screen.getByRole("button", {name: "Remove run.sh"}));
+        await user.click(screen.getByRole("button", {name: "Upload"}));
+        expect(await screen.findByText("2 documents uploaded.")).toBeInTheDocument();
+        expect(server.sent("POST", "/documents")).toHaveLength(2);
+    });
+});
+
+describe("Upload limits", () => {
+    it("takes at most 50 files at a time", async () => {
+        const {user, server} = renderApp("/documents", sessionUser(WRITER), (s) => documents(s, []));
+        const files = Array.from({length: 51}, (_, i) => new File(["x"], `note ${i}.txt`));
+        await user.upload(await screen.findByLabelText("File"), files);
+        await user.click(screen.getByRole("button", {name: "Upload"}));
+        expect(await screen.findByText("Choose up to 50 files at a time.")).toBeInTheDocument();
+        expect(server.sent("POST", "/documents")).toHaveLength(0);
+    });
+
+    it("stops sending once the server says too many documents wait", async () => {
+        const busy = "Too many of your documents are waiting to be processed. Upload more when some are ready.";
+        const {user, server} = renderApp("/documents", sessionUser(WRITER), (s) => {
+            documents(s, []);
+            s.on("POST", "/documents", () => apiError(429, busy, "rate_limited"));
+        });
+        await user.upload(await screen.findByLabelText("File"), [new File(["a"], "a.txt"), new File(["b"], "b.txt"), new File(["c"], "c.txt")]);
+        await user.click(screen.getByRole("button", {name: "Upload"}));
+
+        expect(await screen.findByRole("alert")).toHaveTextContent("3 of 3 files were not uploaded.");
+        expect(server.sent("POST", "/documents")).toHaveLength(1);
+        expect(screen.getAllByText(busy)).toHaveLength(3);
+    });
+});
+
 describe("Upload name after a failed upload", () => {
     it("takes the next file's name instead of keeping the rejected one", async () => {
         const {user} = renderApp("/documents", sessionUser(WRITER), (s) => {

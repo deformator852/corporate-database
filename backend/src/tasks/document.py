@@ -16,7 +16,6 @@ from services.documents.processor import (
     process_document_job,
     unfinished_document_ids,
 )
-from settings import text_cleanup_budget_seconds
 from worker import celery
 
 logger = logging.getLogger(__name__)
@@ -24,8 +23,7 @@ logger = logging.getLogger(__name__)
 PROCESS_MAX_RETRIES = 5
 # The worker runs one task at a time, so a file that hangs a parser would stall
 # every upload. Soft limit marks the document failed; hard limit kills the task.
-# LLM cleanup has its own budget on top (applies after a worker restart).
-PROCESS_SOFT_TIME_LIMIT = 10 * 60 + text_cleanup_budget_seconds()
+PROCESS_SOFT_TIME_LIMIT = 10 * 60
 PROCESS_TIME_LIMIT = PROCESS_SOFT_TIME_LIMIT + 60
 
 

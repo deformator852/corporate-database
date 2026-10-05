@@ -1,6 +1,6 @@
 import {zodResolver} from "@hookform/resolvers/zod";
 import {cn} from "cn";
-import {CircleAlert, FileUp} from "lucide-react";
+import {CircleAlert, FileUp, X} from "lucide-react";
 import {useMemo, useRef, useState, type DragEvent} from "react";
 import {useForm} from "react-hook-form";
 
@@ -10,7 +10,7 @@ import {Input} from "@/components/ui/input";
 import {useI18n} from "@/shared/i18n/I18nProvider";
 import {documentClassificationKey} from "@/shared/i18n/keys";
 import {can} from "@/shared/lib/api/me";
-import {getApiErrorMessage} from "@/shared/lib/api/errors";
+import {getApiErrorCode, getApiErrorMessage} from "@/shared/lib/api/errors";
 import {uploadDocument} from "@pages/documents/api/documents";
 import {
     DOCUMENT_ACCEPT,
@@ -32,6 +32,10 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [dragging, setDragging] = useState(false);
     const [success, setSuccess] = useState<string | null>(null);
+    // Files sent so far while uploading several, one request per file.
+    const [sent, setSent] = useState(0);
+    // Server reasons for files that were not uploaded; they stay selected.
+    const [failures, setFailures] = useState(new Map<File, string>());
     const schema = useMemo(() => createDocumentUploadSchema(t), [t]);
     const {
         register,
@@ -47,10 +51,14 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
         defaultValues: {
             name: "",
             classification: "standard",
+            files: [],
         },
     });
 
-    const file = watch("file");
+    const files = watch("files");
+    const several = files.length > 1;
+    // Files left after a batch upload keep their list and reasons.
+    const listed = several || failures.size > 0;
     const nameRegister = register("name");
     const classificationRegister = register("classification");
     const classifications = allowedUploadClassifications(
@@ -59,19 +67,32 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
         can("documents.secret"),
     );
 
-    function assignFile(next: File | undefined) {
-        if (next == null) {
+    function assignFiles(next: File[]) {
+        if (next.length === 0) {
             return;
         }
         setSuccess(null);
-        // Replace the name unless the user typed one: an empty name, or the
-        // one filled in from the previous file (e.g. after a failed upload).
-        const previous = getValues("file");
+        setFailures(new Map());
+        // A single file fills the name unless the user typed one: an empty
+        // name, or the one filled in from the previous file (e.g. after a
+        // failed upload).
+        const previous = getValues("files");
         const name = getValues("name").trim();
-        if (!name || (previous instanceof File && name === fileStem(previous.name))) {
-            setValue("name", fileStem(next.name), {shouldValidate: true});
+        if (
+            next.length === 1 &&
+            (!name || (previous.length === 1 && name === fileStem(previous[0].name)))
+        ) {
+            setValue("name", fileStem(next[0].name), {shouldValidate: true});
         }
-        setValue("file", next, {shouldValidate: true, shouldTouch: true});
+        setValue("files", next, {shouldValidate: true, shouldTouch: true});
+    }
+
+    function removeFile(file: File) {
+        setValue(
+            "files",
+            getValues("files").filter((item) => item !== file),
+            {shouldValidate: true},
+        );
     }
 
     function handleDragOver(event: DragEvent<HTMLDivElement>) {
@@ -94,36 +115,75 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
         if (isSubmitting) {
             return;
         }
-        assignFile(event.dataTransfer.files[0]);
+        assignFiles([...event.dataTransfer.files]);
     }
 
     async function onSubmit(data: DocumentUploadFormData) {
         setSuccess(null);
-        try {
-            const accepted = await uploadDocument(
-                data.name,
-                data.file,
-                data.classification,
-            );
-            reset({name: "", classification: "standard"});
-            if (fileInputRef.current) {
-                fileInputRef.current.value = "";
+        const failed = new Map<File, string>();
+        let converted = false;
+        // One at a time: each file is checked and converted by the server,
+        // and a failure leaves the others to go on.
+        for (const [index, file] of data.files.entries()) {
+            setSent(index);
+            try {
+                const accepted = await uploadDocument(
+                    data.files.length === 1 ? data.name : fileStem(file.name),
+                    file,
+                    data.classification,
+                );
+                converted ||= accepted.converted === true;
+                onUploaded?.(accepted);
+            } catch (error) {
+                const message = getApiErrorMessage(error, t("documents.upload.error"));
+                failed.set(file, message);
+                if (getApiErrorCode(error) === "rate_limited") {
+                    // Too many documents wait for processing: the rest would
+                    // be refused the same way.
+                    for (const rest of data.files.slice(index + 1)) {
+                        failed.set(rest, message);
+                    }
+                    break;
+                }
             }
-            onUploaded?.(accepted);
-            setSuccess(
-                accepted.converted
-                    ? t("documents.upload.successConverted")
-                    : t("documents.upload.success"),
-            );
-        } catch (error) {
-            setError("root", {
-                message: getApiErrorMessage(error, t("documents.upload.error")),
-            });
         }
+        if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+        }
+        // One file shows its reason in the alert; a batch lists each one.
+        setFailures(data.files.length > 1 ? failed : new Map());
+        if (failed.size === 0) {
+            reset({name: "", classification: data.classification, files: []});
+            setSuccess(
+                data.files.length > 1
+                    ? t("documents.upload.successMany", {count: data.files.length})
+                    : converted
+                      ? t("documents.upload.successConverted")
+                      : t("documents.upload.success"),
+            );
+            return;
+        }
+        setValue("files", [...failed.keys()]);
+        if (failed.size === 1 && data.files.length > 1) {
+            setValue("name", fileStem([...failed.keys()][0].name));
+        }
+        setError("root", {
+            message:
+                data.files.length === 1
+                    ? [...failed.values()][0]
+                    : t("documents.upload.someFailed", {
+                          failed: failed.size,
+                          total: data.files.length,
+                      }),
+        });
     }
 
     const nameErrorId = "document-name-error";
     const fileErrorId = "document-file-error";
+    // No file chosen, or the one chosen file is invalid; with several files
+    // each one's problem shows in the list.
+    const fileError =
+        errors.files?.message ?? (several ? undefined : errors.files?.[0]?.message);
 
     return (
         <form className="stack" noValidate onSubmit={handleSubmit(onSubmit)}>
@@ -144,6 +204,7 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
                     </p>
                 ) : null}
 
+                {several ? null : (
                 <Field data-invalid={!!errors.name || undefined}>
                     <FieldLabel htmlFor="document-name">
                         {t("documents.upload.name")}
@@ -159,6 +220,7 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
                     />
                     <FieldError id={nameErrorId} errors={[errors.name]} />
                 </Field>
+                )}
 
                 <Field data-invalid={!!errors.classification || undefined}>
                     <FieldLabel htmlFor="document-classification">
@@ -194,7 +256,7 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
                     />
                 </Field>
 
-                <Field data-invalid={!!errors.file || undefined}>
+                <Field data-invalid={!!fileError || undefined}>
                     <FieldLabel htmlFor="document-file">{t("common.file")}</FieldLabel>
                     <div
                         className={`relative cursor-pointer rounded-lg border border-dashed px-4 py-6 text-center transition-colors ${
@@ -215,7 +277,11 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
                         <FileUp className="mx-auto mb-2 size-5 text-muted-foreground" aria-hidden />
                         <p className="text-sm">{t("documents.upload.dropPrompt")}</p>
                         <p className="mt-1 text-sm text-muted-foreground">
-                            {file ? file.name : t("documents.upload.dropHint")}
+                            {several
+                                ? t("documents.upload.filesSelected", {count: files.length})
+                                : files.length === 1
+                                  ? files[0].name
+                                  : t("documents.upload.dropHint")}
                         </p>
                         {/* Inside the drop zone, not a direct child of Field: Field gives
                             direct .sr-only children their natural width, which widened
@@ -224,22 +290,67 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
                             id="document-file"
                             ref={fileInputRef}
                             type="file"
+                            multiple
                             accept={DOCUMENT_ACCEPT}
                             disabled={isSubmitting}
                             className="sr-only"
-                            aria-invalid={!!errors.file || undefined}
-                            aria-describedby={errors.file ? fileErrorId : undefined}
+                            aria-invalid={!!fileError || undefined}
+                            aria-describedby={fileError ? fileErrorId : undefined}
                             onChange={(event) => {
-                                assignFile(event.target.files?.[0]);
+                                assignFiles([...(event.target.files ?? [])]);
                             }}
                         />
                     </div>
-                    <FieldError id={fileErrorId} errors={[errors.file]} />
+                    <FieldError id={fileErrorId} errors={[fileError ? {message: fileError} : undefined]} />
+                    {listed ? (
+                        <>
+                            {several ? (
+                                <p className="text-sm text-muted-foreground">
+                                    {t("documents.upload.namesFromFiles")}
+                                </p>
+                            ) : null}
+                            <ul className="max-h-60 list-none divide-y overflow-y-auto rounded-lg border ps-0">
+                                {files.map((item, index) => {
+                                    const problem =
+                                        failures.get(item) ?? errors.files?.[index]?.message;
+                                    return (
+                                        <li
+                                            key={`${item.name}-${item.size}-${item.lastModified}-${index}`}
+                                            className="flex items-start gap-2 px-3 py-2 text-sm"
+                                        >
+                                            <div className="min-w-0 flex-1">
+                                                <p className="truncate" title={item.name}>
+                                                    {item.name}
+                                                </p>
+                                                {problem ? (
+                                                    <p className="text-destructive">{problem}</p>
+                                                ) : null}
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon-xs"
+                                                disabled={isSubmitting}
+                                                aria-label={t("documents.upload.remove", {name: item.name})}
+                                                onClick={() => removeFile(item)}
+                                            >
+                                                <X aria-hidden />
+                                            </Button>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        </>
+                    ) : null}
                 </Field>
             </FieldGroup>
 
             <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? t("common.uploading") : t("documents.upload.submit")}
+                {isSubmitting
+                    ? several
+                        ? t("documents.upload.progress", {done: sent + 1, total: files.length})
+                        : t("common.uploading")
+                    : t("documents.upload.submit")}
             </Button>
         </form>
     );

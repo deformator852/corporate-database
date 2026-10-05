@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from exceptions import AppError
 from i18n import t
-from models.document import Document, DocumentStatus
+from models.document import DONE_STATUSES, Document, DocumentStatus
 from schemas.document import DocumentUploadSchema
 from services.documents.access import (
     classifications_for_user,
@@ -17,6 +17,7 @@ from services.documents.access import (
     user_permission_keys,
 )
 from services.documents.office import convert_doc_to_docx
+from services.notifications.notification import NotificationService
 from services.rag import Rag
 from services.storage import ObjectStorage
 from services.documents.upload_check import check_upload
@@ -38,6 +39,9 @@ ALLOWED_SUFFIXES = frozenset(
 )
 DOC_SUFFIX = ".doc"
 MAX_BYTES = 32 * 1024 * 1024
+# Documents of one user queued or in processing at once. The single worker
+# takes them in turn, so a huge batch would hold up everyone else's uploads.
+MAX_WAITING_DOCUMENTS = 100
 CONTENT_TYPES = {
     ".pdf": "application/pdf",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -111,6 +115,21 @@ class DocumentService:
             allowed = await self._allowed(user_id)
             if classification not in allowed:
                 raise AppError("forbidden", "Insufficient permissions", status_code=403)
+            waiting = await self.session.scalar(
+                select(func.count())
+                .select_from(Document)
+                .where(
+                    Document.user_id == user_id,
+                    Document.status.not_in(DONE_STATUSES),
+                )
+            )
+            if (waiting or 0) >= MAX_WAITING_DOCUMENTS:
+                raise AppError(
+                    "rate_limited",
+                    "Too many of your documents are waiting to be processed. "
+                    "Upload more when some are ready.",
+                    status_code=429,
+                )
             content = await data.file.read(MAX_BYTES + 1)
             if not content:
                 raise AppError("invalid", "The file is empty.", status_code=400)
@@ -190,6 +209,9 @@ class DocumentService:
             await self.session.commit()
         finally:
             await rag.client.close()
+        if document.user_id is not None:
+            # It may have been the last one the owner's ready notice waited for.
+            await NotificationService(self.session).announce_ready(document.user_id)
         return document
 
     async def open_file(self, document_id: int, user_id: int) -> tuple[Document, bytes]:

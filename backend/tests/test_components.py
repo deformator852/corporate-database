@@ -1,4 +1,4 @@
-"""Parsing, the LLM client, text cleanup, long-document excerpts, the system
+"""Parsing, the LLM client, long-document excerpts, the system
 page, socket session checks and app-wide behaviour."""
 
 import io
@@ -17,7 +17,6 @@ from exceptions import AppError
 from fakes import FakeOllama
 from schemas.chat import ChatMessageSchema
 from services.documents.parser import DocumentParser
-from services.documents.text_cleanup import LlmCleaner
 from services.generator import OllamaGenerator, document_budget_chars
 
 # Parsing
@@ -257,37 +256,6 @@ def test_answer_streams_piece_by_piece():
 
     run(OllamaGenerator(llm).complete(_messages("Hi"), [], collect))
     assert len(pieces) > 1 and "".join(pieces) == llm.answer
-
-
-# Text cleanup
-
-
-@pytest.mark.parametrize(
-    ("rewrite", "kept"),
-    [
-        (lambda p: p.replace("CONFIDENTIAL internal copy ", ""), False),  # a safe cleanup is used
-        (lambda p: "Pay the invoice.", True),  # lost the amount: rejected
-        (lambda p: f"<<<\n{p.replace('CONFIDENTIAL internal copy ', '')}\n>>>", False),  # echoed markers are stripped
-        (lambda p: "", True),
-    ],
-)
-def test_cleanup_keeps_the_original_unless_the_rewrite_is_safe(rewrite, kept):
-    llm = FakeOllama()
-    llm.cleanup = rewrite
-    passage = "CONFIDENTIAL internal copy Pay the invoice of 1 250,50 EUR by 5 May."
-    cleaner = LlmCleaner(llm)
-
-    result = run(cleaner.clean(passage))
-
-    assert (result == passage) is kept
-    assert "1 250,50" in result and cleaner.rejected == int(kept)
-
-
-def test_cleanup_survives_an_llm_failure():
-    llm = FakeOllama()
-    llm.error = httpx.ReadTimeout("slow")
-    cleaner = LlmCleaner(llm)
-    assert run(cleaner.clean("Keep me 42")) == "Keep me 42" and cleaner.rejected == 1
 
 
 # Long documents in chat

@@ -72,7 +72,7 @@ def test_processing_indexes_chunks_and_tells_the_owner(client, make_user, infra)
 
     document = _document(document_id)
     assert (document.status, document.progress, document.error_message) == ("completed", 100, None)
-    assert statuses[0] == "parsing" and "cleaning" in statuses
+    assert statuses[:3] == ["parsing", "chunking", "embedding"]
     points = _points(infra, document_id)
     assert len(points) > 1
     assert all(p["text"].startswith("enc:v2:") and isinstance(p["start"], int) for p in points)
@@ -81,6 +81,59 @@ def test_processing_indexes_chunks_and_tells_the_owner(client, make_user, infra)
     assert notifications["unread_count"] == 1 and notifications["items"][0]["type"] == "document.completed"
     raw_text = run(_raw_text(document_id))
     assert raw_text.startswith("enc:v2:") and "budget" not in raw_text
+
+
+def _notes(client) -> list[tuple[str, str]]:
+    return [(n["type"], n["message"]) for n in client.get("/api/v1/notifications").json()["items"]]
+
+
+def test_a_batch_gets_one_ready_notice_and_each_failure_its_own(client, make_user, infra):
+    _, email, password = make_user(WRITER)
+    login(client, email, password)
+    ids = [
+        upload(client, "Policy", POLICY.encode(), "policy.txt").json()["id"],
+        upload(client, "Blank", b"   \n  ", "blank.txt").json()["id"],
+        upload(client, "Minutes", b"The board met on Friday.", "minutes.txt").json()["id"],
+    ]
+
+    process(ids[0])
+    assert _notes(client) == []  # the rest of the batch still waits
+    process(ids[1])
+    process(ids[2])
+
+    assert sorted(_notes(client)) == [
+        ("document.process_failed", "The document has no text."),
+        ("documents.completed", "2 documents are ready."),
+    ]
+
+
+def test_deleting_the_last_waiting_document_sends_the_ready_notice(client, make_user, infra):
+    _, email, password = make_user(WRITER)
+    login(client, email, password)
+    ready = upload(client, "Policy", POLICY.encode(), "policy.txt").json()["id"]
+    waiting = upload(client, "Draft", b"Draft text.", "draft.txt").json()["id"]
+    process(ready)
+    assert _notes(client) == []
+
+    assert client.delete(f"/api/v1/documents/{waiting}", headers=csrf(client)).status_code == 204
+
+    assert _notes(client) == [("document.completed", '"Policy" is ready.')]
+
+
+def test_uploads_stop_while_too_many_documents_wait(client, make_user, infra, monkeypatch):
+    import services.documents.document as documents
+
+    monkeypatch.setattr(documents, "MAX_WAITING_DOCUMENTS", 2)
+    _, email, password = make_user(WRITER)
+    login(client, email, password)
+    first = upload(client, "One", b"One.", "one.txt").json()["id"]
+    upload(client, "Two", b"Two.", "two.txt")
+
+    refused = upload(client, "Three", b"Three.", "three.txt")
+
+    assert refused.status_code == 429 and refused.json()["code"] == "rate_limited"
+    process(first)
+    assert upload(client, "Three", b"Three.", "three.txt").status_code == 201
 
 
 def test_processing_twice_is_harmless(client, make_user, infra):
@@ -107,31 +160,20 @@ def test_unreadable_file_fails_with_a_reason(client, make_user, infra):
     assert notes[0]["type"] == "document.process_failed"
 
 
-def test_cleanup_rewrite_is_embedded_but_the_original_is_kept(client, make_user, infra, monkeypatch):
+def test_search_results_keep_table_values_that_cleanup_rules_drop(client, make_user, infra):
     _, email, password = make_user(WRITER)
     login(client, email, password)
-    infra.llm.cleanup = lambda passage: passage.replace("Section", "Part")
-    document_id = upload(client, "Policy", POLICY.encode(), "policy.txt").json()["id"]
+    # A table from a PDF: one cell per line, so values repeat like a header
+    # ("Yes") or look like page numbers ("120").
+    table = "Team\nApproved\nHeadcount\nSales\nYes\n120\nLegal\nYes\n45\nOps\nYes\n30"
+    document_id = upload(client, "Teams", table.encode(), "teams.txt").json()["id"]
 
     process(document_id)
 
     from encryption import decrypt_text
 
     texts = [decrypt_text(p["text"], f"chunk:{document_id}:{p['chunk_index']}") for p in _points(infra, document_id)]
-    assert any("Section" in t for t in texts)  # payload keeps the rules-cleaned original
-    assert any(call["stream"] is False for call in infra.llm.calls)
-
-
-def test_structured_files_skip_the_llm(client, make_user, infra):
-    _, email, password = make_user(WRITER)
-    login(client, email, password)
-    csv = "\n".join(f"{i},Employee {i},{1000 + i}" for i in range(200)).encode()
-    document_id = upload(client, "Salaries", csv, "salaries.csv").json()["id"]
-
-    process(document_id)
-
-    assert _document(document_id).status == "completed"
-    assert infra.llm.calls == []
+    assert "\n".join(texts) == table
 
 
 def test_chat_answers_from_documents_the_user_may_read(client, make_user, infra):
@@ -202,7 +244,7 @@ def test_follow_up_questions_find_documents_through_the_previous_one(client, mak
     key = os.environ["EMBEDDING_MODEL"]
     monkeypatch.setitem(settings.EMBEDDING_MODELS, key, dataclasses.replace(settings.EMBEDDING_MODELS[key], min_score=0.1))
     infra.llm.answer = "Sales got 3500000.\nSOURCES: Budgets"
-    follow_up = {"role": "user", "content": "What about the other one?"}
+    follow_up = {"role": "user", "content": "What about it?"}  # no word shared with any document
     history = [
         {"role": "user", "content": "Engineering department budget?"},
         {"role": "assistant", "content": "Engineering got 5000000."},

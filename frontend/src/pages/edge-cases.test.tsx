@@ -42,7 +42,7 @@ describe("Failures keep the user informed", () => {
             s.on("GET", "/documents", {items: [], page: 1, per_page: 20, total: 0, pages: 0});
             s.on("POST", "/documents", {id: 1, name: "minutes", filename: "minutes.docx", status: "queued", progress: 0, classification: "standard", error_message: null, created_at: "2026-09-30T10:00:00Z", converted: true});
         });
-        const area = (await screen.findByText("Drop a file here or choose one")).parentElement as HTMLElement;
+        const area = (await screen.findByText("Drop files here or choose them")).parentElement as HTMLElement;
         const file = new File(["old word"], "minutes.doc");
         fireEvent.dragOver(area, {dataTransfer: {files: [file], dropEffect: ""}});
         fireEvent.drop(area, {dataTransfer: {files: [file]}});

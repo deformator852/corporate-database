@@ -10,6 +10,7 @@ import type {PermissionRef} from "@pages/roles/list/model/roles";
 
 const SEARCH_DEBOUNCE_MS = 300;
 const PICKER_PAGE_SIZE = 10;
+const LOAD_MORE_MARGIN_PX = 48;
 
 type PermissionPickerProps = {
     value: string[];
@@ -53,7 +54,6 @@ export function PermissionPicker({
     const [retryKey, setRetryKey] = useState(0);
     const [state, setState] = useState<PickerState | null>(null);
     const scrollerRef = useRef<HTMLDivElement>(null);
-    const sentinelRef = useRef<HTMLDivElement>(null);
     const loadingMoreRef = useRef(false);
 
     useEffect(() => {
@@ -155,35 +155,28 @@ export function PermissionPicker({
             });
     };
 
-    const loadNextPageRef = useRef(loadNextPage);
+    // Loads the next page once the list is scrolled near its end, or when
+    // the loaded items do not fill the box (nothing to scroll yet).
+    const loadIfAtEnd = () => {
+        const scroller = scrollerRef.current;
+        if (
+            canLoadMore &&
+            scroller != null &&
+            scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= LOAD_MORE_MARGIN_PX
+        ) {
+            loadNextPage();
+        }
+    };
+
+    const loadIfAtEndRef = useRef(loadIfAtEnd);
 
     useEffect(() => {
-        loadNextPageRef.current = loadNextPage;
+        loadIfAtEndRef.current = loadIfAtEnd;
     });
 
     useEffect(() => {
-        if (!canLoadMore) {
-            return;
-        }
-        const sentinel = sentinelRef.current;
-        const root = scrollerRef.current;
-        if (sentinel == null || root == null) {
-            return;
-        }
-        const observer = new IntersectionObserver(
-            (entries) => {
-                if (!entries[0]?.isIntersecting) {
-                    return;
-                }
-                loadNextPageRef.current();
-            },
-            {root, rootMargin: "48px"},
-        );
-        observer.observe(sentinel);
-        return () => {
-            observer.disconnect();
-        };
-    }, [canLoadMore, debouncedQuery, state?.page]);
+        loadIfAtEndRef.current();
+    }, [canLoadMore, state?.page]);
 
     const toggle = (key: string, checked: boolean) => {
         const selected = new Set(value);
@@ -253,6 +246,7 @@ export function PermissionPicker({
                 <div
                     ref={scrollerRef}
                     className="max-h-40 overflow-y-auto rounded-lg border border-input"
+                    onScroll={loadIfAtEnd}
                 >
                     {items.map((permission) => {
                         const checkboxId = `role-permission-${permission.key}`;
@@ -274,10 +268,7 @@ export function PermissionPicker({
                         );
                     })}
                     {canLoadMore ? (
-                        <div
-                            ref={sentinelRef}
-                            className="px-3 py-2 text-sm text-muted-foreground"
-                        >
+                        <div className="px-3 py-2 text-sm text-muted-foreground">
                             {t("common.loadingMore")}
                         </div>
                     ) : null}
