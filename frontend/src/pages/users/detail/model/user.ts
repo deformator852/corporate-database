@@ -11,6 +11,3 @@ export type UserDetail = {
     last_sign_in_at: string | null;
     actions_total: number;
 };
-
-/** Where the user page was opened from; its Back link returns there. */
-export type UserDetailLinkState = {from?: string};

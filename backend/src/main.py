@@ -12,22 +12,21 @@ from fastapi.responses import JSONResponse
 load_dotenv()
 
 from api.v1.router import api_router
+from database import AsyncSessionLocal
 from exceptions import AppError
-from i18n import t
 from extensions import plugins
+from i18n import t
 from schemas.error import ErrorSchema, validation_message
+from services.chat.generator import OllamaGenerator
+from services.chat.history import ChatHistoryService
+from services.chat.limit import close_open_chat_requests, purge_chat_requests
 from services.documents.events import consume_document_events
 from services.documents.hub import hub
-from database import AsyncSessionLocal
-from services.chat_history import ChatHistoryService
-from services.embedding import get_embedding_model
 from services.encryption_key import verify_encryption_key
-from services.chat_limit import close_open_chat_requests, purge_chat_requests
-from settings import chat_retention_days
-from services.generator import OllamaGenerator
 from services.notifications.events import consume_notification_events
 from services.notifications.hub import dispatch_notification
-
+from services.search.embedding import get_embedding_model
+from settings import chat_retention_days
 
 logger = logging.getLogger(__name__)
 
@@ -74,9 +73,7 @@ async def lifespan(_app: FastAPI):
     warm_up_task = asyncio.create_task(warm_up())
     purge_task = asyncio.create_task(purge_old_chats())
     document_task = asyncio.create_task(consume_document_events(hub.broadcast))
-    notification_task = asyncio.create_task(
-        consume_notification_events(dispatch_notification)
-    )
+    notification_task = asyncio.create_task(consume_notification_events(dispatch_notification))
     try:
         yield
     finally:
@@ -117,14 +114,12 @@ async def security_headers(request: Request, call_next):
     for name, value in _SECURITY_HEADERS.items():
         response.headers.setdefault(name, value)
     if not _DOCS:
-        response.headers.setdefault(
-            "Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'"
-        )
+        response.headers.setdefault("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
     if request.url.scheme == "https":
-        response.headers.setdefault(
-            "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
-        )
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     return response
+
+
 app.include_router(api_router)
 for plugin in plugins():
     if hasattr(plugin, "setup"):

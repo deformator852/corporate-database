@@ -2,10 +2,9 @@
 with realtime events, notifications and encryption at every store."""
 
 import pytest
+from conftest import csrf, login, process, run, upload
 from sqlalchemy import select, text
 from starlette.websockets import WebSocketDisconnect
-
-from conftest import csrf, login, process, run, upload
 
 POLICY = (
     "Travel policy.\n\n"
@@ -64,8 +63,10 @@ def test_processing_indexes_chunks_and_tells_the_owner(client, make_user, infra)
     login(client, email, password)
     document_id = upload(client, "Travel policy", POLICY.encode(), "policy.txt").json()["id"]
 
-    with client.websocket_connect("/api/v1/documents/ws", headers=_ws(client)) as documents_ws, \
-            client.websocket_connect("/api/v1/notifications/ws", headers=_ws(client)) as notes_ws:
+    with (
+        client.websocket_connect("/api/v1/documents/ws", headers=_ws(client)) as documents_ws,
+        client.websocket_connect("/api/v1/notifications/ws", headers=_ws(client)) as notes_ws,
+    ):
         process(document_id)
         statuses = [documents_ws.receive_json()["status"] for _ in range(4)]
         note = notes_ws.receive_json()
@@ -160,6 +161,26 @@ def test_unreadable_file_fails_with_a_reason(client, make_user, infra):
     assert notes[0]["type"] == "document.process_failed"
 
 
+def test_a_line_many_documents_share_is_found(client, make_user, infra):
+    from database import AsyncSessionLocal
+    from services.documents.boilerplate import MIN_DOCUMENTS, shared_lines
+
+    _, email, password = make_user(WRITER)
+    login(client, email, password)
+    notice = "This message is confidential and meant only for the people it was sent to."
+    texts = [f"Note {i} about the budget.\n{notice}" for i in range(MIN_DOCUMENTS)]
+    ids = [upload(client, f"Note {i}", text.encode(), f"note{i}.txt").json()["id"] for i, text in enumerate(texts)]
+
+    async def shared(document_id: int, text: str) -> frozenset[str]:
+        async with AsyncSessionLocal() as session:
+            found = await shared_lines(session, document_id, text)
+            await session.commit()
+            return found
+
+    assert all(run(shared(i, t)) == frozenset() for i, t in zip(ids[:-1], texts[:-1], strict=True))
+    assert run(shared(ids[-1], texts[-1])) == frozenset({notice})  # now in enough documents
+
+
 def test_search_results_keep_table_values_that_cleanup_rules_drop(client, make_user, infra):
     _, email, password = make_user(WRITER)
     login(client, email, password)
@@ -180,7 +201,9 @@ def test_chat_answers_from_documents_the_user_may_read(client, make_user, infra)
     _, email, password = make_user([*WRITER, "documents.secret", "documents.confidential", "documents.restricted"])
     login(client, email, password)
     public = upload(client, "Travel policy", POLICY.encode(), "policy.txt").json()["id"]
-    secret = upload(client, "Board minutes", b"The travel budget of the board is secret.", "board.txt", "secret").json()["id"]
+    secret = upload(
+        client, "Board minutes", b"The travel budget of the board is secret.", "board.txt", "secret"
+    ).json()["id"]
     process(public)
     process(secret)
     client.post("/api/v1/auth/logout", headers=csrf(client))
@@ -201,6 +224,33 @@ def test_chat_answers_from_documents_the_user_may_read(client, make_user, infra)
     assert saved["messages"][1]["sources"][0]["id"] == public
 
 
+def test_an_answer_is_saved_when_the_client_leaves(client, make_user, infra):
+    import time
+
+    _, email, password = make_user(WRITER)
+    login(client, email, password)
+    process(upload(client, "Travel policy", POLICY.encode(), "policy.txt").json()["id"])
+    infra.llm.delay = 0.05
+
+    with client.websocket_connect("/api/v1/chat/ws", headers=_ws(client)) as chat:
+        chat.send_json(_ask("What is the travel budget?"))
+        assert chat.receive_json()["type"] == "delta"  # answering has begun
+    # The tab is closed; the answer is still written and saved.
+
+    messages: list[dict] = []
+    for _ in range(100):
+        items = client.get("/api/v1/chat/conversations").json()["items"]
+        if items:
+            messages = client.get(f"/api/v1/chat/conversations/{items[0]['id']}").json()["messages"]
+            if len(messages) == 2:
+                break
+        time.sleep(0.05)
+    assert [(m["role"], m["content"]) for m in messages] == [
+        ("user", "What is the travel budget?"),
+        ("assistant", "The travel budget is 500 EUR."),
+    ]
+
+
 def test_chat_can_reproduce_a_document_named_in_the_question(client, make_user, infra):
     _, email, password = make_user(WRITER)
     login(client, email, password)
@@ -216,7 +266,7 @@ def test_chat_can_reproduce_a_document_named_in_the_question(client, make_user, 
 
 
 def test_chat_says_it_does_not_know_without_documents(client, make_user, infra):
-    from services.chat import NO_DOCUMENTS_ANSWER
+    from services.chat.chat import NO_DOCUMENTS_ANSWER
 
     _, email, password = make_user([])  # may not read any document
     login(client, email, password)
@@ -234,7 +284,7 @@ def test_follow_up_questions_find_documents_through_the_previous_one(client, mak
     import os
 
     import settings
-    from services.chat import NO_DOCUMENTS_ANSWER
+    from services.chat.chat import NO_DOCUMENTS_ANSWER
 
     _, email, password = make_user(WRITER)
     login(client, email, password)
@@ -242,7 +292,9 @@ def test_follow_up_questions_find_documents_through_the_previous_one(client, mak
     document_id = upload(client, "Budgets", budgets, "budgets.txt").json()["id"]
     process(document_id)
     key = os.environ["EMBEDDING_MODEL"]
-    monkeypatch.setitem(settings.EMBEDDING_MODELS, key, dataclasses.replace(settings.EMBEDDING_MODELS[key], min_score=0.1))
+    monkeypatch.setitem(
+        settings.EMBEDDING_MODELS, key, dataclasses.replace(settings.EMBEDDING_MODELS[key], min_score=0.1)
+    )
     infra.llm.answer = "Sales got 3500000.\nSOURCES: Budgets"
     follow_up = {"role": "user", "content": "What about it?"}  # no word shared with any document
     history = [
@@ -378,9 +430,7 @@ async def _raw_text(document_id: int) -> str:
     from database import AsyncSessionLocal
 
     async with AsyncSessionLocal() as session:
-        return await session.scalar(
-            text("SELECT text FROM document_texts WHERE document_id = :i"), {"i": document_id}
-        )
+        return await session.scalar(text("SELECT text FROM document_texts WHERE document_id = :i"), {"i": document_id})
 
 
 def _ws(client) -> dict[str, str]:

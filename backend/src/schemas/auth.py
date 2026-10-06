@@ -30,11 +30,5 @@ class SessionUserSchema(BaseModel):
             first_name=user.first_name,
             last_name=user.last_name,
             email=user.email,
-            permissions=sorted(
-                {
-                    permission.key
-                    for role in user.roles
-                    for permission in role.permissions
-                }
-            ),
+            permissions=sorted({permission.key for role in user.roles for permission in role.permissions}),
         )

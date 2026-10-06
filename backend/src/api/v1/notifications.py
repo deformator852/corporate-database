@@ -12,29 +12,25 @@ from fastapi import (
 from api.deps import get_current_user, get_notification_service
 from api.ws import hold
 from models.user import User
-from schemas.error import ErrorSchema
+from schemas.error import error_responses
 from schemas.notification import (
     NotificationListResponseSchema,
     NotificationReadSchema,
 )
 from security import get_ws_payload
-from services.notifications.notification import NotificationService
 from services.notifications.hub import hub
+from services.notifications.notification import NotificationService
 
 router = APIRouter(
     prefix="/notifications",
     tags=["notifications"],
 )
 
-ERROR_RESPONSES = {
-    401: {"model": ErrorSchema},
-}
-
 
 @router.get(
     "",
     response_model=NotificationListResponseSchema,
-    responses=ERROR_RESPONSES,
+    responses=error_responses(401),
 )
 async def list_notifications(
     page: Annotated[int, Query(ge=1)] = 1,
@@ -59,7 +55,7 @@ async def list_notifications(
 @router.post(
     "/read",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=ERROR_RESPONSES,
+    responses=error_responses(401),
 )
 async def mark_notifications_read(
     payload: NotificationReadSchema,
@@ -73,7 +69,7 @@ async def mark_notifications_read(
 @router.delete(
     "/{notification_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={**ERROR_RESPONSES, 404: {"model": ErrorSchema}},
+    responses=error_responses(401, 404),
 )
 async def delete_notification(
     notification_id: int,
@@ -87,7 +83,7 @@ async def delete_notification(
 @router.delete(
     "",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=ERROR_RESPONSES,
+    responses=error_responses(401),
 )
 async def clear_notifications(
     user: User = Depends(get_current_user),
@@ -104,7 +100,7 @@ async def notification_events(
 ) -> None:
     try:
         user_id = int(payload.sub)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         await websocket.close(code=4401)
         return
     await hub.connect(user_id, websocket)

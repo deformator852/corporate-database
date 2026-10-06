@@ -1,10 +1,14 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import CheckConstraint, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
 from models.mixins import TimestampMixin
+
+if TYPE_CHECKING:  # relationships only; the real import would be circular
+    from models.rbac.role import Role
 
 
 class User(TimestampMixin, Base):
@@ -14,15 +18,13 @@ class User(TimestampMixin, Base):
     first_name: Mapped[str] = mapped_column(String(100))
     last_name: Mapped[str] = mapped_column(String(100))
     email: Mapped[str] = mapped_column(unique=True, index=True)
-    roles: Mapped[list["Role"]] = relationship(
+    roles: Mapped[list[Role]] = relationship(
         secondary="role_users",
         back_populates="users",
     )
     password: Mapped[str]
     # Tokens issued before this moment are rejected (password change).
-    sessions_valid_after: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True)
-    )
+    sessions_valid_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Set: the account cannot sign in; it and its history stay (offboarding).
     disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

@@ -1,6 +1,6 @@
 export type ServiceStatus = "ok" | "warning" | "down";
 
-export type ServiceCheck = {
+type ServiceCheck = {
     name: string;
     status: ServiceStatus;
     detail: string;

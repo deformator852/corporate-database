@@ -1,10 +1,14 @@
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, String, Text, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
 from models.mixins import TimestampMixin
+
+if TYPE_CHECKING:  # relationships only; the real import would be circular
+    from models.user import User
 
 
 class DocumentStatus(StrEnum):
@@ -47,20 +51,15 @@ class Document(TimestampMixin, Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    user: Mapped["User | None"] = relationship()
+    user: Mapped[User | None] = relationship()
     # Completed, but the owner has not been told yet: told in one notice
     # once none of their documents is waiting (services/notifications).
-    ready_unannounced: Mapped[bool] = mapped_column(
-        Boolean, default=False, server_default=false()
-    )
+    ready_unannounced: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
     __table_args__ = (
         CheckConstraint("length(name) BETWEEN 1 AND 200"),
         CheckConstraint("progress BETWEEN 0 AND 100"),
-        CheckConstraint(
-            "status IN ('queued','parsing','chunking','embedding',"
-            "'completed','failed')"
-        ),
+        CheckConstraint("status IN ('queued','parsing','chunking','embedding','completed','failed')"),
         CheckConstraint(
             "classification IN ('standard','restricted','confidential','secret')",
             name="ck_documents_classification",

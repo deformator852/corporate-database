@@ -67,7 +67,7 @@ def _client() -> Client:
 def _installed() -> set[str]:
     try:
         return {model.model for model in _client().list().models if model.model}
-    except (RequestError, ResponseError, OSError):
+    except RequestError, ResponseError, OSError:
         return set()
 
 
@@ -150,10 +150,7 @@ def _choose(console: Console, installed: set[str], language: str) -> str:
         choice = IntPrompt.ask("Choice", default=default, console=console)
         if 1 <= choice <= len(options):
             selected = options[choice - 1]
-            if (
-                selected.disk_bytes * 11 // 10 > free
-                and selected.tag not in installed
-            ):
+            if selected.disk_bytes * 11 // 10 > free and selected.tag not in installed:
                 console.print(
                     f"[yellow]This model needs about "
                     f"{_fmt_bytes(selected.disk_bytes)}; "

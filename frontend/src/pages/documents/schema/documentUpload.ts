@@ -1,12 +1,12 @@
 import {z} from "zod";
 
 import {
-    DOCUMENT_CLASSIFICATIONS,
     DOCUMENT_EXTENSIONS,
     fileExtension,
     MAX_DOCUMENT_BYTES,
     MAX_UPLOAD_FILES,
 } from "@pages/documents/model/documents";
+import {DOCUMENT_CLASSIFICATIONS} from "@/entities/document/model";
 import type {TranslateFn} from "@/shared/i18n/I18nProvider";
 
 const allowed = new Set<string>(DOCUMENT_EXTENSIONS);

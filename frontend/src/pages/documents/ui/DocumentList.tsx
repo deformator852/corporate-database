@@ -12,17 +12,16 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import {useI18n} from "@/shared/i18n/I18nProvider";
+import {ListPagination} from "@/shared/ui/ListPagination";
+import {StatusCard} from "@/shared/ui/StatusCard";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
 import {openDocumentFile} from "@/shared/lib/documentFile";
-import {
-    documentClassificationKey,
-    documentStatusKey,
-} from "@/shared/i18n/keys";
+import {documentClassificationKey, documentStatusKey} from "@/entities/document/model";
 import {
     type DocumentListItem,
     type DocumentListPage,
-    type DocumentStatus,
 } from "@pages/documents/model/documents";
+import {type DocumentStatus} from "@/entities/document/model";
 
 type DocumentListProps = {
     headingId: string;
@@ -51,31 +50,17 @@ export function DocumentList({
     const items = data?.items ?? [];
     const total = data?.total ?? 0;
     const pages = data?.pages ?? 0;
-    const perPage = data?.per_page ?? 20;
-    const from = total === 0 ? 0 : (page - 1) * perPage + 1;
-    const to = total === 0 ? 0 : (page - 1) * perPage + items.length;
     const columns = canDelete ? 6 : 5;
 
     if (status === "error") {
         return (
-            <div className="flex flex-col items-start gap-3 rounded-xl bg-card px-4 py-8 ring-1 ring-foreground/10">
-                <p className="font-medium">{t("documents.loadErrorTitle")}</p>
-                <p className="text-sm text-muted-foreground">{error}</p>
-                <Button type="button" onClick={onRetry}>
-                    {t("common.tryAgain")}
-                </Button>
-            </div>
+            <StatusCard title={t("documents.loadErrorTitle")} detail={error} onRetry={onRetry} />
         );
     }
 
     if (status === "ready" && total === 0) {
         return (
-            <div className="flex flex-col items-start gap-3 rounded-xl bg-card px-4 py-8 ring-1 ring-foreground/10">
-                <p className="font-medium">{t("documents.emptyTitle")}</p>
-                <p className="text-sm text-muted-foreground">
-                    {t("documents.emptyDescription")}
-                </p>
-            </div>
+            <StatusCard title={t("documents.emptyTitle")} detail={t("documents.emptyDescription")} />
         );
     }
 
@@ -120,41 +105,15 @@ export function DocumentList({
                     </TableBody>
                 </Table>
             </Card>
-            {status === "ready" && pages > 1 ? (
-                <nav
-                    aria-label={t("common.pagination")}
-                    className="flex flex-wrap items-center justify-between gap-3"
-                >
-                    <p className="text-sm text-muted-foreground">
-                        {t("common.showing", {from, to, total})}
-                    </p>
-                    <div className="flex items-center gap-2">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={page <= 1}
-                            onClick={() => onPageChange(page - 1)}
-                        >
-                            {t("common.previous")}
-                        </Button>
-                        <p className="min-w-24 text-center text-sm text-muted-foreground">
-                            {t("common.pageOf", {
-                                page,
-                                pages: Math.max(pages, 1),
-                            })}
-                        </p>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={page >= pages}
-                            onClick={() => onPageChange(page + 1)}
-                        >
-                            {t("common.next")}
-                        </Button>
-                    </div>
-                </nav>
+            {data && pages > 1 ? (
+                <ListPagination
+                    page={page}
+                    pages={pages}
+                    perPage={data.per_page}
+                    total={total}
+                    shown={items.length}
+                    onPageChange={onPageChange}
+                />
             ) : null}
         </div>
     );

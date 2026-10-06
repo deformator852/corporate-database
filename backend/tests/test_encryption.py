@@ -3,10 +3,10 @@
 import os
 
 import pytest
+from conftest import run
 from sqlalchemy import text
 
 import encryption
-from conftest import run
 from encryption import (
     current_fingerprint,
     decrypt_bytes,
@@ -66,14 +66,25 @@ def test_text_that_looks_encrypted_is_still_encrypted():
 
 
 def test_document_text_is_stored_encrypted():
+    from sqlalchemy import select
+
     from database import AsyncSessionLocal
     from models import Document, DocumentText, User
-    from sqlalchemy import select
 
     async def scenario() -> tuple[str, str]:
         async with AsyncSessionLocal() as session:
             owner = await session.scalar(select(User.id).limit(1))
-            doc = Document(name="Enc", filename="e.txt", content_type="text/plain", size=1, status="completed", progress=100, object_key="k", classification="standard", user_id=owner)
+            doc = Document(
+                name="Enc",
+                filename="e.txt",
+                content_type="text/plain",
+                size=1,
+                status="completed",
+                progress=100,
+                object_key="k",
+                classification="standard",
+                user_id=owner,
+            )
             session.add(doc)
             await session.flush()
             session.add(DocumentText(document_id=doc.id, text="secret salary table"))
@@ -130,11 +141,12 @@ def test_startup_refuses_another_key(keys):
 
 
 def test_rotate_key_reencrypts_the_database(keys, make_user):
+    from sqlalchemy import select
+
     from database import AsyncSessionLocal
     from maintenance.rotate_key import _column
     from models import ChatConversation, ChatMessageRecord
     from services.encryption_key import save_fingerprint
-    from sqlalchemy import select
 
     owner, _, _ = make_user()
 
@@ -154,9 +166,13 @@ def test_rotate_key_reencrypts_the_database(keys, make_user):
 
     async def read(chat_id: int) -> tuple[str, str, str]:
         async with AsyncSessionLocal() as session:
-            raw = await session.scalar(text("SELECT content FROM chat_messages WHERE conversation_id = :i"), {"i": chat_id})
+            raw = await session.scalar(
+                text("SELECT content FROM chat_messages WHERE conversation_id = :i"), {"i": chat_id}
+            )
             title = await session.scalar(select(ChatConversation.title).where(ChatConversation.id == chat_id))
-            content = await session.scalar(select(ChatMessageRecord.content).where(ChatMessageRecord.conversation_id == chat_id))
+            content = await session.scalar(
+                select(ChatMessageRecord.content).where(ChatMessageRecord.conversation_id == chat_id)
+            )
             return raw, title, content
 
     chat_id = run(seed())

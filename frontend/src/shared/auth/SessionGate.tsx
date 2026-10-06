@@ -1,4 +1,4 @@
-import {useEffect, useState} from "react";
+import {useEffect, useEffectEvent, useState} from "react";
 import {Navigate, Outlet, useLocation} from "react-router";
 
 import {Button} from "@/components/ui/button";
@@ -14,6 +14,8 @@ export function SessionGate() {
     const error = useSessionStore((state) => state.error);
     const location = useLocation();
     const [attempt, setAttempt] = useState(0);
+
+    const failed = useEffectEvent((reason: unknown) => getApiErrorMessage(reason, t("session.errorDefault")));
 
     useEffect(() => {
         const {status: current, setUser, clear, fail} = useSessionStore.getState();
@@ -38,7 +40,7 @@ export function SessionGate() {
                     clear();
                     return;
                 }
-                fail(getApiErrorMessage(reason, t("session.errorDefault")));
+                fail(failed(reason));
             });
 
         return () => {

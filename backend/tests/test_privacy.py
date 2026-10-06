@@ -5,7 +5,7 @@ from conftest import csrf, login, run
 
 def _conversation(user_id: int) -> int:
     from database import AsyncSessionLocal
-    from services.chat_history import ChatHistoryService
+    from services.chat.history import ChatHistoryService
 
     async def create() -> int:
         async with AsyncSessionLocal() as session:

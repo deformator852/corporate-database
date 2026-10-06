@@ -39,10 +39,7 @@ class RoleListItemSchema(BaseModel):
             description=role.description,
             protected=role.key == ADMIN_ROLE_KEY,
             permissions=sorted(
-                (
-                    PermissionRefSchema(key=permission.key, name=permission.name)
-                    for permission in role.permissions
-                ),
+                (PermissionRefSchema(key=permission.key, name=permission.name) for permission in role.permissions),
                 key=lambda item: item.key,
             ),
         )

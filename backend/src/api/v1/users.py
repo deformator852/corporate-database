@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Response, status
 
@@ -6,8 +6,8 @@ from api.deps import get_audit_service, get_user_service, require_permission
 from exceptions import AppError
 from models.audit import AuditAction
 from models.user import User
-from schemas.error import ErrorSchema
 from schemas.audit import AuditCursorPageSchema
+from schemas.error import error_responses
 from schemas.user import (
     UserCreateSchema,
     UserDetailSchema,
@@ -23,16 +23,11 @@ router = APIRouter(
     tags=["users"],
 )
 
-ERROR_RESPONSES = {
-    401: {"model": ErrorSchema},
-    403: {"model": ErrorSchema},
-}
-
 
 @router.get(
     "",
     response_model=UserListResponseSchema,
-    responses=ERROR_RESPONSES,
+    responses=error_responses(401, 403),
     dependencies=[Depends(require_permission("users.list"))],
 )
 async def list_users(
@@ -54,10 +49,7 @@ async def list_users(
     "",
     status_code=status.HTTP_201_CREATED,
     response_model=UserListItemSchema,
-    responses={
-        **ERROR_RESPONSES,
-        409: {"model": ErrorSchema},
-    },
+    responses=error_responses(401, 403, 409),
 )
 async def create_user(
     payload: UserCreateSchema,
@@ -66,25 +58,14 @@ async def create_user(
     audit: AuditService = Depends(get_audit_service),
 ) -> UserListItemSchema:
     user = await service.create_user(payload, actor_id=actor.id)
-    audit.record(
-        AuditAction.USER_CREATE,
-        actor=actor,
-        target_type="user",
-        target_id=user.id,
-        target_label=user.email,
-        details={"roles": [role.name for role in user.roles]},
-    )
+    _audit(audit, AuditAction.USER_CREATE, actor, user, {"roles": [role.name for role in user.roles]})
     return UserListItemSchema.from_user(user)
 
 
 @router.patch(
     "/{user_id}",
     response_model=UserListItemSchema,
-    responses={
-        **ERROR_RESPONSES,
-        404: {"model": ErrorSchema},
-        409: {"model": ErrorSchema},
-    },
+    responses=error_responses(401, 403, 404, 409),
 )
 async def update_user(
     user_id: int,
@@ -94,16 +75,12 @@ async def update_user(
     audit: AuditService = Depends(get_audit_service),
 ) -> UserListItemSchema:
     user = await service.update_user(user_id, payload, actor_id=actor.id)
-    audit.record(
+    _audit(
+        audit,
         AuditAction.USER_UPDATE,
-        actor=actor,
-        target_type="user",
-        target_id=user.id,
-        target_label=user.email,
-        details={
-            "roles": [role.name for role in user.roles],
-            "password_changed": payload.password is not None,
-        },
+        actor,
+        user,
+        {"roles": [role.name for role in user.roles], "password_changed": payload.password is not None},
     )
     return UserListItemSchema.from_user(user)
 
@@ -111,11 +88,7 @@ async def update_user(
 @router.delete(
     "/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={
-        **ERROR_RESPONSES,
-        404: {"model": ErrorSchema},
-        409: {"model": ErrorSchema},
-    },
+    responses=error_responses(401, 403, 404, 409),
 )
 async def delete_user(
     user_id: int,
@@ -124,24 +97,14 @@ async def delete_user(
     audit: AuditService = Depends(get_audit_service),
 ) -> Response:
     user = await service.delete_user(user_id, actor_id=current_user.id)
-    audit.record(
-        AuditAction.USER_DELETE,
-        actor=current_user,
-        target_type="user",
-        target_id=user_id,
-        target_label=user.email,
-    )
+    _audit(audit, AuditAction.USER_DELETE, current_user, user)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(
     "/{user_id}/disable",
     response_model=UserListItemSchema,
-    responses={
-        **ERROR_RESPONSES,
-        404: {"model": ErrorSchema},
-        409: {"model": ErrorSchema},
-    },
+    responses=error_responses(401, 403, 404, 409),
 )
 async def disable_user(
     user_id: int,
@@ -150,20 +113,14 @@ async def disable_user(
     audit: AuditService = Depends(get_audit_service),
 ) -> UserListItemSchema:
     user = await service.disable_user(user_id, actor_id=actor.id)
-    audit.record(
-        AuditAction.USER_DISABLE,
-        actor=actor,
-        target_type="user",
-        target_id=user.id,
-        target_label=user.email,
-    )
+    _audit(audit, AuditAction.USER_DISABLE, actor, user)
     return UserListItemSchema.from_user(user)
 
 
 @router.post(
     "/{user_id}/enable",
     response_model=UserListItemSchema,
-    responses={**ERROR_RESPONSES, 404: {"model": ErrorSchema}},
+    responses=error_responses(401, 403, 404),
 )
 async def enable_user(
     user_id: int,
@@ -172,14 +129,14 @@ async def enable_user(
     audit: AuditService = Depends(get_audit_service),
 ) -> UserListItemSchema:
     user = await service.enable_user(user_id, actor_id=actor.id)
-    audit.record(
-        AuditAction.USER_ENABLE,
-        actor=actor,
-        target_type="user",
-        target_id=user.id,
-        target_label=user.email,
-    )
+    _audit(audit, AuditAction.USER_ENABLE, actor, user)
     return UserListItemSchema.from_user(user)
+
+
+def _audit(
+    audit: AuditService, action: AuditAction, actor: User, user: User, details: dict[str, Any] | None = None
+) -> None:
+    audit.record(action, actor=actor, target_type="user", target_id=user.id, target_label=user.email, details=details)
 
 
 async def _require_user(user_id: int, service: UserService) -> User:
@@ -192,7 +149,7 @@ async def _require_user(user_id: int, service: UserService) -> User:
 @router.get(
     "/{user_id}",
     response_model=UserDetailSchema,
-    responses={**ERROR_RESPONSES, 404: {"model": ErrorSchema}},
+    responses=error_responses(401, 403, 404),
     dependencies=[Depends(require_permission("users.view"))],
 )
 async def get_user(
@@ -202,15 +159,13 @@ async def get_user(
 ) -> UserDetailSchema:
     user = await _require_user(user_id, service)
     total, last_sign_in = await audit.user_summary(user)
-    return UserDetailSchema.from_user(
-        user, actions_total=total, last_sign_in_at=last_sign_in
-    )
+    return UserDetailSchema.from_user(user, actions_total=total, last_sign_in_at=last_sign_in)
 
 
 @router.get(
     "/{user_id}/activity",
     response_model=AuditCursorPageSchema,
-    responses={**ERROR_RESPONSES, 404: {"model": ErrorSchema}},
+    responses=error_responses(401, 403, 404),
     dependencies=[Depends(require_permission("users.view"))],
 )
 async def list_user_activity(

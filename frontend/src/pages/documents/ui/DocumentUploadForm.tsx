@@ -1,17 +1,17 @@
 import {zodResolver} from "@hookform/resolvers/zod";
 import {cn} from "cn";
-import {CircleAlert, FileUp, X} from "lucide-react";
+import {CircleAlert, FileUp} from "lucide-react";
 import {useMemo, useRef, useState, type DragEvent} from "react";
-import {useForm} from "react-hook-form";
+import {useForm, useWatch} from "react-hook-form";
 
 import {Button} from "@/components/ui/button";
 import {Field, FieldError, FieldGroup, FieldLabel} from "@/components/ui/field";
 import {Input} from "@/components/ui/input";
 import {useI18n} from "@/shared/i18n/I18nProvider";
-import {documentClassificationKey} from "@/shared/i18n/keys";
+import {documentClassificationKey} from "@/entities/document/model";
 import {can} from "@/shared/lib/api/me";
-import {getApiErrorCode, getApiErrorMessage} from "@/shared/lib/api/errors";
-import {uploadDocument} from "@pages/documents/api/documents";
+import {uploadFiles} from "@pages/documents/model/uploadFiles";
+import {SelectedFiles} from "@pages/documents/ui/SelectedFiles";
 import {
     DOCUMENT_ACCEPT,
     allowedUploadClassifications,
@@ -43,8 +43,8 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
         setValue,
         getValues,
         setError,
-        watch,
         reset,
+        control,
         formState: {errors, isSubmitting},
     } = useForm<DocumentUploadFormData>({
         resolver: zodResolver(schema),
@@ -55,7 +55,7 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
         },
     });
 
-    const files = watch("files");
+    const files = useWatch({control, name: "files"});
     const several = files.length > 1;
     // Files left after a batch upload keep their list and reasons.
     const listed = several || failures.size > 0;
@@ -120,33 +120,14 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
 
     async function onSubmit(data: DocumentUploadFormData) {
         setSuccess(null);
-        const failed = new Map<File, string>();
-        let converted = false;
-        // One at a time: each file is checked and converted by the server,
-        // and a failure leaves the others to go on.
-        for (const [index, file] of data.files.entries()) {
-            setSent(index);
-            try {
-                const accepted = await uploadDocument(
-                    data.files.length === 1 ? data.name : fileStem(file.name),
-                    file,
-                    data.classification,
-                );
-                converted ||= accepted.converted === true;
-                onUploaded?.(accepted);
-            } catch (error) {
-                const message = getApiErrorMessage(error, t("documents.upload.error"));
-                failed.set(file, message);
-                if (getApiErrorCode(error) === "rate_limited") {
-                    // Too many documents wait for processing: the rest would
-                    // be refused the same way.
-                    for (const rest of data.files.slice(index + 1)) {
-                        failed.set(rest, message);
-                    }
-                    break;
-                }
-            }
-        }
+        const {failed, converted} = await uploadFiles({
+            files: data.files,
+            name: data.name,
+            classification: data.classification,
+            errorFallback: t("documents.upload.error"),
+            onProgress: setSent,
+            onUploaded,
+        });
         if (fileInputRef.current) {
             fileInputRef.current.value = "";
         }
@@ -186,7 +167,7 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
         errors.files?.message ?? (several ? undefined : errors.files?.[0]?.message);
 
     return (
-        <form className="stack" noValidate onSubmit={handleSubmit(onSubmit)}>
+        <form className="stack" noValidate onSubmit={(event) => void handleSubmit(onSubmit)(event)}>
             <FieldGroup>
                 {errors.root?.message ? (
                     <div
@@ -309,37 +290,12 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
                                     {t("documents.upload.namesFromFiles")}
                                 </p>
                             ) : null}
-                            <ul className="max-h-60 list-none divide-y overflow-y-auto rounded-lg border ps-0">
-                                {files.map((item, index) => {
-                                    const problem =
-                                        failures.get(item) ?? errors.files?.[index]?.message;
-                                    return (
-                                        <li
-                                            key={`${item.name}-${item.size}-${item.lastModified}-${index}`}
-                                            className="flex items-start gap-2 px-3 py-2 text-sm"
-                                        >
-                                            <div className="min-w-0 flex-1">
-                                                <p className="truncate" title={item.name}>
-                                                    {item.name}
-                                                </p>
-                                                {problem ? (
-                                                    <p className="text-destructive">{problem}</p>
-                                                ) : null}
-                                            </div>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon-xs"
-                                                disabled={isSubmitting}
-                                                aria-label={t("documents.upload.remove", {name: item.name})}
-                                                onClick={() => removeFile(item)}
-                                            >
-                                                <X aria-hidden />
-                                            </Button>
-                                        </li>
-                                    );
-                                })}
-                            </ul>
+                            <SelectedFiles
+                                files={files}
+                                problemOf={(file, index) => failures.get(file) ?? errors.files?.[index]?.message}
+                                disabled={isSubmitting}
+                                onRemove={removeFile}
+                            />
                         </>
                     ) : null}
                 </Field>

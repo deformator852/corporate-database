@@ -22,10 +22,7 @@ class PermissionListItemSchema(BaseModel):
             name=permission.name,
             description=permission.description,
             roles=sorted(
-                (
-                    RoleRefSchema(key=role.key, name=role.name)
-                    for role in permission.roles
-                ),
+                (RoleRefSchema(key=role.key, name=role.name) for role in permission.roles),
                 key=lambda item: item.key,
             ),
         )
@@ -51,10 +48,7 @@ class PermissionListResponseSchema(BaseModel):
     ) -> Self:
         pages = (total + per_page - 1) // per_page if per_page and total else 0
         return cls(
-            items=[
-                PermissionListItemSchema.from_permission(permission)
-                for permission in permissions
-            ],
+            items=[PermissionListItemSchema.from_permission(permission) for permission in permissions],
             page=page,
             per_page=per_page,
             total=total,

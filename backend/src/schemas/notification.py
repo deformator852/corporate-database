@@ -43,9 +43,7 @@ class NotificationListResponseSchema(BaseModel):
     ) -> Self:
         pages = (total + per_page - 1) // per_page if per_page and total else 0
         return cls(
-            items=[
-                NotificationSchema.from_notification(item) for item in notifications
-            ],
+            items=[NotificationSchema.from_notification(item) for item in notifications],
             page=page,
             per_page=per_page,
             total=total,

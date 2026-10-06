@@ -19,32 +19,22 @@ class StorageStep:
         app_user = env_value(ENV_PATH, "MINIO_ACCESS_KEY")
         app_secret = env_value(ENV_PATH, "MINIO_SECRET_KEY")
 
-        written: list[str] = []
+        written: dict[str, str] = {}
         if _missing(root_user):
-            root_user = "minio-root"
-            written.append("MINIO_ROOT_USER")
+            root_user = written["MINIO_ROOT_USER"] = "minio-root"
         if _missing(root_password):
-            root_password = random_secret(24)
-            written.append("MINIO_ROOT_PASSWORD")
+            root_password = written["MINIO_ROOT_PASSWORD"] = random_secret(24)
         # The app must never run with the root account.
         if _missing(app_user, root_user):
-            app_user = "corporate-app"
-            written.append("MINIO_ACCESS_KEY")
+            written["MINIO_ACCESS_KEY"] = "corporate-app"
         if _missing(app_secret, root_password):
-            app_secret = random_secret(24)
-            written.append("MINIO_SECRET_KEY")
+            written["MINIO_SECRET_KEY"] = random_secret(24)
 
         if not written:
             console.print("MinIO credentials are already set.")
             return
-        for key, value in (
-            ("MINIO_ROOT_USER", root_user),
-            ("MINIO_ROOT_PASSWORD", root_password),
-            ("MINIO_ACCESS_KEY", app_user),
-            ("MINIO_SECRET_KEY", app_secret),
-        ):
-            if key in written:
-                upsert_env(ENV_PATH, key, value)
+        for key, value in written.items():
+            upsert_env(ENV_PATH, key, value)
         console.print(f"Generated {', '.join(written)} in {ENV_PATH}")
         console.print(
             Panel(

@@ -167,6 +167,14 @@ def is_current_bytes(blob: bytes) -> bool:
     return blob.startswith(_BYTES_V2) and blob[head : head + _KEY_ID_BYTES] == _current().id
 
 
+def keyed_digest(data: bytes) -> bytes:
+    """A 16-byte digest keyed with the current key: equal data gives equal
+    digests, but without the key nobody can test a guess against one (a
+    plain hash of a short secret line can be). Digests made before a key
+    rotation stop matching new ones."""
+    return hmac.new(_current().material, b"corpus digest:" + data, hashlib.sha256).digest()[:16]
+
+
 def encrypt_text(text: str, context: str = "") -> str:
     sealed = _seal(text.encode(), context)
     return _TEXT_V2 + base64.b64encode(sealed).decode()

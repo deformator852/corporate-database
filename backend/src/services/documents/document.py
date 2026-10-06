@@ -17,10 +17,10 @@ from services.documents.access import (
     user_permission_keys,
 )
 from services.documents.office import convert_doc_to_docx
-from services.notifications.notification import NotificationService
-from services.rag import Rag
-from services.storage import ObjectStorage
 from services.documents.upload_check import check_upload
+from services.notifications.notification import NotificationService
+from services.search.rag import Rag
+from services.storage import ObjectStorage
 
 ALLOWED_SUFFIXES = frozenset(
     {
@@ -79,14 +79,10 @@ class DocumentService:
         self.storage = storage
         self.queue = queue or CeleryDocumentQueue()
 
-    async def list_documents(
-        self, user_id: int, page: int = 1, per_page: int = 20
-    ) -> tuple[list[Document], int]:
+    async def list_documents(self, user_id: int, page: int = 1, per_page: int = 20) -> tuple[list[Document], int]:
         allowed = await self._allowed(user_id)
         visible = Document.classification.in_(allowed)
-        total = await self.session.scalar(
-            select(func.count()).select_from(Document).where(visible)
-        )
+        total = await self.session.scalar(select(func.count()).select_from(Document).where(visible))
         documents = await self.session.scalars(
             select(Document)
             .where(visible)
@@ -126,8 +122,7 @@ class DocumentService:
             if (waiting or 0) >= MAX_WAITING_DOCUMENTS:
                 raise AppError(
                     "rate_limited",
-                    "Too many of your documents are waiting to be processed. "
-                    "Upload more when some are ready.",
+                    "Too many of your documents are waiting to be processed. Upload more when some are ready.",
                     status_code=429,
                 )
             content = await data.file.read(MAX_BYTES + 1)
@@ -193,9 +188,7 @@ class DocumentService:
             await data.file.close()
 
     async def delete_document(self, document_id: int, user_id: int) -> Document:
-        document = await self.session.scalar(
-            select(Document).where(Document.id == document_id)
-        )
+        document = await self.session.scalar(select(Document).where(Document.id == document_id))
         if document is None:
             raise AppError("not_found", "Document not found", status_code=404)
         allowed = await self._allowed(user_id)
@@ -217,9 +210,7 @@ class DocumentService:
     async def open_file(self, document_id: int, user_id: int) -> tuple[Document, bytes]:
         """The original file, for anyone who may retrieve documents of its
         classification (the same rule as chat answers)."""
-        allowed = retrieval_classifications(
-            await user_permission_keys(self.session, user_id)
-        )
+        allowed = retrieval_classifications(await user_permission_keys(self.session, user_id))
         document = await self.session.get(Document, document_id)
         # 404 for both missing and forbidden: do not reveal what exists.
         if document is None or document.classification not in allowed:

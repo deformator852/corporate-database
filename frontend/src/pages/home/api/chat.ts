@@ -13,7 +13,7 @@ import {reconnectDelay} from "@/shared/lib/ws";
 
 const FALLBACK = "Could not send the message.";
 
-export function chatSocketUrl(): string {
+function chatSocketUrl(): string {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     return `${protocol}//${window.location.host}/api/v1/chat/ws`;
 }

@@ -1,3 +1,10 @@
+import {
+    isDocumentClassification,
+    isDocumentStatus,
+    type DocumentClassification,
+    type DocumentStatus,
+} from "@/entities/document/model";
+
 export const MAX_DOCUMENT_BYTES = 32 * 1024 * 1024;
 /** Files per upload, so a whole folder dropped by mistake is caught at once.
  * The server also limits each user's documents waiting to be processed. */
@@ -20,33 +27,6 @@ export const DOCUMENT_EXTENSIONS = [
 
 export const DOCUMENT_ACCEPT = DOCUMENT_EXTENSIONS.join(",");
 
-export const DOCUMENT_STATUSES = [
-    "queued",
-    "parsing",
-    "chunking",
-    "embedding",
-    "completed",
-    "failed",
-] as const;
-
-export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
-
-export const DOCUMENT_CLASSIFICATIONS = [
-    "standard",
-    "restricted",
-    "confidential",
-    "secret",
-] as const;
-
-export type DocumentClassification = (typeof DOCUMENT_CLASSIFICATIONS)[number];
-
-export const DOCUMENT_CLASSIFICATION_LABELS: Record<DocumentClassification, string> = {
-    standard: "Standard",
-    restricted: "Restricted",
-    confidential: "Confidential",
-    secret: "Secret",
-};
-
 export type DocumentListItem = {
     id: number;
     name: string;
@@ -67,16 +47,7 @@ export type DocumentListPage = {
     pages: number;
 };
 
-export const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
-    queued: "Queued",
-    parsing: "Parsing",
-    chunking: "Chunking",
-    embedding: "Embedding",
-    completed: "Completed",
-    failed: "Failed",
-};
-
-export const DOCUMENT_STATUS_RANK: Record<DocumentStatus, number> = {
+const DOCUMENT_STATUS_RANK: Record<DocumentStatus, number> = {
     queued: 0,
     parsing: 1,
     chunking: 2,
@@ -84,16 +55,6 @@ export const DOCUMENT_STATUS_RANK: Record<DocumentStatus, number> = {
     completed: 4,
     failed: 4,
 };
-
-export function isDocumentStatus(value: string): value is DocumentStatus {
-    return (DOCUMENT_STATUSES as readonly string[]).includes(value);
-}
-
-export function isDocumentClassification(
-    value: string,
-): value is DocumentClassification {
-    return (DOCUMENT_CLASSIFICATIONS as readonly string[]).includes(value);
-}
 
 export function allowedUploadClassifications(
     canRestricted: boolean,

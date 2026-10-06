@@ -11,7 +11,10 @@ the worker would embed them:
 
 * clean    the original dataset text (the ceiling),
 * noisy    noisy text, no cleanup (TEXT_CLEANUP=off),
-* rules    noisy text after the rules (TEXT_CLEANUP=rules).
+* lines    rules without pages: lines repeated 3+ times, page-number lines
+           (what text and Markdown files get),
+* edges    rules with pages, as for a PDF: lines at the page edges,
+* shared   edges, plus lines that 5+ documents share (boilerplate.py).
 
 Scores as evals/search_relevance.py does: a document scores its best chunk,
 the chat keeps the two best at or above the model's min_score.
@@ -20,6 +23,10 @@ This script also measured an LLM rewrite after the rules (llama3.1:8b),
 2026-10-05. Right document first, noisy / rules / rules + LLM: en 92/92/100 %,
 es 92/92/83 %, fr 71/83/83 %, at 10-24 s per chunk. No steady gain over the
 rules, so the LLM step was removed.
+
+Page edges and shared lines, 2026-10-05, right document first, lines /
+edges / shared: en (bge-base-en) 92/100/100 %, es (multilingual-e5-base)
+92/92/92 %, fr 83/88/92 % (needed documents kept 82/86/89 %).
 """
 
 import json
@@ -27,6 +34,8 @@ import os
 import random
 import statistics
 import sys
+from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 
 from chonkie import RecursiveChunker
@@ -36,41 +45,57 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 from search_relevance import kept  # noqa: E402
+
+from services.documents.boilerplate import MIN_DOCUMENTS, MIN_LENGTH  # noqa: E402
+from services.documents.embedding_text import embedding_texts  # noqa: E402
+from services.documents.parser import PAGE_BREAK  # noqa: E402
 from services.documents.processor import _split_text  # noqa: E402
-from services.documents.text_cleanup import basic_clean, repeated_lines  # noqa: E402
+from services.documents.text_cleanup import normalized_lines  # noqa: E402
 from settings import EMBEDDING_MODELS, chunk_overlap, chunk_size, language  # noqa: E402
 
+
+@dataclass(frozen=True, slots=True)
+class Noise:
+    """What real files of one language carry around their text."""
+
+    header: str
+    page: str
+    fillers: list[str]
+    signature: str
+    disclaimer: str
+
+
 NOISE = {
-    "en": {
-        "header": "Northwind Group · Internal use only",
-        "page": "Page {page} of {pages}",
-        "fillers": ["It should be noted that ", "Basically, ", "As mentioned above, ", "Please note that "],
-        "signature": "Best regards,\nAnna Keller\nHR Operations\nSent from my iPhone",
-        "disclaimer": (
+    "en": Noise(
+        header="Northwind Group · Internal use only",
+        page="Page {page} of {pages}",
+        fillers=["It should be noted that ", "Basically, ", "As mentioned above, ", "Please note that "],
+        signature="Best regards,\nAnna Keller\nHR Operations\nSent from my iPhone",
+        disclaimer=(
             "This message and any attachments are confidential and intended solely for the addressee. "
             "If you received it in error, notify the sender and delete it. All rights reserved."
         ),
-    },
-    "es": {
-        "header": "Grupo Northwind · Uso interno",
-        "page": "Página {page} de {pages}",
-        "fillers": ["Cabe señalar que ", "Básicamente, ", "Como se mencionó anteriormente, ", "Tenga en cuenta que "],
-        "signature": "Saludos cordiales,\nAnna Keller\nOperaciones de RR. HH.\nEnviado desde mi iPhone",
-        "disclaimer": (
+    ),
+    "es": Noise(
+        header="Grupo Northwind · Uso interno",
+        page="Página {page} de {pages}",
+        fillers=["Cabe señalar que ", "Básicamente, ", "Como se mencionó anteriormente, ", "Tenga en cuenta que "],
+        signature="Saludos cordiales,\nAnna Keller\nOperaciones de RR. HH.\nEnviado desde mi iPhone",
+        disclaimer=(
             "Este mensaje y sus anexos son confidenciales y están dirigidos únicamente a su destinatario. "
             "Si lo recibió por error, avise al remitente y elimínelo. Todos los derechos reservados."
         ),
-    },
-    "fr": {
-        "header": "Groupe Northwind · Usage interne",
-        "page": "Page {page} sur {pages}",
-        "fillers": ["Il convient de noter que ", "En gros, ", "Comme mentionné ci-dessus, ", "Veuillez noter que "],
-        "signature": "Cordialement,\nAnna Keller\nOpérations RH\nEnvoyé de mon iPhone",
-        "disclaimer": (
+    ),
+    "fr": Noise(
+        header="Groupe Northwind · Usage interne",
+        page="Page {page} sur {pages}",
+        fillers=["Il convient de noter que ", "En gros, ", "Comme mentionné ci-dessus, ", "Veuillez noter que "],
+        signature="Cordialement,\nAnna Keller\nOpérations RH\nEnvoyé de mon iPhone",
+        disclaimer=(
             "Ce message et ses pièces jointes sont confidentiels et destinés uniquement à leur destinataire. "
             "Si vous l'avez reçu par erreur, prévenez l'expéditeur et supprimez-le. Tous droits réservés."
         ),
-    },
+    ),
 }
 GARBAGE = ["* * * * * * *", "~~ ¦ ·:· ¦¦ ~", "_______________"]
 SENTENCES_PER_PAGE = 2
@@ -82,10 +107,10 @@ def noisy(text: str, lang: str, rng: random.Random) -> str:
     pages = [sentences[i : i + SENTENCES_PER_PAGE] for i in range(0, len(sentences), SENTENCES_PER_PAGE)]
     out: list[str] = []
     for number, page in enumerate(pages, start=1):
-        lines = [noise["header"]]
+        lines = [noise.header]
         for sentence in page:
             if rng.random() < 0.5:
-                sentence = rng.choice(noise["fillers"]) + sentence[0].lower() + sentence[1:]
+                sentence = rng.choice(noise.fillers) + sentence[0].lower() + sentence[1:]
             words = sentence.split(" ")
             long = [i for i, word in enumerate(words) if len(word) >= 10 and word.isalpha()]
             if long and rng.random() < 0.5:
@@ -94,19 +119,34 @@ def noisy(text: str, lang: str, rng: random.Random) -> str:
             lines.append(" ".join(words))
         if rng.random() < 0.5:
             lines.append(rng.choice(GARBAGE))
-        lines.append(noise["page"].format(page=number, pages=len(pages)))
+        lines.append(noise.page.format(page=number, pages=len(pages)))
         out.append("\n".join(lines))
-    return "\n\n".join([*out, noise["signature"], noise["disclaimer"]])
+    # Pages as the PDF parser joins them; the signature and the disclaimer,
+    # the same in every document, end the last page.
+    out[-1] = "\n\n".join([out[-1], noise.signature, noise.disclaimer])
+    return PAGE_BREAK.join(out)
+
+
+def chunked(text: str) -> tuple[list[str], list[int]]:
+    chunker = RecursiveChunker(tokenizer="character", chunk_size=chunk_size())
+    return _split_text(chunker, text, chunk_overlap())
 
 
 def chunks_of(text: str) -> list[str]:
-    chunker = RecursiveChunker(tokenizer="character", chunk_size=chunk_size())
-    return _split_text(chunker, text, chunk_overlap())[0]
+    return chunked(text)[0]
 
 
-def rules(text: str) -> list[str]:
-    repeated = repeated_lines(text)
-    return [basic_clean(chunk, repeated=repeated) or chunk for chunk in chunks_of(text)]
+def shared(documents: dict[str, str]) -> frozenset[str]:
+    """What boilerplate.shared_lines finds, counted in memory."""
+    holders: Counter[str] = Counter()
+    for text in documents.values():
+        holders.update({line for line in normalized_lines(text) if len(line) >= MIN_LENGTH})
+    return frozenset(line for line, count in holders.items() if count >= MIN_DOCUMENTS)
+
+
+def cleaned(text: str, boilerplate: frozenset[str] = frozenset()) -> list[str]:
+    chunks, starts = chunked(text)
+    return embedding_texts(text, chunks, starts, ".pdf", clean=True, boilerplate=boilerplate)
 
 
 def evaluate(model, spec, questions: list[dict], texts: dict[str, list[str]]) -> dict[str, float]:
@@ -128,7 +168,7 @@ def evaluate(model, spec, questions: list[dict], texts: dict[str, list[str]]) ->
         if not expected:
             misled += bool(chosen)
             continue
-        ranked = sorted(best, key=best.get, reverse=True)
+        ranked = sorted(best, key=lambda doc: best[doc], reverse=True)
         first += ranked[0] in expected
         ranks.append(1 / (1 + min(ranked.index(doc) for doc in expected)))
         wrong = max(value for doc, value in best.items() if doc not in expected)
@@ -153,18 +193,21 @@ def main(lang: str, model_key: str) -> None:
     data = json.loads(Path(__file__).with_name(f"dataset.{lang}.json").read_text())
     rng = random.Random(7)
     dirty = {name: noisy(text, lang, rng) for name, text in data["documents"].items()}
+    unpaged = {name: text.replace(PAGE_BREAK, "\n\n") for name, text in dirty.items()}
+    common = shared(dirty)
     variants = {
         "clean": {name: chunks_of(text) for name, text in data["documents"].items()},
         "noisy": {name: chunks_of(text) for name, text in dirty.items()},
-        "rules": {name: rules(text) for name, text in dirty.items()},
+        "lines": {name: cleaned(text) for name, text in unpaged.items()},
+        "edges": {name: cleaned(text) for name, text in dirty.items()},
+        "shared": {name: cleaned(text, common) for name, text in dirty.items()},
     }
     print(f"{model_key}, {lang}: {len(data['questions'])} questions, min_score {spec.min_score}")
     print(f"{'':6} {'right first':>11} {'MRR':>6} {'margin':>7} {'needed kept':>12} {'no-answer misled':>17}")
     for name, texts in variants.items():
         m = evaluate(model, spec, data["questions"], texts)
         print(
-            f"{name:6} {m['first']:>11.0%} {m['mrr']:>6.3f} {m['margin']:>7.3f} "
-            f"{m['kept']:>12.0%} {m['misled']:>17.0%}"
+            f"{name:6} {m['first']:>11.0%} {m['mrr']:>6.3f} {m['margin']:>7.3f} {m['kept']:>12.0%} {m['misled']:>17.0%}"
         )
 
 

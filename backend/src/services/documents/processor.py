@@ -1,6 +1,8 @@
 import asyncio
-from pathlib import Path
+import re
 from collections.abc import Awaitable, Callable
+from itertools import pairwise
+from pathlib import Path
 
 from chonkie import RecursiveChunker
 from sqlalchemy import select
@@ -12,14 +14,15 @@ from i18n import t
 from models.document import DONE_STATUSES, Document, DocumentStatus
 from models.document_text import DocumentText
 from models.notification import Notification, NotificationType
+from services.documents.boilerplate import shared_lines
+from services.documents.embedding_text import STRUCTURED, embedding_texts
 from services.documents.events import DocumentEventPublisher
-from services.embedding import EmbeddingModel
-from services.notifications.notification import NotificationService
-from services.notifications.events import NotificationEventPublisher
 from services.documents.parser import DocumentParser
-from services.rag import Rag
+from services.notifications.events import NotificationEventPublisher
+from services.notifications.notification import NotificationService
+from services.search.embedding import EmbeddingModel
+from services.search.rag import Rag
 from services.storage import ObjectStorage
-from services.documents.text_cleanup import basic_clean, repeated_lines
 from settings import (
     chunk_overlap,
     chunk_size,
@@ -27,27 +30,57 @@ from settings import (
 )
 
 EMBED_BATCH_SIZE = 8
-# Data, not prose: no line-dropping rules, which could only lose values there.
-_STRUCTURED = frozenset({".csv", ".json", ".xml", ".xlsx"})
 
 
-def _split_text(
-    chunker: RecursiveChunker, text: str, overlap: int
-) -> tuple[list[str], list[int]]:
+# A Markdown heading line; Word and ODT headings are parsed into these.
+_HEADING = re.compile(r"^#{1,6}[ \t]+\S", re.MULTILINE)
+
+
+def _split_text(chunker: RecursiveChunker, text: str, overlap: int) -> tuple[list[str], list[int]]:
     """Chunks and where each starts in `text`. The offsets let long-document
-    excerpts join neighbouring chunks exactly (services/chat.py)."""
-    pieces = [piece for piece in chunker.chunk(text) if piece.text.strip()]
+    excerpts join neighbouring chunks exactly (services/chat/chat.py).
+
+    A chunk never runs from one section into the next: the text is cut at
+    headings first, small neighbouring sections are kept together up to the
+    chunk size, and only a longer section is split inside."""
+    chunks: list[str] = []
+    starts: list[int] = []
+    for begin, end in _sections(text, chunker.chunk_size):
+        part_chunks, part_starts = _split_span(chunker, text, overlap, begin, end)
+        chunks += part_chunks
+        starts += part_starts
+    return chunks, starts
+
+
+def _sections(text: str, size: int) -> list[tuple[int, int]]:
+    cuts = [match.start() for match in _HEADING.finditer(text) if match.start() > 0]
+    bounds = [0, *cuts, len(text)]
+    groups: list[tuple[int, int]] = []
+    for begin, end in pairwise(bounds):
+        if groups and end - groups[-1][0] <= size:
+            groups[-1] = (groups[-1][0], end)
+        else:
+            groups.append((begin, end))
+    return groups
+
+
+def _split_span(
+    chunker: RecursiveChunker, text: str, overlap: int, begin: int, end: int
+) -> tuple[list[str], list[int]]:
+    """Chunks of text[begin:end], with starts in `text`; each chunk after
+    the first repeats `overlap` characters before it."""
+    pieces = [piece for piece in chunker.chunk(text[begin:end]) if piece.text.strip()]
     chunks: list[str] = []
     starts: list[int] = []
     for index, piece in enumerate(pieces):
         start = piece.start_index
         if index:
             start = max(0, piece.start_index - overlap)
-        raw = text[start : piece.end_index]
+        raw = text[begin + start : begin + piece.end_index]
         chunk = raw.strip()
         if chunk:
             chunks.append(chunk)
-            starts.append(start + len(raw) - len(raw.lstrip()))
+            starts.append(begin + start + len(raw) - len(raw.lstrip()))
     return chunks, starts
 
 
@@ -77,39 +110,17 @@ class DocumentProcessor:
         if document is None or document.status in DONE_STATUSES:
             return
         try:
-            content = await asyncio.to_thread(self.storage.get, document.object_key)
-            await self.rag.delete_document(document.id)
-            await self._set(document, DocumentStatus.PARSING, 15)
-            text = await asyncio.to_thread(self.parser.parse, content, document.filename)
-            # Chat reads this (the original) instead of re-parsing per question.
-            await self.session.merge(DocumentText(document_id=document.id, text=text))
+            text = await self._parse(document)
             await self._set(document, DocumentStatus.CHUNKING, 25)
-            mode = text_cleanup_mode()
-            structured = Path(document.filename).suffix.lower() in _STRUCTURED
             # `chunks` go to the Qdrant payload as written: search results and
             # long-document excerpts must show the document, not a cleanup
-            # that dropped a table value. Only `searchable` (embedded) is cleaned.
+            # that dropped a table value. Only the embedded text is cleaned,
+            # and table chunks get the header row (embedding_text.py).
             chunks, starts = _split_text(self.chunker, text, chunk_overlap())
             if not chunks:
                 raise AppError("invalid", "The document has no text.", status_code=400)
-            searchable = chunks
-            if mode != "off":
-                repeated = repeated_lines(text)
-                searchable = [
-                    basic_clean(chunk, structured=structured, repeated=repeated) or chunk
-                    for chunk in chunks
-                ]
-            await self._set(document, DocumentStatus.EMBEDDING, 30)
-            vectors: list[list[float]] = []
-            total = len(searchable)
-            for start in range(0, total, EMBED_BATCH_SIZE):
-                batch = searchable[start : start + EMBED_BATCH_SIZE]
-                vectors.extend(
-                    await asyncio.to_thread(self.embedder.embed_passages, batch)
-                )
-                done = min(start + EMBED_BATCH_SIZE, total)
-                progress = 30 + int(65 * done / total)
-                await self._set(document, DocumentStatus.EMBEDDING, progress)
+            searchable = await self._searchable(document, text, chunks, starts)
+            vectors = await self._embed(document, searchable)
             await self.rag.upsert_chunks(
                 document_id=document.id,
                 name=document.name,
@@ -118,6 +129,7 @@ class DocumentProcessor:
                 chunks=chunks,
                 starts=starts,
                 vectors=vectors,
+                indexed=searchable,
             )
             document.error_message = None
             document.ready_unannounced = True
@@ -126,35 +138,61 @@ class DocumentProcessor:
         except AppError as exc:
             if exc.code == "not_found":
                 raise
-            try:
-                await self.rag.delete_document(document.id)
-            except AppError:
-                pass
+            await self._drop_index(document.id)
             if exc.status_code >= 500:
                 raise
             document.error_message = t(exc.message)
             await self._set(document, DocumentStatus.FAILED, document.progress)
-            await self._notify(
-                document,
-                NotificationType.DOCUMENT_PROCESS_FAILED,
-                t(exc.message),
-            )
+            await self._notify(document, NotificationType.DOCUMENT_PROCESS_FAILED, t(exc.message))
             await self._announce_ready(document)
         except Exception:
-            try:
-                await self.rag.delete_document(document.id)
-            except AppError:
-                pass
+            await self._drop_index(document.id)
             raise
+
+    async def _parse(self, document: Document) -> str:
+        """The document's text, saved for the chat, which reads it instead of
+        parsing the file again for every question."""
+        content = await asyncio.to_thread(self.storage.get, document.object_key)
+        await self.rag.delete_document(document.id)
+        await self._set(document, DocumentStatus.PARSING, 15)
+        text = await asyncio.to_thread(self.parser.parse, content, document.filename)
+        await self.session.merge(DocumentText(document_id=document.id, text=text))
+        return text
+
+    async def _searchable(self, document: Document, text: str, chunks: list[str], starts: list[int]) -> list[str]:
+        """What each chunk is embedded and keyword-indexed from."""
+        suffix = Path(document.filename).suffix.lower()
+        clean = text_cleanup_mode() != "off"
+        boilerplate = frozenset()
+        if clean and suffix not in STRUCTURED:
+            boilerplate = await shared_lines(self.session, document.id, text)
+        return embedding_texts(text, chunks, starts, suffix, clean=clean, boilerplate=boilerplate)
+
+    async def _embed(self, document: Document, texts: list[str]) -> list[list[float]]:
+        """Vectors of `texts`, in batches, reporting progress from 30 to 95%."""
+        await self._set(document, DocumentStatus.EMBEDDING, 30)
+        vectors: list[list[float]] = []
+        for start in range(0, len(texts), EMBED_BATCH_SIZE):
+            vectors.extend(
+                await asyncio.to_thread(self.embedder.embed_passages, texts[start : start + EMBED_BATCH_SIZE])
+            )
+            done = min(start + EMBED_BATCH_SIZE, len(texts))
+            await self._set(document, DocumentStatus.EMBEDDING, 30 + int(65 * done / len(texts)))
+        return vectors
+
+    async def _drop_index(self, document_id: int) -> None:
+        """Removes the document's chunks from search; Qdrant being down must
+        not hide the error being handled."""
+        try:
+            await self.rag.delete_document(document_id)
+        except AppError:
+            pass
 
     async def fail(self, document_id: int, message: str) -> None:
         document = await self._require(document_id)
         if document is None or document.status == DocumentStatus.COMPLETED:
             return
-        try:
-            await self.rag.delete_document(document.id)
-        except AppError:
-            pass
+        await self._drop_index(document.id)
         document.error_message = t(message)
         await self._set(document, DocumentStatus.FAILED, document.progress)
         await self._notify(
@@ -168,10 +206,7 @@ class DocumentProcessor:
         document = await self._require(document_id)
         if document is None or document.status in DONE_STATUSES:
             return
-        try:
-            await self.rag.delete_document(document.id)
-        except AppError:
-            pass
+        await self._drop_index(document.id)
         try:
             await asyncio.to_thread(self.storage.delete, document.object_key)
         except AppError:
@@ -220,9 +255,7 @@ class DocumentProcessor:
         await self.notifications.emit(notification)
 
     async def _require(self, document_id: int) -> Document | None:
-        return await self.session.scalar(
-            select(Document).where(Document.id == document_id)
-        )
+        return await self.session.scalar(select(Document).where(Document.id == document_id))
 
     async def _set(self, document: Document, status: DocumentStatus, progress: int) -> None:
         document.status = status
@@ -241,9 +274,7 @@ async def unfinished_document_ids() -> list[int]:
     try:
         async with AsyncSessionLocal() as session:
             ids = await session.scalars(
-                select(Document.id)
-                .where(Document.status.not_in(DONE_STATUSES))
-                .order_by(Document.id)
+                select(Document.id).where(Document.status.not_in(DONE_STATUSES)).order_by(Document.id)
             )
             return list(ids)
     finally:

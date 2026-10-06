@@ -7,12 +7,14 @@ import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
 import {cn} from "cn";
 import {useI18n} from "@/shared/i18n/I18nProvider";
+import {StatusCard} from "@/shared/ui/StatusCard";
 import {localeIntlTag} from "@/shared/i18n/messages";
 import {getApiErrorCode, getApiErrorMessage} from "@/shared/lib/api/errors";
-import type {AuditEntry} from "@pages/audit/model/audit";
-import {actionLabel, describe} from "@pages/audit/model/format";
+import type {AuditEntry} from "@/entities/audit/model";
+import {actionLabel, describe} from "@/entities/audit/format";
 import {getUser, getUserActivity} from "@pages/users/detail/api/user";
-import type {UserDetail as UserDetailData, UserDetailLinkState} from "@pages/users/detail/model/user";
+import type {UserDetailLinkState} from "@/entities/user/model";
+import type {UserDetail as UserDetailData} from "@pages/users/detail/model/user";
 
 type UserState =
     | {status: "loading"}
@@ -164,25 +166,18 @@ function UserDetailView({userId}: {userId: number}) {
         return (
             <div className="stack stack--lg w-full">
                 {back}
-                <div className="flex flex-col items-start gap-3 rounded-xl bg-card px-4 py-8 ring-1 ring-foreground/10">
-                    <p className="font-medium">
-                        {user.missing ? t("userDetail.notFound") : t("userDetail.loadErrorTitle")}
-                    </p>
-                    {user.missing ? null : (
-                        <>
-                            <p className="text-sm text-muted-foreground">{user.message}</p>
-                            <Button
-                                type="button"
-                                onClick={() => {
-                                    setUser({status: "loading"});
-                                    setReloadKey((key) => key + 1);
-                                }}
-                            >
-                                {t("common.tryAgain")}
-                            </Button>
-                        </>
-                    )}
-                </div>
+                {user.missing ? (
+                    <StatusCard title={t("userDetail.notFound")} />
+                ) : (
+                    <StatusCard
+                        title={t("userDetail.loadErrorTitle")}
+                        detail={user.message}
+                        onRetry={() => {
+                            setUser({status: "loading"});
+                            setReloadKey((key) => key + 1);
+                        }}
+                    />
+                )}
             </div>
         );
     }

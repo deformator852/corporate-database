@@ -2,9 +2,10 @@
 
 from chonkie import RecursiveChunker
 
-from services.chat import build_excerpt
+from services.chat.excerpts import build_excerpt
+from services.documents.embedding_text import embedding_texts
 from services.documents.processor import _split_text
-from services.documents.text_cleanup import basic_clean, repeated_lines
+from services.documents.text_cleanup import basic_clean, furniture_of
 
 
 def test_rules_drop_page_furniture_but_keep_content():
@@ -17,7 +18,41 @@ def test_rules_drop_page_furniture_but_keep_content():
 def test_a_chunk_drops_the_headers_of_its_whole_document():
     document = "ACME internal\nBudget is 500 EUR.\nACME internal\nTrips need approval.\nACME internal\nEnd."
     chunk = "ACME internal\nBudget is 500 EUR."  # the header shows once here
-    assert basic_clean(chunk, repeated=repeated_lines(document)) == "Budget is 500 EUR."
+    assert basic_clean(chunk, furniture=furniture_of(document)) == "Budget is 500 EUR."
+
+
+def test_table_chunks_are_embedded_with_the_header_row():
+    table = "Name,Extension\nAna,101\nBen,102"
+    chunks, starts = ["Name,Extension\nAna,101", "Ben,102"], [0, table.index("Ben")]
+    assert embedding_texts(table, chunks, starts, ".csv", clean=True) == [
+        "Name,Extension\nAna,101",  # already starts with it
+        "Name,Extension\nBen,102",
+    ]
+    assert embedding_texts("Intro\nBody", ["Body"], [6], ".txt", clean=True) == ["Body"]
+
+
+def test_a_pdf_loses_lines_at_its_page_edges_only():
+    topics = ["Sales grew in spring.", "Costs fell after the audit.", "Hiring slowed down.", "Rent stays flat."]
+    pages = [
+        f"ACME report\n{topic}\nApproved\nYes\n120\n{topic[:9]} ends.\nPage {i} of 4"
+        for i, topic in enumerate(topics, 1)
+    ]
+    document = "\n\f\n".join(pages)
+    cleaned = basic_clean(pages[1], furniture=furniture_of(document))
+    # The header and "Page 2 of 4" sit at every page edge; "Yes" and "120"
+    # repeat too, but inside the pages: table values, kept.
+    assert cleaned == "Costs fell after the audit.\nApproved\nYes\n120\nCosts fel ends."
+
+
+def test_chunks_never_cross_a_section():
+    section = "Text of the section, long enough to fill most of a chunk. " * 4
+    text = f"# Remote work\n{section}\n# Equipment\n{section}\n# Short\nA.\n# Shorter\nB."
+    chunks, starts = _split_text(RecursiveChunker(tokenizer="character", chunk_size=300), text, 60)
+    # Each section starts a chunk; the short ones join the section before
+    # them while the chunk size allows.
+    assert [chunk.split("\n", 1)[0] for chunk in chunks] == ["# Remote work", "# Equipment"]
+    assert chunks[1].endswith("# Short\nA.\n# Shorter\nB.")
+    assert all(text[start : start + len(chunk)] == chunk for chunk, start in zip(chunks, starts, strict=True))
 
 
 def test_structured_files_keep_every_line():

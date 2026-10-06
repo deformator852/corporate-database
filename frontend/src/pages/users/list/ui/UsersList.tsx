@@ -1,6 +1,6 @@
-import {useEffect, useState} from "react";
+import {useState} from "react";
 import {Ban, CircleCheck, Pencil, Plus, Trash2} from "lucide-react";
-import {Link, useLocation, useSearchParams} from "react-router";
+import {Link, useLocation} from "react-router";
 
 import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
@@ -14,15 +14,17 @@ import {
 } from "@/components/ui/table";
 import {useSessionStore} from "@/shared/auth/session-store";
 import {useI18n} from "@/shared/i18n/I18nProvider";
+import {usePageParam} from "@/shared/lib/hooks/usePageParam";
+import {useRequest} from "@/shared/lib/hooks/useRequest";
+import {ListPagination} from "@/shared/ui/ListPagination";
+import {StatusCard} from "@/shared/ui/StatusCard";
 import {can} from "@/shared/lib/api/me";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
 import {deleteUser, disableUser, enableUser, getUsersPage} from "@pages/users/list/api/users";
 import {
-    USERS_PER_PAGE,
     type UserListItem,
-    type UserListPage,
 } from "@pages/users/list/model/users";
-import type {UserDetailLinkState} from "@pages/users/detail/model/user";
+import type {UserDetailLinkState} from "@/entities/user/model";
 import {Badge} from "@/components/ui/badge";
 import {ConfirmDialog} from "@/shared/ui/ConfirmDialog";
 import {UserFormDialog} from "@pages/users/list/ui/UserFormDialog";
@@ -31,29 +33,13 @@ function fullName(user: UserListItem) {
     return `${user.first_name} ${user.last_name}`;
 }
 
-function parsePage(value: string | null): number {
-    const page = Number(value);
-    if (!Number.isInteger(page) || page < 1) {
-        return 1;
-    }
-    return page;
-}
-
-type LoadState =
-    | {key: string; status: "ready"; data: UserListPage}
-    | {key: string; status: "error"; message: string};
-
 export function UsersList() {
     const {t} = useI18n();
     const canViewUser = can("users.view");
     const location = useLocation();
     // The user page's Back link returns to this page of the list.
     const linkState: UserDetailLinkState = {from: location.pathname + location.search};
-    const [searchParams, setSearchParams] = useSearchParams();
-    const page = parsePage(searchParams.get("page"));
-    const [reloadKey, setReloadKey] = useState(0);
-    const requestKey = `${page}:${reloadKey}`;
-    const [load, setLoad] = useState<LoadState | null>(null);
+    const [page, goToPage] = usePageParam();
 
     const canCreate = can("users.create");
     const canUpdate = can("users.update");
@@ -69,52 +55,9 @@ export function UsersList() {
     // Shown in the row whose "Enable" failed.
     const [enableError, setEnableError] = useState<{id: number; message: string} | null>(null);
 
-    useEffect(() => {
-        let cancelled = false;
-
-        void getUsersPage(page)
-            .then((data) => {
-                if (!cancelled) {
-                    setLoad({key: requestKey, status: "ready", data});
-                }
-            })
-            .catch((reason) => {
-                if (!cancelled) {
-                    setLoad({
-                        key: requestKey,
-                        status: "error",
-                        message: getApiErrorMessage(reason, t("users.loadError")),
-                    });
-                }
-            });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [page, reloadKey, requestKey]);
-
-    const goToPage = (nextPage: number) => {
-        setSearchParams((current) => {
-            const params = new URLSearchParams(current);
-            if (nextPage <= 1) {
-                params.delete("page");
-            } else {
-                params.set("page", String(nextPage));
-            }
-            return params;
-        });
-    };
-
-    const isCurrent = load?.key === requestKey;
-    const status = !isCurrent ? "loading" : load.status;
-    const data = isCurrent && load.status === "ready" ? load.data : null;
-    const error = isCurrent && load.status === "error" ? load.message : null;
+    const {status, data, error, reload} = useRequest(String(page), () => getUsersPage(page), t("users.loadError"));
     const items = data?.items ?? [];
     const total = data?.total ?? 0;
-    const pages = data?.pages ?? 0;
-    const perPage = data?.per_page ?? USERS_PER_PAGE;
-    const from = total === 0 ? 0 : (page - 1) * perPage + 1;
-    const to = total === 0 ? 0 : (page - 1) * perPage + items.length;
 
     const openCreate = () => {
         setEditingUser(null);
@@ -127,7 +70,7 @@ export function UsersList() {
     };
 
     const handleSaved = () => {
-        setReloadKey((key) => key + 1);
+        reload();
     };
 
     const handleDeleted = () => {
@@ -135,7 +78,7 @@ export function UsersList() {
             goToPage(page - 1);
             return;
         }
-        setReloadKey((key) => key + 1);
+        reload();
     };
 
     const handleEnable = async (user: UserListItem) => {
@@ -143,7 +86,7 @@ export function UsersList() {
         setEnableError(null);
         try {
             await enableUser(user.id);
-            setReloadKey((key) => key + 1);
+            reload();
         } catch (reason) {
             setEnableError({id: user.id, message: getApiErrorMessage(reason, t("users.enableError"))});
         } finally {
@@ -176,26 +119,16 @@ export function UsersList() {
             </div>
 
             {status === "error" ? (
-                <div className="flex flex-col items-start gap-3 rounded-xl bg-card px-4 py-8 ring-1 ring-foreground/10">
-                    <p className="font-medium">{t("users.loadErrorTitle")}</p>
-                    <p className="text-sm text-muted-foreground">{error}</p>
-                    <Button type="button" onClick={() => setReloadKey((key) => key + 1)}>
-                        {t("common.tryAgain")}
-                    </Button>
-                </div>
+                <StatusCard title={t("users.loadErrorTitle")} detail={error} onRetry={reload} />
             ) : status === "ready" && total === 0 ? (
-                <div className="flex flex-col items-start gap-3 rounded-xl bg-card px-4 py-8 ring-1 ring-foreground/10">
-                    <p className="font-medium">{t("users.emptyTitle")}</p>
-                    <p className="text-sm text-muted-foreground">
-                        {t("users.emptyDescription")}
-                    </p>
+                <StatusCard title={t("users.emptyTitle")} detail={t("users.emptyDescription")}>
                     {canCreate ? (
                         <Button type="button" onClick={openCreate}>
                             <Plus aria-hidden/>
                             {t("users.create")}
                         </Button>
                     ) : null}
-                </div>
+                </StatusCard>
             ) : (
                 <div className="stack">
                     <Card className="gap-0 py-0">
@@ -353,41 +286,15 @@ export function UsersList() {
                         </Table>
                     </Card>
 
-                    {status === "ready" ? (
-                        <nav
-                            aria-label={t("common.pagination")}
-                            className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-                        >
-                            <p className="text-sm text-muted-foreground">
-                                {t("common.showing", {from, to, total})}
-                            </p>
-                            <div className="flex items-center gap-2">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={page <= 1}
-                                    onClick={() => goToPage(page - 1)}
-                                >
-                                    {t("common.previous")}
-                                </Button>
-                                <p className="min-w-24 text-center text-sm text-muted-foreground">
-                                    {t("common.pageOf", {
-                                        page,
-                                        pages: Math.max(pages, 1),
-                                    })}
-                                </p>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={pages === 0 || page >= pages}
-                                    onClick={() => goToPage(page + 1)}
-                                >
-                                    {t("common.next")}
-                                </Button>
-                            </div>
-                        </nav>
+                    {data ? (
+                        <ListPagination
+                            page={page}
+                            pages={data.pages}
+                            perPage={data.per_page}
+                            total={total}
+                            shown={items.length}
+                            onPageChange={goToPage}
+                        />
                     ) : null}
                 </div>
             )}

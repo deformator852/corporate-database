@@ -58,9 +58,7 @@ class AuditService:
                     AuditLog.ip.ilike(pattern),
                 )
             )
-        total = await self.session.scalar(
-            select(func.count()).select_from(AuditLog).where(*filters)
-        )
+        total = await self.session.scalar(select(func.count()).select_from(AuditLog).where(*filters))
         entries = await self.session.scalars(
             select(AuditLog)
             .where(*filters)
@@ -91,9 +89,7 @@ class AuditService:
         if before is not None:
             # Rows strictly older than the cursor entry: (time, id) < its pair.
             anchor = select(AuditLog.created_at, AuditLog.id).where(AuditLog.id == before)
-            query = query.where(
-                tuple_(AuditLog.created_at, AuditLog.id) < anchor.scalar_subquery()
-            )
+            query = query.where(tuple_(AuditLog.created_at, AuditLog.id) < anchor.scalar_subquery())
         query = query.order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
         query = query.limit(limit + 1)
         rows = list(await self.session.scalars(query))
@@ -102,9 +98,7 @@ class AuditService:
 
     async def user_summary(self, user: User) -> tuple[int, datetime | None]:
         """Total entries and the last successful sign-in."""
-        total = await self.session.scalar(
-            select(func.count()).select_from(AuditLog).where(self._by_user(user))
-        )
+        total = await self.session.scalar(select(func.count()).select_from(AuditLog).where(self._by_user(user)))
         last_sign_in = await self.session.scalar(
             select(func.max(AuditLog.created_at)).where(
                 AuditLog.actor_id == user.id, AuditLog.action == AuditAction.LOGIN
@@ -112,9 +106,7 @@ class AuditService:
         )
         return total or 0, last_sign_in
 
-    async def failed_logins_since(
-        self, since: datetime, *, email: str | None = None, ip: str | None = None
-    ) -> int:
+    async def failed_logins_since(self, since: datetime, *, email: str | None = None, ip: str | None = None) -> int:
         """Failed sign-ins after `since` and after the last success for the
         same email or IP (a success resets the count)."""
         column = AuditLog.actor_email if email is not None else AuditLog.ip

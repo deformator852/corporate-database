@@ -63,24 +63,22 @@ def database() -> Iterator[None]:
         asyncio.run(_admin_execute(f'CREATE DATABASE "{_TEST_DB}"'))
     except OSError as exc:
         pytest.exit(f"Postgres is not running ({exc}); start it with docker compose.", 2)
-    from alembic import command
     from alembic.config import Config
 
+    from alembic import command
+
     config = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
-    config.set_main_option(
-        "script_location", os.path.join(os.path.dirname(__file__), "..", "src", "alembic")
-    )
+    config.set_main_option("script_location", os.path.join(os.path.dirname(__file__), "..", "src", "alembic"))
     command.upgrade(config, "heads")
 
     # One event loop per test (TestClient, asyncio.run): pooled connections
     # would be bound to a closed loop.
-    import database as db
     from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy.pool import NullPool
 
-    db.AsyncSessionLocal.configure(
-        bind=create_async_engine(db.DATABASE_URL, poolclass=NullPool)
-    )
+    import database as db
+
+    db.AsyncSessionLocal.configure(bind=create_async_engine(db.DATABASE_URL, poolclass=NullPool))
     asyncio.run(_seed_catalog())
     yield
     asyncio.run(_admin_execute(f'DROP DATABASE "{_TEST_DB}" WITH (FORCE)'))
@@ -107,10 +105,11 @@ def run(coro):
 def make_user():
     """Creates a user with a role holding `permissions`; returns
     (id, email, password)."""
+    from sqlalchemy import select
+
     from database import AsyncSessionLocal
     from models import Permission, Role, User
     from services.password import hash_password
-    from sqlalchemy import select
 
     async def create(permissions: list[str], admin: bool = False):
         tag = uuid.uuid4().hex[:8]
@@ -119,9 +118,7 @@ def make_user():
             if admin:
                 role = await session.scalar(select(Role).where(Role.key == "admin"))
             else:
-                perms = list(
-                    await session.scalars(select(Permission).where(Permission.key.in_(permissions)))
-                )
+                perms = list(await session.scalars(select(Permission).where(Permission.key.in_(permissions))))
                 role = Role(key=f"role-{tag}", name=f"Role {tag}", description="", permissions=perms)
                 session.add(role)
             user = User(
@@ -143,12 +140,6 @@ def infra(monkeypatch):
     """Fakes for MinIO, Qdrant, embeddings, Ollama, RabbitMQ and Celery
     (tests/fakes.py), wired in where the app creates its clients."""
     import aio_pika
-
-    import services.embedding as embedding
-    import services.generator as generator
-    import services.rag as rag
-    import services.storage as storage
-    import services.system as system
     from fakes import (
         FakeBroker,
         FakeMinio,
@@ -157,6 +148,12 @@ def infra(monkeypatch):
         RecordingQueue,
         SharedQdrant,
     )
+
+    import services.chat.generator as generator
+    import services.search.embedding as embedding
+    import services.search.rag as rag
+    import services.storage as storage
+    import services.system as system
     from services.documents.document import CeleryDocumentQueue
 
     stack = SimpleNamespace(

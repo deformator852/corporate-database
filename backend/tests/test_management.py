@@ -3,7 +3,6 @@
 import uuid
 
 import pytest
-
 from conftest import csrf, login, run
 
 ADMIN_PAGE = ["users.list", "users.view", "users.create", "users.update", "users.delete"]
@@ -31,7 +30,10 @@ def test_admin_creates_updates_and_deletes_a_user(client, make_user):
     assert created.status_code == 201
     user = created.json()
     assert user["email"] == new_email and user["disabled"] is False  # normalized
-    assert login(client.__class__(client.app, base_url="https://testserver"), new_email, "Initial-pass-1").status_code == 200
+    assert (
+        login(client.__class__(client.app, base_url="https://testserver"), new_email, "Initial-pass-1").status_code
+        == 200
+    )
 
     updated = client.patch(
         f"/api/v1/users/{user['id']}",
@@ -97,9 +99,7 @@ def test_cannot_delete_yourself_or_the_last_admin(client, make_user):
         client.post(f"/api/v1/users/{other}/disable", headers=csrf(client))
     listed = client.get("/api/v1/users", params={"per_page": 100}).json()["items"]
     assert next(u for u in listed if u["id"] == admin_id)["is_last_admin"] is True
-    removed = client.patch(
-        f"/api/v1/users/{admin_id}", headers=csrf(client), json=_payload(email, role_keys=[])
-    )
+    removed = client.patch(f"/api/v1/users/{admin_id}", headers=csrf(client), json=_payload(email, role_keys=[]))
     assert removed.status_code == 409
     for other in others:
         client.post(f"/api/v1/users/{other}/enable", headers=csrf(client))
@@ -137,7 +137,9 @@ def test_user_list_pages(client, make_user):
 def test_every_management_route_needs_its_permission(client, make_user, method, path, permission):
     _, email, password = make_user([])
     login(client, email, password)
-    response = getattr(client, method)(path, headers=csrf(client), **({"json": {}} if method in {"post", "patch"} else {}))
+    response = getattr(client, method)(
+        path, headers=csrf(client), **({"json": {}} if method in {"post", "patch"} else {})
+    )
     assert response.status_code == 403, permission
 
 
@@ -159,7 +161,9 @@ def test_me_lists_the_users_permissions(client, make_user):
 def test_role_lifecycle(client, make_user):
     _, email, password = make_user(admin=True)
     login(client, email, password)
-    name = f"Legal team {uuid.uuid4().hex[:4]}"
+    # 8 hex characters: make_user's roles ("role-<8 hex>") must not match the
+    # search below by chance, as 4 did about once in a hundred runs.
+    name = f"Legal team {uuid.uuid4().hex[:8]}"
 
     created = client.post(
         "/api/v1/roles",
@@ -170,7 +174,7 @@ def test_role_lifecycle(client, make_user):
     role = created.json()
     assert role["key"] == name.lower().replace(" ", ".") and role["description"] == "Contracts"
 
-    found = client.get("/api/v1/roles", params={"q": name[-4:]}).json()["items"]
+    found = client.get("/api/v1/roles", params={"q": name[-8:]}).json()["items"]
     assert [r["key"] for r in found] == [role["key"]]
     updated = client.patch(
         f"/api/v1/roles/{role['key']}",
@@ -247,7 +251,10 @@ def test_notifications_can_be_read_dismissed_and_cleared(client, make_user):
     listed = client.get("/api/v1/notifications").json()
     assert [n["id"] for n in listed["items"]] == [third, second, first] and listed["unread_count"] == 3
 
-    assert client.post("/api/v1/notifications/read", headers=csrf(client), json={"ids": [first, second]}).status_code == 204
+    assert (
+        client.post("/api/v1/notifications/read", headers=csrf(client), json={"ids": [first, second]}).status_code
+        == 204
+    )
     assert client.get("/api/v1/notifications").json()["unread_count"] == 1
     assert client.delete(f"/api/v1/notifications/{third}", headers=csrf(client)).status_code == 204
     assert [n["id"] for n in client.get("/api/v1/notifications").json()["items"]] == [second, first]

@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -9,12 +11,17 @@ from seeders.permissions import ALL_PERMISSIONS
 
 CATALOG_KEYS = frozenset(key for key, _name, _description in ALL_PERMISSIONS)
 
+
+@dataclass(frozen=True, slots=True)
+class RoleDefinition:
+    name: str
+    description: str
+    # None: every permission of the catalog.
+    permission_keys: list[str] | None
+
+
 ROLE_DEFINITIONS = {
-    ADMIN_ROLE_KEY: {
-        "name": "Admin",
-        "description": "Full access",
-        "permission_keys": None,
-    },
+    ADMIN_ROLE_KEY: RoleDefinition(name="Admin", description="Full access", permission_keys=None),
 }
 
 
@@ -22,9 +29,7 @@ async def seed_roles(session: AsyncSession) -> None:
     # Catalog only: a permission dropped from the catalog must not stay on the
     # admin role, or the permission seeder can never delete it.
     permissions = [
-        permission
-        for permission in await session.scalars(select(Permission))
-        if permission.key in CATALOG_KEYS
+        permission for permission in await session.scalars(select(Permission)) if permission.key in CATALOG_KEYS
     ]
     permissions_by_key = {permission.key: permission for permission in permissions}
     roles = {
@@ -36,7 +41,7 @@ async def seed_roles(session: AsyncSession) -> None:
 
     for key, definition in ROLE_DEFINITIONS.items():
         assigned = _assigned_permissions(
-            definition["permission_keys"],
+            definition.permission_keys,
             permissions=permissions,
             permissions_by_key=permissions_by_key,
         )
@@ -45,14 +50,14 @@ async def seed_roles(session: AsyncSession) -> None:
             session.add(
                 Role(
                     key=key,
-                    name=definition["name"],
-                    description=definition["description"],
+                    name=definition.name,
+                    description=definition.description,
                     permissions=assigned,
                 )
             )
             continue
-        role.name = definition["name"]
-        role.description = definition["description"]
+        role.name = definition.name
+        role.description = definition.description
         role.permissions = assigned
 
     # Only the roles defined here are managed; roles created in the UI are
@@ -69,9 +74,7 @@ def _assigned_permissions(
     if permission_keys is None:
         return list(permissions)
     return [
-        permissions_by_key[permission_key]
-        for permission_key in permission_keys
-        if permission_key in permissions_by_key
+        permissions_by_key[permission_key] for permission_key in permission_keys if permission_key in permissions_by_key
     ]
 
 

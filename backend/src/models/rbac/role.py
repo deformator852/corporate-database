@@ -1,9 +1,15 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import CheckConstraint, String, Text, event
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
 from exceptions import AppError
 from models.mixins import TimestampMixin
+
+if TYPE_CHECKING:  # relationships only; the real import would be circular
+    from models.rbac.permission import Permission
+    from models.user import User
 
 
 class Role(TimestampMixin, Base):
@@ -13,11 +19,11 @@ class Role(TimestampMixin, Base):
     key: Mapped[str] = mapped_column(String(50), unique=True)
     name: Mapped[str] = mapped_column(String(100), unique=True)
     description: Mapped[str] = mapped_column(Text)
-    users: Mapped[list["User"]] = relationship(
+    users: Mapped[list[User]] = relationship(
         secondary="role_users",
         back_populates="roles",
     )
-    permissions: Mapped[list["Permission"]] = relationship(
+    permissions: Mapped[list[Permission]] = relationship(
         secondary="role_permissions",
         back_populates="roles",
     )

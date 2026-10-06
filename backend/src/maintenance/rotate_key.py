@@ -34,7 +34,7 @@ from encryption import (
 from exceptions import AppError
 from models.document import Document
 from services.encryption_key import save_fingerprint, stored_fingerprint
-from services.rag import COLLECTION_NAME, Rag, _chunk_context
+from services.search.rag import COLLECTION_NAME, Rag, _chunk_context
 from services.storage import ObjectStorage
 
 # (table, primary key, encrypted column); all sealed without a context.
@@ -94,8 +94,7 @@ async def _column(table: str, key: str, column: str) -> int:
     # only what is left and the loop ends.
     done = 0
     select_sql = text(
-        f"SELECT {key}, {column} FROM {table} "
-        f"WHERE {column} NOT LIKE :prefix ORDER BY {key} LIMIT {_BATCH}"
+        f"SELECT {key}, {column} FROM {table} WHERE {column} NOT LIKE :prefix ORDER BY {key} LIMIT {_BATCH}"
     )
     update_sql = text(f"UPDATE {table} SET {column} = :value WHERE {key} = :id")
     prefix = current_text_prefix() + "%"
@@ -105,9 +104,7 @@ async def _column(table: str, key: str, column: str) -> int:
             if not rows:
                 return done
             for row_id, value in rows:
-                await session.execute(
-                    update_sql, {"value": reencrypt_text(value), "id": row_id}
-                )
+                await session.execute(update_sql, {"value": reencrypt_text(value), "id": row_id})
             await session.commit()
         done += len(rows)
 
@@ -129,10 +126,10 @@ async def _chunks() -> int:
             )
             for record in records:
                 payload = record.payload or {}
-                value = payload.get("text")
-                if not isinstance(value, str):
+                value, document_id, index = (payload.get(key) for key in ("text", "document_id", "chunk_index"))
+                if not (isinstance(value, str) and isinstance(document_id, int) and isinstance(index, int)):
                     continue
-                context = _chunk_context(payload.get("document_id"), payload.get("chunk_index"))
+                context = _chunk_context(document_id, index)
                 sealed = reencrypt_text(value, context)
                 if sealed == value:
                     continue

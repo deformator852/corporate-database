@@ -71,4 +71,3 @@ def ensure_env(console: Console) -> None:
         return
     ENV_PATH.write_text(_MINIMAL_ENV)
     console.print(f"Created {ENV_PATH}.")
-

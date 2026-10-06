@@ -24,17 +24,13 @@ _SAMPLES = (
 
 
 async def stored_fingerprint(session: AsyncSession) -> str | None:
-    return await session.scalar(
-        select(SystemState.value).where(SystemState.name == FINGERPRINT)
-    )
+    return await session.scalar(select(SystemState.value).where(SystemState.name == FINGERPRINT))
 
 
 async def save_fingerprint(session: AsyncSession, fingerprint: str) -> None:
     statement = insert(SystemState).values(name=FINGERPRINT, value=fingerprint)
     await session.execute(
-        statement.on_conflict_do_update(
-            index_elements=[SystemState.name], set_={"value": fingerprint}
-        )
+        statement.on_conflict_do_update(index_elements=[SystemState.name], set_={"value": fingerprint})
     )
     await session.commit()
 

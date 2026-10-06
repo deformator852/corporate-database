@@ -4,7 +4,7 @@ import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/compo
 import {useI18n} from "@/shared/i18n/I18nProvider";
 import {LogoMark} from "@/shared/ui/Logo";
 import {ThemeSwitcher} from "@/theme/ThemeSwitcher";
-import {LoginForm} from "@pages/login/ui/LoginForm.tsx";
+import {LoginForm} from "@pages/login/ui/LoginForm";
 
 export default function Login() {
     const {t} = useI18n();

@@ -66,6 +66,8 @@ OPTIONS: dict[str, tuple[EmbeddingOption, ...]] = {
     ),
     "es": (_E5_SMALL, _E5_BASE, _BGE_M3),
 }
+
+
 def _fmt_bytes(n: int) -> str:
     return f"{n / _GIB:.1f} GB"
 
@@ -148,10 +150,7 @@ def _choose(console: Console, language: str) -> EmbeddingOption:
         choice = IntPrompt.ask("Choice", default=default, console=console)
         if 1 <= choice <= len(options):
             selected = options[choice - 1]
-            if (
-                selected.disk_bytes * 11 // 10 > free
-                and not _cached(selected.hf_id)
-            ):
+            if selected.disk_bytes * 11 // 10 > free and not _cached(selected.hf_id):
                 console.print(
                     f"[yellow]This model needs about "
                     f"{_fmt_bytes(selected.disk_bytes)}; "
@@ -201,10 +200,7 @@ class EmbeddingStep:
                 style="yellow",
             )
         )
-        console.print(
-            "A larger embedding model usually finds more relevant documents. "
-            "It needs more disk and RAM."
-        )
+        console.print("A larger embedding model usually finds more relevant documents. It needs more disk and RAM.")
         selected = _choose(console, current_language())
         upsert_env(ENV_PATH, "EMBEDDING_MODEL", selected.key)
         console.print(f"Wrote EMBEDDING_MODEL={selected.key} to {ENV_PATH}")

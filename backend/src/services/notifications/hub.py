@@ -32,9 +32,6 @@ hub = NotificationHub()
 
 
 async def dispatch_notification(payload: dict) -> None:
-    raw_id = payload.get("user_id")
-    try:
-        user_id = int(raw_id)
-    except (TypeError, ValueError):
-        return
-    await hub.send(user_id, payload)
+    user_id = payload.get("user_id")
+    if isinstance(user_id, int):
+        await hub.send(user_id, payload)

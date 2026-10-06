@@ -23,11 +23,7 @@ async def seed_test_users(session: AsyncSession) -> None:
         await session.flush()
 
     admin_role = await session.scalar(select(Role).where(Role.key == ADMIN_ROLE_KEY))
-    admin_user = await session.scalar(
-        select(User)
-        .where(User.email == ADMIN_EMAIL)
-        .options(selectinload(User.roles))
-    )
+    admin_user = await session.scalar(select(User).where(User.email == ADMIN_EMAIL).options(selectinload(User.roles)))
     if admin_role is None or admin_user is None:
         return
     if admin_role not in admin_user.roles:

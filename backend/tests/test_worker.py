@@ -3,9 +3,8 @@ jobs, and the worker's start-up checks."""
 
 import pytest
 from celery.exceptions import SoftTimeLimitExceeded
-from sqlalchemy import select
-
 from conftest import login, run, upload
+from sqlalchemy import select
 
 WRITER = ["documents.list", "documents.create"]
 

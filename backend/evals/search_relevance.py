@@ -4,11 +4,13 @@
 
 dataset.LANG.json holds company documents and questions: most have their
 answer in one document, some in two, the rest in none (off-topic and
-near-topic). For each model and each language the setup offers it for, the
-script embeds everything with the real model, scores each document by its
-best chunk (cosine, as Qdrant does) and picks the `min_score` that misjudges
-the fewest questions. Like the chat, it keeps at most two documents scoring at
-least `min_score`.
+near-topic). dataset_long.LANG.json, where it exists, adds long documents
+with sections, whose chunks score lower than whole short documents. For each
+model and each language the setup offers it for, the script embeds
+everything with the real model, scores each document by its best chunk
+(cosine, as Qdrant does) and picks the `min_score` that misjudges the fewest
+questions. Like the chat, it keeps at most two documents scoring at least
+`min_score`.
 
 Losing a needed document counts three times as much as giving documents to a
 question that has no answer: a lost document loses the answer, while the
@@ -26,12 +28,13 @@ from chonkie import RecursiveChunker
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from services.documents.embedding_text import embedding_texts  # noqa: E402
 from services.documents.processor import _split_text  # noqa: E402
 from settings import EMBEDDING_MODELS, chunk_overlap, chunk_size  # noqa: E402
 from setup.steps.embedding import OPTIONS  # noqa: E402
 
 LOST_WEIGHT = 3
-MAX_DOCS = 2  # services/chat.py _MAX_DOCS
+MAX_DOCS = 2  # services/chat/chat.py _MAX_DOCS
 Scores = list[tuple[set[str], dict[str, float]]]
 
 
@@ -41,14 +44,19 @@ def languages_of(model_key: str) -> list[str]:
 
 def score(model, spec, language: str) -> Scores:
     """(expected document, best score per document) for every question."""
-    data = json.loads(Path(__file__).with_name(f"dataset.{language}.json").read_text())
+    return score_file(model, spec, Path(__file__).with_name(f"dataset.{language}.json"))
+
+
+def score_file(model, spec, path: Path) -> Scores:
+    data = json.loads(path.read_text())
     chunker = RecursiveChunker(tokenizer="character", chunk_size=chunk_size())
     owners: list[str] = []
     passages: list[str] = []
     for name, text in data["documents"].items():
-        chunks, _ = _split_text(chunker, text, chunk_overlap())
+        # Embedded as the worker embeds it: cut at sections, cleaned.
+        chunks, starts = _split_text(chunker, text, chunk_overlap())
         owners += [name] * len(chunks)
-        passages += [spec.passage_prefix + chunk for chunk in chunks]
+        passages += [spec.passage_prefix + t for t in embedding_texts(text, chunks, starts, ".md", clean=True)]
     chunk_vectors = model.encode(passages, normalize_embeddings=True)
     questions = data["questions"]
     query_vectors = model.encode([spec.query_prefix + q["q"] for q in questions], normalize_embeddings=True)
@@ -101,9 +109,13 @@ def main() -> None:
         scores: Scores = []
         for language in languages_of(model_key) or ["en"]:
             scores += score(model, spec, language)
+            # Long documents with sections, where chunks score lower.
+            long = Path(__file__).with_name(f"dataset_long.{language}.json")
+            if long.exists():
+                scores += score_file(model, spec, long)
         answered = [best[doc] for expected, best in scores for doc in expected]
         unanswered = [max(best.values()) for expected, best in scores if not expected]
-        first = sum(1 for expected, best in scores if expected and max(best, key=best.get) in expected)
+        first = sum(1 for expected, best in scores if expected and max(best, key=lambda doc: best[doc]) in expected)
         floor, lost, misled = calibrate(scores)
         both = [expected <= kept(best, floor) for expected, best in scores if len(expected) > 1]
         print(

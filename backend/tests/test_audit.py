@@ -45,7 +45,11 @@ def test_user_activity_pages_newest_first_without_gaps(client, make_user):
                         created_at=base if i in (10, 11, 12) else base + timedelta(hours=i),
                     )
                 )
-            session.add(AuditLog(actor_email=user_email, action="auth.login_failed", details={}, created_at=base - timedelta(days=1)))
+            session.add(
+                AuditLog(
+                    actor_email=user_email, action="auth.login_failed", details={}, created_at=base - timedelta(days=1)
+                )
+            )
             await session.commit()
 
     run(seed())

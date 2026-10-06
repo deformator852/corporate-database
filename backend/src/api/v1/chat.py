@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections.abc import Coroutine
 from typing import Annotated, Any
 
@@ -15,40 +16,43 @@ from pydantic import Field, TypeAdapter, ValidationError
 
 from api.deps import get_chat_history_service, get_current_user
 from api.ws import RECHECK_SECONDS, seconds_left, still_allowed
-from database import AsyncSessionLocal
 from exceptions import AppError
 from i18n import t
-from models.audit import AuditAction
 from models.user import User
 from schemas.chat import (
     ChatAnswerSchema,
     ChatAskSchema,
-    ChatCancelSchema,
     ChatCancelledSchema,
+    ChatCancelSchema,
     ChatConversationListSchema,
     ChatConversationSchema,
     ChatDeltaSchema,
     ChatSocketErrorSchema,
     ChatSourceSchema,
 )
-from schemas.error import ErrorSchema, validation_message
+from schemas.error import error_responses, validation_message
 from security import get_ws_payload
-from services.audit import AuditService
-from services.chat import ChatService
-from services.chat_history import ChatHistoryService
-from services.chat_limit import finish_chat_request, start_chat_request
-from services.embedding import EmbeddingModel, get_embedding_model
-from services.generator import OllamaGenerator
+from services.chat.generator import OllamaGenerator
+from services.chat.history import ChatHistoryService
+from services.chat.limit import finish_chat_request, start_chat_request
+from services.chat.turn import answer_question
+from services.search.embedding import EmbeddingModel, get_embedding_model
+
+logger = logging.getLogger(__name__)
+# Answers still being written after their client left (tab closed, network
+# lost); kept referenced until done so they are not garbage-collected.
+_DETACHED: set[asyncio.Task] = set()
 
 router = APIRouter(
     prefix="/chat",
     tags=["chat"],
 )
 
+
 @router.get(
     "/conversations",
     response_model=ChatConversationListSchema,
-    responses={401: {"model": ErrorSchema}},
+    responses=error_responses(401),
 )
 async def list_conversations(
     page: Annotated[int, Query(ge=1)] = 1,
@@ -63,7 +67,7 @@ async def list_conversations(
 @router.get(
     "/conversations/{conversation_id}",
     response_model=ChatConversationSchema,
-    responses={401: {"model": ErrorSchema}, 404: {"model": ErrorSchema}},
+    responses=error_responses(401, 404),
 )
 async def get_conversation(
     conversation_id: int,
@@ -77,7 +81,7 @@ async def get_conversation(
 @router.delete(
     "/conversations/{conversation_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={401: {"model": ErrorSchema}, 404: {"model": ErrorSchema}},
+    responses=error_responses(401, 404),
 )
 async def delete_conversation(
     conversation_id: int,
@@ -88,9 +92,7 @@ async def delete_conversation(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-IncomingMessage = TypeAdapter(
-    Annotated[ChatAskSchema | ChatCancelSchema, Field(discriminator="type")]
-)
+IncomingMessage = TypeAdapter(Annotated[ChatAskSchema | ChatCancelSchema, Field(discriminator="type")])
 
 
 @router.websocket("/ws")
@@ -100,7 +102,7 @@ async def chat_socket(
 ) -> None:
     try:
         user_id = int(payload.sub)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         await websocket.close(code=4401)
         return
     await websocket.accept()
@@ -109,6 +111,8 @@ async def chat_socket(
     generator = OllamaGenerator()
     receive = asyncio.create_task(websocket.receive_text())
     reply: asyncio.Task[ChatAnswerSchema] | None = None
+    # The client went away, as opposed to the session ending or Stop.
+    left = False
     try:
         while True:
             wait: set[asyncio.Task] = {receive}
@@ -127,6 +131,7 @@ async def chat_socket(
                 try:
                     raw = receive.result()
                 except WebSocketDisconnect:
+                    left = True
                     return
                 if not await _session_ok(websocket, payload):
                     return
@@ -144,15 +149,32 @@ async def chat_socket(
                 await _finish_reply(websocket, reply)
                 reply = None
     except WebSocketDisconnect:
+        left = True
         return
     finally:
         receive.cancel()
         if reply is not None and not reply.done():
-            reply.cancel()
-            try:
-                await reply
-            except (asyncio.CancelledError, AppError):
-                pass
+            if left:
+                # Finish and save the answer: it shows in the chat history
+                # when the user comes back.
+                _detach(reply)
+            else:
+                reply.cancel()
+                try:
+                    await reply
+                except asyncio.CancelledError, AppError:
+                    pass
+
+
+def _detach(reply: asyncio.Task[ChatAnswerSchema]) -> None:
+    _DETACHED.add(reply)
+
+    def done(task: asyncio.Task[ChatAnswerSchema]) -> None:
+        _DETACHED.discard(task)
+        if not task.cancelled() and task.exception() is not None:
+            logger.warning("Chat answer after the client left failed", exc_info=task.exception())
+
+    reply.add_done_callback(done)
 
 
 async def _session_ok(websocket: WebSocket, payload) -> bool:
@@ -193,7 +215,7 @@ async def _on_client_message(
         reply.cancel()
         try:
             await reply
-        except (asyncio.CancelledError, AppError):
+        except asyncio.CancelledError, AppError:
             pass
         await websocket.send_json(ChatCancelledSchema(type="cancelled").model_dump())
         return None
@@ -213,14 +235,10 @@ async def _on_client_message(
             ChatSocketErrorSchema(type="error", code=exc.code, message=t(exc.message)).model_dump()
         )
         return None
-    return asyncio.create_task(
-        _answer(request_id, _generate(websocket, user_id, incoming, ip, embedder, generator))
-    )
+    return asyncio.create_task(_answer(request_id, _generate(websocket, user_id, incoming, ip, embedder, generator)))
 
 
-async def _answer(
-    request_id: int, answer: Coroutine[Any, Any, ChatAnswerSchema]
-) -> ChatAnswerSchema:
+async def _answer(request_id: int, answer: Coroutine[Any, Any, ChatAnswerSchema]) -> ChatAnswerSchema:
     """`answer`, with the user's chat slot freed however it ends (done,
     failed, cancelled, socket closed)."""
     try:
@@ -237,60 +255,37 @@ async def _generate(
     embedder: EmbeddingModel,
     generator: OllamaGenerator,
 ) -> ChatAnswerSchema:
-    async with AsyncSessionLocal() as session:
-        service = ChatService(session, embedder, generator)
-        history = ChatHistoryService(session)
-        question = ask.messages[-1].content
-        # Saved before answering: the question is kept even if the answer
-        # fails or is cancelled.
-        conversation = await history.open_or_start(user_id, ask.conversation_id, question)
-        await history.add_message(conversation, "user", question)
-        await session.commit()
+    client_gone = False
 
-        async def send_delta(piece: str) -> None:
-            await websocket.send_json(
-                ChatDeltaSchema(type="delta", content=piece).model_dump()
-            )
+    async def send_delta(piece: str) -> None:
+        # After the client left, the answer is still written and saved.
+        nonlocal client_gone
+        if client_gone:
+            return
+        try:
+            await websocket.send_json(ChatDeltaSchema(type="delta", content=piece).model_dump())
+        except Exception:  # noqa: BLE001 - the server and test client raise
+            # different errors on a closed socket; any of them means gone.
+            client_gone = True
 
-        content, used, read = await service.reply(user_id, ask.messages, send_delta)
-        sources = [
-            ChatSourceSchema(id=int(d["document_id"]), name=str(d["name"]), filename=str(d["filename"]))
-            for d in used
-        ]
-        await history.add_message(
-            conversation, "assistant", content, [source.model_dump() for source in sources]
-        )
-        if read:
-            # Who read which documents through the assistant; not the question.
-            actor = await session.get(User, user_id)
-            AuditService(session, ip).record(
-                AuditAction.CHAT_ANSWER,
-                actor=actor,
-                target_type="document",
-                target_label=", ".join(str(d["name"]) for d in read),
-                details={
-                    "documents": [
-                        {
-                            "id": d["document_id"],
-                            "name": d["name"],
-                            "classification": d["classification"],
-                        }
-                        for d in read
-                    ]
-                },
-            )
-        await session.commit()
-        return ChatAnswerSchema(
-            type="answer",
-            content=content,
-            conversation_id=conversation.id,
-            sources=sources,
-        )
+    turn = await answer_question(
+        user_id,
+        ask.messages,
+        ask.conversation_id,
+        ip=ip,
+        embedder=embedder,
+        generator=generator,
+        on_delta=send_delta,
+    )
+    return ChatAnswerSchema(
+        type="answer",
+        content=turn.content,
+        conversation_id=turn.conversation_id,
+        sources=[ChatSourceSchema(id=d.document_id, name=d.name, filename=d.filename) for d in turn.sources],
+    )
 
 
-async def _finish_reply(
-    websocket: WebSocket, reply: asyncio.Task[ChatAnswerSchema]
-) -> None:
+async def _finish_reply(websocket: WebSocket, reply: asyncio.Task[ChatAnswerSchema]) -> None:
     try:
         answer = reply.result()
     except asyncio.CancelledError:

@@ -10,8 +10,6 @@ from fastapi import (
     WebSocket,
     status,
 )
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import (
     get_audit_service,
@@ -22,8 +20,7 @@ from api.deps import (
 from api.ws import hold
 from database import AsyncSessionLocal
 from models.audit import AuditAction
-from models.rbac import role_permissions, role_users
-from models.rbac.permission import Permission
+from models.document import Document
 from models.user import User
 from schemas.document import (
     DocumentListItemSchema,
@@ -31,11 +28,11 @@ from schemas.document import (
     DocumentUploadResponseSchema,
     DocumentUploadSchema,
 )
-from schemas.error import ErrorSchema
+from schemas.error import error_responses
 from security import get_ws_payload
 from services.audit import AuditService
+from services.documents.access import event_classifications
 from services.documents.document import DocumentService
-from services.documents.access import classifications_for_user
 from services.documents.hub import hub
 
 router = APIRouter(
@@ -43,16 +40,11 @@ router = APIRouter(
     tags=["documents"],
 )
 
-ERROR_RESPONSES = {
-    401: {"model": ErrorSchema},
-    403: {"model": ErrorSchema},
-}
-
 
 @router.get(
     "",
     response_model=DocumentListResponseSchema,
-    responses=ERROR_RESPONSES,
+    responses=error_responses(401, 403),
 )
 async def list_documents(
     page: Annotated[int, Query(ge=1)] = 1,
@@ -60,9 +52,7 @@ async def list_documents(
     user: User = Depends(require_permission("documents.list")),
     service: DocumentService = Depends(get_document_service),
 ) -> DocumentListResponseSchema:
-    documents, total = await service.list_documents(
-        user.id, page=page, per_page=per_page
-    )
+    documents, total = await service.list_documents(user.id, page=page, per_page=per_page)
     return DocumentListResponseSchema.from_page(
         documents,
         page=page,
@@ -75,11 +65,7 @@ async def list_documents(
     "",
     status_code=status.HTTP_201_CREATED,
     response_model=DocumentUploadResponseSchema,
-    responses={
-        **ERROR_RESPONSES,
-        400: {"model": ErrorSchema},
-        503: {"model": ErrorSchema},
-    },
+    responses=error_responses(400, 401, 403, 503),
 )
 async def upload_document(
     payload: Annotated[DocumentUploadSchema, Form()],
@@ -88,17 +74,7 @@ async def upload_document(
     audit: AuditService = Depends(get_audit_service),
 ) -> DocumentUploadResponseSchema:
     document, converted = await service.accept_upload(payload, user.id)
-    audit.record(
-        AuditAction.DOCUMENT_UPLOAD,
-        actor=user,
-        target_type="document",
-        target_id=document.id,
-        target_label=document.name,
-        details={
-            "filename": document.filename,
-            "classification": document.classification,
-        },
-    )
+    _audit(audit, AuditAction.DOCUMENT_UPLOAD, user, document)
     item = DocumentListItemSchema.from_document(document)
     return DocumentUploadResponseSchema(**item.model_dump(), converted=converted)
 
@@ -106,11 +82,7 @@ async def upload_document(
 @router.delete(
     "/{document_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={
-        **ERROR_RESPONSES,
-        404: {"model": ErrorSchema},
-        503: {"model": ErrorSchema},
-    },
+    responses=error_responses(401, 403, 404, 503),
 )
 async def delete_document(
     document_id: int,
@@ -119,18 +91,19 @@ async def delete_document(
     audit: AuditService = Depends(get_audit_service),
 ) -> Response:
     document = await service.delete_document(document_id, user.id)
+    _audit(audit, AuditAction.DOCUMENT_DELETE, user, document)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def _audit(audit: AuditService, action: AuditAction, user: User, document: Document) -> None:
     audit.record(
-        AuditAction.DOCUMENT_DELETE,
+        action,
         actor=user,
         target_type="document",
-        target_id=document_id,
+        target_id=document.id,
         target_label=document.name,
-        details={
-            "filename": document.filename,
-            "classification": document.classification,
-        },
+        details={"filename": document.filename, "classification": document.classification},
     )
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # Opened in the browser; everything else downloads. Never HTML, SVG or XML
@@ -140,7 +113,7 @@ _INLINE_TYPES = frozenset({"application/pdf", "text/plain", "text/markdown", "te
 
 @router.get(
     "/{document_id}/file",
-    responses={**ERROR_RESPONSES, 404: {"model": ErrorSchema}},
+    responses=error_responses(401, 403, 404),
 )
 async def open_document_file(
     document_id: int,
@@ -149,25 +122,13 @@ async def open_document_file(
     audit: AuditService = Depends(get_audit_service),
 ) -> Response:
     document, content = await service.open_file(document_id, user.id)
-    audit.record(
-        AuditAction.DOCUMENT_VIEW,
-        actor=user,
-        target_type="document",
-        target_id=document.id,
-        target_label=document.name,
-        details={
-            "filename": document.filename,
-            "classification": document.classification,
-        },
-    )
+    _audit(audit, AuditAction.DOCUMENT_VIEW, user, document)
     disposition = "inline" if document.content_type in _INLINE_TYPES else "attachment"
     return Response(
         content=content,
         media_type=document.content_type,
         headers={
-            "Content-Disposition": (
-                f"{disposition}; filename*=UTF-8''{quote(document.filename)}"
-            ),
+            "Content-Disposition": (f"{disposition}; filename*=UTF-8''{quote(document.filename)}"),
             # A file that sneaks in script cannot run it in the app's origin.
             "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
             "Cache-Control": "no-store",
@@ -182,7 +143,7 @@ async def document_events(
 ) -> None:
     try:
         user_id = int(payload.sub)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         await websocket.close(code=4401)
         return
     classifications = await _event_classifications(user_id)
@@ -206,22 +167,5 @@ async def document_events(
 
 
 async def _event_classifications(user_id: int) -> tuple[str, ...] | None:
-    """Classifications whose events the user may receive; None without access."""
     async with AsyncSessionLocal() as session:
-        if not await _can_list_documents(session, user_id):
-            return None
-        return await classifications_for_user(session, user_id)
-
-
-async def _can_list_documents(session: AsyncSession, user_id: int) -> bool:
-    found = await session.scalar(
-        select(Permission.id)
-        .join(role_permissions, role_permissions.c.permission_id == Permission.id)
-        .join(role_users, role_users.c.role_id == role_permissions.c.role_id)
-        .where(
-            role_users.c.user_id == user_id,
-            Permission.key == "documents.list",
-        )
-        .limit(1)
-    )
-    return found is not None
+        return await event_classifications(session, user_id)

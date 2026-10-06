@@ -27,9 +27,7 @@ async def create_admin(email: str, first_name: str, last_name: str) -> str:
             if await session.scalar(select(User.id).where(User.email == email)):
                 raise SystemExit(f"A user with email {email} already exists.")
             role = await session.scalar(
-                select(Role)
-                .where(Role.key == ADMIN_ROLE_KEY)
-                .options(selectinload(Role.permissions))
+                select(Role).where(Role.key == ADMIN_ROLE_KEY).options(selectinload(Role.permissions))
             )
             if role is None:
                 raise SystemExit("The Admin role is missing: run the seeders first.")

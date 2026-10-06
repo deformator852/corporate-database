@@ -32,9 +32,7 @@ class AuditListResponseSchema(BaseModel):
     pages: int
 
     @classmethod
-    def from_page(
-        cls, entries: list[AuditLog], *, page: int, per_page: int, total: int
-    ) -> Self:
+    def from_page(cls, entries: list[AuditLog], *, page: int, per_page: int, total: int) -> Self:
         pages = (total + per_page - 1) // per_page if per_page and total else 0
         return cls(
             items=[AuditEntrySchema.model_validate(entry) for entry in entries],

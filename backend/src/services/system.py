@@ -16,8 +16,8 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.document import Document
-from services.embedding import get_embedding_model
-from services.rag import COLLECTION_NAME, Rag
+from services.search.embedding import get_embedding_model
+from services.search.rag import COLLECTION_NAME, Rag
 from services.storage import ObjectStorage
 from settings import (
     chunk_overlap,
@@ -83,9 +83,7 @@ def _queue() -> Check:
     from worker import celery
 
     with celery.connection_or_acquire() as connection:
-        waiting = connection.default_channel.queue_declare(
-            queue="celery", passive=True
-        ).message_count
+        waiting = connection.default_channel.queue_declare(queue="celery", passive=True).message_count
     replies = celery.control.inspect(timeout=2).ping() or {}
     workers = len(replies)
     if workers == 0:
@@ -150,9 +148,8 @@ async def system_status(session: AsyncSession) -> dict[str, Any]:
         _run("embedding", _thread(_embedder)),
         _run("disk", _thread(_disk)),
     )
-    documents = dict(
-        (await session.execute(select(Document.status, func.count()).group_by(Document.status))).all()
-    )
+    rows = await session.execute(select(Document.status, func.count()).group_by(Document.status))
+    documents = dict(rows.tuples().all())
     spec = embedding_model()
     return {
         "services": services,

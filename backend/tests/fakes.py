@@ -99,6 +99,8 @@ class FakeOllama:
 
     def __init__(self) -> None:
         self.answer = "The travel budget is 500 EUR."
+        # Seconds before each streamed piece: a slow model.
+        self.delay = 0.0
         self.error: Exception | None = None
         self.installed = {"llama3.1:8b"}
         self.loaded: set[str] = set()
@@ -115,6 +117,7 @@ class FakeOllama:
 
     async def _stream(self, text: str):
         for piece in re.findall(r"\S+\s*", text):
+            await asyncio.sleep(self.delay)
             yield SimpleNamespace(message=SimpleNamespace(content=piece))
 
     async def generate(self, **kwargs):
@@ -139,9 +142,7 @@ class FakeBroker:
 
     def __init__(self) -> None:
         self.published: list[tuple[str, dict]] = []
-        self._queues: dict[str, list[tuple[asyncio.AbstractEventLoop, asyncio.Queue]]] = (
-            defaultdict(list)
-        )
+        self._queues: dict[str, list[tuple[asyncio.AbstractEventLoop, asyncio.Queue]]] = defaultdict(list)
 
     async def connect_robust(self, url: str) -> _Connection:
         return _Connection(self)

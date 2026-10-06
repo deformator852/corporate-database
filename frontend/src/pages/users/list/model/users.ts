@@ -1,10 +1,6 @@
 export const USERS_PER_PAGE = 20;
 
-export type RoleRef = {
-    key: string;
-    name: string;
-    protected?: boolean;
-};
+import type {RoleRef} from "@/entities/role/model";
 
 export type UserListItem = {
     id: number;

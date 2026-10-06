@@ -17,6 +17,7 @@ dependencies = [
     "minio>=7.2.20",
     "ollama>=0.6.2",
     "openpyxl>=3.1.5",
+    "pdfplumber>=0.11.10",
     "pydantic[email]>=2.13.5",
     "pypdf>=6.19.0",
     "python-docx>=1.2.0",
@@ -36,11 +37,20 @@ configure = "configure:main"
 [tool.uv]
 package = true
 
+[tool.ruff]
+line-length = 120
+
 [tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "C4", "UP"]
 ignore = ["B008"]
 
 [tool.ruff.lint.per-file-ignores]
-"src/models/**.py" = ["F821"]
+# Scripts put src/ on sys.path before importing from it.
+"evals/*.py" = ["E402"]
+# .env is loaded before the app modules, which read settings on import.
+"src/main.py" = ["E402"]
+# The translation catalog keeps each message on one line.
+"src/i18n.py" = ["E501"]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.params.Depends"]
@@ -49,6 +59,8 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.params.Depends"]
 dev = [
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
+    "ruff>=0.16.10",
+    "ty>=0.0.84",
 ]
 
 [tool.pytest.ini_options]

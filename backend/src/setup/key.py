@@ -1,8 +1,8 @@
 """DATA_ENCRYPTION_KEY: backup and rotation.
 
-    uv run setup key           fingerprint of the key in .env
-    uv run setup key --show    the key itself, to copy it to a safe place
-    uv run setup key rotate    start a rotation (see maintenance/rotate_key.py)
+uv run setup key           fingerprint of the key in .env
+uv run setup key --show    the key itself, to copy it to a safe place
+uv run setup key rotate    start a rotation (see maintenance/rotate_key.py)
 """
 
 import sys
@@ -37,9 +37,7 @@ def confirm_backup(console: Console, key: str) -> None:
         )
     )
     if not sys.stdin.isatty():
-        console.print(
-            "[yellow]Not a terminal: back the key up now with `uv run setup key --show`.[/]"
-        )
+        console.print("[yellow]Not a terminal: back the key up now with `uv run setup key --show`.[/]")
         return
     while Prompt.ask('Type "saved" once the key is stored', console=console) != "saved":
         pass
@@ -52,9 +50,7 @@ def _show(console: Console, reveal: bool) -> None:
     console.print(f"Fingerprint: {key_fingerprint(key)}")
     previous = env_value(ENV_PATH, PREVIOUS)
     if previous:
-        console.print(
-            f"Rotation in progress; previous key fingerprint: {key_fingerprint(previous)}"
-        )
+        console.print(f"Rotation in progress; previous key fingerprint: {key_fingerprint(previous)}")
     if reveal:
         console.print(key, soft_wrap=True, highlight=False)
     else:

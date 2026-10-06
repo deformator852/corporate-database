@@ -1,7 +1,6 @@
 import {useEffect, useMemo, useState} from "react";
 import {Link, useLocation, useSearchParams} from "react-router";
 
-import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
 import {Input} from "@/components/ui/input";
 import {
@@ -14,43 +13,26 @@ import {
 } from "@/components/ui/table";
 import {cn} from "cn";
 import {useI18n} from "@/shared/i18n/I18nProvider";
+import {usePageParam} from "@/shared/lib/hooks/usePageParam";
+import {useRequest} from "@/shared/lib/hooks/useRequest";
+import {ListPagination} from "@/shared/ui/ListPagination";
+import {StatusCard} from "@/shared/ui/StatusCard";
 import {localeIntlTag} from "@/shared/i18n/messages";
-import {getApiErrorMessage} from "@/shared/lib/api/errors";
 import {can} from "@/shared/lib/api/me";
 import {getAuditPage} from "@pages/audit/api/audit";
-import {
-    AUDIT_ACTIONS,
-    AUDIT_PER_PAGE,
-    auditActionKey,
-    type AuditListPage,
-} from "@pages/audit/model/audit";
-import {actionLabel, describe} from "@pages/audit/model/format";
-import type {UserDetailLinkState} from "@pages/users/detail/model/user";
+import {AUDIT_ACTIONS, auditActionKey} from "@/entities/audit/model";
+import {actionLabel, describe} from "@/entities/audit/format";
+import type {UserDetailLinkState} from "@/entities/user/model";
 
 const SEARCH_DEBOUNCE_MS = 300;
-
-function parsePage(value: string | null): number {
-    const page = Number(value);
-    if (!Number.isInteger(page) || page < 1) {
-        return 1;
-    }
-    return page;
-}
-
-type LoadState =
-    | {key: string; status: "ready"; data: AuditListPage}
-    | {key: string; status: "error"; message: string};
 
 export function AuditLog() {
     const {t, locale} = useI18n();
     const [searchParams, setSearchParams] = useSearchParams();
-    const page = parsePage(searchParams.get("page"));
+    const [page] = usePageParam();
     const q = searchParams.get("q") ?? "";
     const action = searchParams.get("action") ?? "";
     const [draft, setDraft] = useState(q);
-    const [reloadKey, setReloadKey] = useState(0);
-    const requestKey = `${page}:${q}:${action}:${reloadKey}`;
-    const [load, setLoad] = useState<LoadState | null>(null);
 
     const timeFormat = useMemo(
         () =>
@@ -89,44 +71,17 @@ export function AuditLog() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [draft, q]);
 
-    useEffect(() => {
-        let cancelled = false;
-
-        void getAuditPage(page, q, action)
-            .then((data) => {
-                if (!cancelled) {
-                    setLoad({key: requestKey, status: "ready", data});
-                }
-            })
-            .catch((reason) => {
-                if (!cancelled) {
-                    setLoad({
-                        key: requestKey,
-                        status: "error",
-                        message: getApiErrorMessage(reason, t("audit.loadError")),
-                    });
-                }
-            });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [page, q, action, requestKey, t]);
-
-    const isCurrent = load?.key === requestKey;
-    const status = !isCurrent ? "loading" : load.status;
-    const data = isCurrent && load.status === "ready" ? load.data : null;
-    const error = isCurrent && load.status === "error" ? load.message : null;
+    const {status, data, error, reload} = useRequest(
+        `${page}:${q}:${action}`,
+        () => getAuditPage(page, q, action),
+        t("audit.loadError"),
+    );
     const items = data?.items ?? [];
     const total = data?.total ?? 0;
-    const pages = data?.pages ?? 0;
-    const perPage = data?.per_page ?? AUDIT_PER_PAGE;
     const canOpenUser = can("users.view");
     const location = useLocation();
     // The user page's Back link returns here with the same filters.
     const linkState: UserDetailLinkState = {from: location.pathname + location.search};
-    const from = total === 0 ? 0 : (page - 1) * perPage + 1;
-    const to = total === 0 ? 0 : (page - 1) * perPage + items.length;
 
     return (
         <div className="stack stack--lg w-full">
@@ -174,17 +129,9 @@ export function AuditLog() {
             </div>
 
             {status === "error" ? (
-                <div className="flex flex-col items-start gap-3 rounded-xl bg-card px-4 py-8 ring-1 ring-foreground/10">
-                    <p className="font-medium">{t("audit.loadErrorTitle")}</p>
-                    <p className="text-sm text-muted-foreground">{error}</p>
-                    <Button type="button" onClick={() => setReloadKey((key) => key + 1)}>
-                        {t("common.tryAgain")}
-                    </Button>
-                </div>
+                <StatusCard title={t("audit.loadErrorTitle")} detail={error} onRetry={reload} />
             ) : status === "ready" && total === 0 ? (
-                <div className="flex flex-col items-start gap-3 rounded-xl bg-card px-4 py-8 ring-1 ring-foreground/10">
-                    <p className="font-medium">{t("audit.emptyTitle")}</p>
-                </div>
+                <StatusCard title={t("audit.emptyTitle")} />
             ) : (
                 <div className="stack">
                     <Card className="gap-0 py-0">
@@ -259,38 +206,15 @@ export function AuditLog() {
                         </Table>
                     </Card>
 
-                    {status === "ready" ? (
-                        <nav
-                            aria-label={t("common.pagination")}
-                            className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-                        >
-                            <p className="text-sm text-muted-foreground">
-                                {t("common.showing", {from, to, total})}
-                            </p>
-                            <div className="flex items-center gap-2">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={page <= 1}
-                                    onClick={() => updateParams({page: String(page - 1)})}
-                                >
-                                    {t("common.previous")}
-                                </Button>
-                                <p className="min-w-24 text-center text-sm text-muted-foreground">
-                                    {t("common.pageOf", {page, pages: Math.max(pages, 1)})}
-                                </p>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={pages === 0 || page >= pages}
-                                    onClick={() => updateParams({page: String(page + 1)})}
-                                >
-                                    {t("common.next")}
-                                </Button>
-                            </div>
-                        </nav>
+                    {data ? (
+                        <ListPagination
+                            page={page}
+                            pages={data.pages}
+                            perPage={data.per_page}
+                            total={total}
+                            shown={items.length}
+                            onPageChange={(next) => updateParams({page: String(next)})}
+                        />
                     ) : null}
                 </div>
             )}

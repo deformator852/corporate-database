@@ -5,14 +5,14 @@ import {Link, Outlet, useLocation, useMatches} from "react-router";
 import {Button} from "@/components/ui/button";
 import {useSessionStore} from "@/shared/auth/session-store";
 import {can, signOut} from "@/shared/lib/api/me";
-import NotFound from "@/pages/not-found/ui/NotFound";
+import NotFound from "@pages/not-found/ui/NotFound";
 import type {RouteHandle} from "@/router";
 import {Logo} from "@/shared/ui/Logo";
 import type {SessionUser} from "@/shared/auth/types";
 import {useI18n} from "@/shared/i18n/I18nProvider";
 import {ThemeSwitcher} from "@/theme/ThemeSwitcher";
 import {NotificationBell} from "@/widgets/notifications/ui/NotificationBell";
-import {MobileNav, Sidebar} from "@/widgets/sidebar/ui/Sidebar.tsx";
+import {MobileNav, Sidebar} from "@/widgets/sidebar/ui/Sidebar";
 
 export default function AppLayout() {
     const user = useSessionStore((state) => state.user);

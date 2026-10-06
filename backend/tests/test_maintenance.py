@@ -7,7 +7,6 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from conftest import login, process, run, upload
 
 SRC = Path(__file__).resolve().parent.parent / "src"
@@ -85,7 +84,11 @@ def _crypt(*args: str, stdin: bytes, key: str | None = None) -> subprocess.Compl
         env["DATA_ENCRYPTION_KEY"] = key
     return subprocess.run(
         [sys.executable, "-m", "maintenance.backup_crypt", *args],
-        input=stdin, capture_output=True, cwd=SRC, env=env, timeout=60,
+        input=stdin,
+        capture_output=True,
+        cwd=SRC,
+        env=env,
+        timeout=60,
     )
 
 
@@ -105,7 +108,7 @@ def test_backup_stream_command_roundtrip():
     assert _crypt("nonsense", stdin=b"").returncode != 0
 
 
-def test_first_administrator_is_created_once(capsys, monkeypatch):
+def test_first_administrator_is_created_once(capsys, monkeypatch, infra):  # infra: the app starts below
     from maintenance import create_admin
 
     monkeypatch.setattr(sys, "argv", ["create_admin", "Chief@Acme.io", "Marta", "Ruiz"])

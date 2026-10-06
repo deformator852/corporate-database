@@ -7,9 +7,7 @@ class DocumentHub:
     def __init__(self) -> None:
         self._clients: dict[WebSocket, frozenset[str]] = {}
 
-    async def connect(
-        self, websocket: WebSocket, classifications: Iterable[str]
-    ) -> None:
+    async def connect(self, websocket: WebSocket, classifications: Iterable[str]) -> None:
         await websocket.accept()
         self._clients[websocket] = frozenset(classifications)
 

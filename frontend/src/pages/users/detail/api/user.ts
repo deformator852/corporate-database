@@ -1,5 +1,5 @@
 import {api} from "@/shared/lib/api/client";
-import type {AuditCursorPage} from "@pages/audit/model/audit";
+import type {AuditCursorPage} from "@/entities/audit/model";
 import {USER_ACTIVITY_PAGE, type UserDetail} from "@pages/users/detail/model/user";
 
 export async function getUser(userId: number): Promise<UserDetail> {

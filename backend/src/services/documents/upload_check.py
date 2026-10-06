@@ -61,9 +61,7 @@ def _check_archive(content: bytes, main_part: str) -> None:
             entries = archive.infolist()
     except (zipfile.BadZipFile, ValueError) as exc:
         raise _mismatch() from exc
-    if len(entries) > MAX_ZIP_ENTRIES or (
-        sum(entry.file_size for entry in entries) > MAX_UNPACKED_BYTES
-    ):
+    if len(entries) > MAX_ZIP_ENTRIES or (sum(entry.file_size for entry in entries) > MAX_UNPACKED_BYTES):
         raise AppError(
             "invalid",
             "The file unpacks to too much data.",

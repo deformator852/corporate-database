@@ -15,9 +15,7 @@ def _user_payload(email: str, roles: list[str], password: str | None = None) -> 
 def test_cannot_grant_self_admin(client, make_user):
     user_id, email, password = make_user(MANAGER)
     login(client, email, password)
-    response = client.patch(
-        f"/api/v1/users/{user_id}", headers=csrf(client), json=_user_payload(email, ["admin"])
-    )
+    response = client.patch(f"/api/v1/users/{user_id}", headers=csrf(client), json=_user_payload(email, ["admin"]))
     assert response.status_code == 403
 
 
@@ -67,11 +65,12 @@ def test_admin_role_keeps_every_permission(client, make_user):
 
 
 def test_seeders_keep_roles_created_in_the_ui():
+    from sqlalchemy import select
+
     from database import AsyncSessionLocal
     from models import Role
     from seeders.permissions import seed_permissions
     from seeders.roles import seed_roles
-    from sqlalchemy import select
 
     async def scenario() -> bool:
         async with AsyncSessionLocal() as session:

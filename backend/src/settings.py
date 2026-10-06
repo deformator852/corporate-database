@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from urllib.parse import quote
 
@@ -37,21 +38,22 @@ class EmbeddingSpec:
     min_score: float | None = None
 
 
-_E5 = {"query_prefix": "query: ", "passage_prefix": "passage: "}
-_BGE_EN = {"query_prefix": "Represent this sentence for searching relevant passages: "}
-_SOLON = {"query_prefix": "query : "}
+_e5 = partial(EmbeddingSpec, query_prefix="query: ", passage_prefix="passage: ")
+_bge_en = partial(EmbeddingSpec, query_prefix="Represent this sentence for searching relevant passages: ")
+_solon = partial(EmbeddingSpec, query_prefix="query : ")
 
 # EMBEDDING_MODEL value → model spec. min_score: calibrated with
-# evals/search_relevance.py on evals/dataset.LANG.json.
+# evals/search_relevance.py on evals/dataset.LANG.json (and dataset_long.en.json
+# for English models: the lower of its values at chunks of 400 and 800).
 EMBEDDING_MODELS = {
-    "multilingual-e5-small": EmbeddingSpec("intfloat/multilingual-e5-small", 384, **_E5, min_score=0.81),
-    "multilingual-e5-base": EmbeddingSpec("intfloat/multilingual-e5-base", 768, **_E5, min_score=0.785),
-    "multilingual-e5-large": EmbeddingSpec("intfloat/multilingual-e5-large", 1024, **_E5),
-    "bge-small-en": EmbeddingSpec("BAAI/bge-small-en-v1.5", 384, **_BGE_EN, min_score=0.54),
-    "bge-base-en": EmbeddingSpec("BAAI/bge-base-en-v1.5", 768, **_BGE_EN, min_score=0.48),
-    "bge-large-en": EmbeddingSpec("BAAI/bge-large-en-v1.5", 1024, **_BGE_EN, min_score=0.505),
-    "solon-base": EmbeddingSpec("OrdalieTech/Solon-embeddings-base-0.1", 768, **_SOLON, min_score=0.375),
-    "solon-large": EmbeddingSpec("OrdalieTech/Solon-embeddings-large-0.1", 1024, **_SOLON, min_score=0.39),
+    "multilingual-e5-small": _e5("intfloat/multilingual-e5-small", 384, min_score=0.81),
+    "multilingual-e5-base": _e5("intfloat/multilingual-e5-base", 768, min_score=0.785),
+    "multilingual-e5-large": _e5("intfloat/multilingual-e5-large", 1024),
+    "bge-small-en": _bge_en("BAAI/bge-small-en-v1.5", 384, min_score=0.54),
+    "bge-base-en": _bge_en("BAAI/bge-base-en-v1.5", 768, min_score=0.48),
+    "bge-large-en": _bge_en("BAAI/bge-large-en-v1.5", 1024, min_score=0.525),
+    "solon-base": _solon("OrdalieTech/Solon-embeddings-base-0.1", 768, min_score=0.375),
+    "solon-large": _solon("OrdalieTech/Solon-embeddings-large-0.1", 1024, min_score=0.39),
     "bge-m3": EmbeddingSpec("BAAI/bge-m3", 1024, min_score=0.45),
 }
 
@@ -143,13 +145,9 @@ def llm_num_ctx() -> int:
     try:
         value = int(raw)
     except ValueError as exc:
-        raise AppError(
-            "misconfigured", "LLM_NUM_CTX must be a number.", status_code=500
-        ) from exc
+        raise AppError("misconfigured", "LLM_NUM_CTX must be a number.", status_code=500) from exc
     if value < 4096:
-        raise AppError(
-            "misconfigured", "LLM_NUM_CTX must be at least 4096.", status_code=500
-        )
+        raise AppError("misconfigured", "LLM_NUM_CTX must be at least 4096.", status_code=500)
     return value
 
 
@@ -168,9 +166,7 @@ def _int_env(name: str, default: int) -> int:
     try:
         return int(raw)
     except ValueError as exc:
-        raise AppError(
-            "misconfigured", f"{name} must be a number.", status_code=500
-        ) from exc
+        raise AppError("misconfigured", f"{name} must be a number.", status_code=500) from exc
 
 
 def chunk_size() -> int:

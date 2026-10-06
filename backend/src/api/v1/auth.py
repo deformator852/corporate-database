@@ -6,7 +6,7 @@ from exceptions import AppError
 from models.audit import AuditAction
 from models.user import User
 from schemas.auth import LoginSchema, SessionUserSchema
-from schemas.error import ErrorSchema
+from schemas.error import error_responses
 from security import config, revoke_tokens, security, set_auth_cookies
 from services.audit import AuditService
 from services.auth import AuthService
@@ -20,7 +20,7 @@ router = APIRouter(
 @router.post(
     "/login",
     response_model=SessionUserSchema,
-    responses={401: {"model": ErrorSchema}, 429: {"model": ErrorSchema}},
+    responses=error_responses(401, 429),
 )
 async def login(
     creds: LoginSchema,
@@ -35,7 +35,7 @@ async def login(
 @router.post(
     "/refresh",
     status_code=204,
-    responses={401: {"model": ErrorSchema}},
+    responses=error_responses(401),
 )
 async def refresh(
     request: Request,
@@ -54,7 +54,7 @@ async def refresh(
 @router.post(
     "/logout",
     status_code=204,
-    responses={401: {"model": ErrorSchema}},
+    responses=error_responses(401),
 )
 async def logout(
     request: Request,
@@ -73,7 +73,7 @@ async def logout(
 @router.get(
     "/me",
     response_model=SessionUserSchema,
-    responses={401: {"model": ErrorSchema}},
+    responses=error_responses(401),
 )
 async def me(
     user: User = Depends(get_current_user),

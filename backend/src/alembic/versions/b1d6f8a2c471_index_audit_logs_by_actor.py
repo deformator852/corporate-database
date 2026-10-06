@@ -6,15 +6,14 @@ Create Date: 2026-09-28 14:00:00.000000
 
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 from alembic import op
 
-
 revision: str = "b1d6f8a2c471"
-down_revision: Union[str, Sequence[str], None] = "a9c5e7f1b360"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "a9c5e7f1b360"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -24,9 +23,7 @@ def upgrade() -> None:
         ["actor_id", "created_at", "id"],
         unique=False,
     )
-    op.create_index(
-        "ix_audit_logs_actor_email", "audit_logs", ["actor_email"], unique=False
-    )
+    op.create_index("ix_audit_logs_actor_email", "audit_logs", ["actor_email"], unique=False)
 
 
 def downgrade() -> None:

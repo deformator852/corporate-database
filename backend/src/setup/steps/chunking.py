@@ -114,6 +114,8 @@ def _input_limits(spec: EmbeddingSpec) -> dict[str, int]:
         tokenizer = AutoTokenizer.from_pretrained(spec.hf_id, local_files_only=True)
     except Exception:
         return {}
+    if tokenizer is None:
+        return {}
     max_tokens = min(int(tokenizer.model_max_length), 8192)
     limits: dict[str, int] = {}
     for language, sentence in _SAMPLES.items():
@@ -157,9 +159,7 @@ class ChunkingStep:
 
     def run(self, console: Console) -> None:
         current_size = int(env_value(ENV_PATH, "CHUNK_SIZE") or DEFAULT_CHUNK_SIZE)
-        current_overlap = int(
-            env_value(ENV_PATH, "CHUNK_OVERLAP") or DEFAULT_CHUNK_OVERLAP
-        )
+        current_overlap = int(env_value(ENV_PATH, "CHUNK_OVERLAP") or DEFAULT_CHUNK_OVERLAP)
         spec = _current_model()
         dims = spec.dims if spec else 768
 
@@ -202,10 +202,11 @@ class ChunkingStep:
         console.print(table)
 
         limits = _input_limits(spec) if spec else {}
+        model_name = spec.hf_id if spec else "the search model"
         if limits:
             fits = ", ".join(f"{LANGUAGES[code]} ~{chars}" for code, chars in limits.items())
             console.print(
-                f"Longest chunk {spec.hf_id} reads whole, in characters: {fits}. "
+                f"Longest chunk {model_name} reads whole, in characters: {fits}. "
                 "A stored chunk is size + overlap long; longer chunks are cut "
                 "and their end is not searchable."
             )
@@ -221,12 +222,10 @@ class ChunkingStep:
                 continue
             # The overlap is prepended, so a stored chunk is up to size + overlap.
             longest = size + overlap
-            too_long = [
-                LANGUAGES[code] for code, chars in limits.items() if longest > chars
-            ]
+            too_long = [LANGUAGES[code] for code, chars in limits.items() if longest > chars]
             if too_long and not Confirm.ask(
                 f"[yellow]Chunks of up to {longest} characters (size + overlap) "
-                f"are longer than {spec.hf_id} "
+                f"are longer than {model_name} "
                 f"reads for {', '.join(too_long)} text; the end of each chunk "
                 "would not be searchable. Keep this size anyway?[/]",
                 default=False,

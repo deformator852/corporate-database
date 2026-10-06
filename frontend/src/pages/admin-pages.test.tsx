@@ -74,9 +74,12 @@ describe("User page", () => {
         act(() => scrollToEnd());  // the list end is on screen at first
         expect(await screen.findByText(paragraph("Updated user · luis@acme.io"))).toBeInTheDocument();
 
-        act(() => scrollToEnd());
-
-        expect(await screen.findByText(paragraph("Signed in · luis@acme.io"))).toBeInTheDocument();
+        // The "load more" observer attaches after the first page renders:
+        // scroll until it has, as a user scrolling again would.
+        await waitFor(() => {
+            act(() => scrollToEnd());
+            expect(screen.getByText(paragraph("Signed in · luis@acme.io"))).toBeInTheDocument();
+        });
         expect(await screen.findByText("This is the first recorded action.")).toBeInTheDocument();
         expect(server.sent("GET", "/users/2/activity")[1].params.before).toBe(2);
     });

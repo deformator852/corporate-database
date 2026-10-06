@@ -51,9 +51,7 @@ def process_document(self, document_id: int) -> None:
         else:
             asyncio.run(fail_document_job(document_id, exc.message))
     except Exception as exc:
-        _retry_or(
-            self, exc, lambda: fail_document_job(document_id, "Could not process the document.")
-        )
+        _retry_or(self, exc, lambda: fail_document_job(document_id, "Could not process the document."))
 
 
 def _retry_or(task: Task, exc: Exception, give_up: Callable[[], Coroutine[Any, Any, None]]) -> None:

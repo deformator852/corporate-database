@@ -1,0 +1,121 @@
+{
+  "documents": {
+    "Employee handbook": "# Employee handbook\n\nThis handbook applies to all permanent staff of Northwind Group. It is reviewed every January by the people team.\n\n## Working hours\n\nThe standard week is 38 hours. Core time runs from 10:00 to 15:00, and outside it people organise their day with their team. Overtime is recorded in the time tool and compensated with time off within three months. Work on public holidays is paid at double rate and needs the approval of the department head beforehand.\n\n## Remote work\n\nUp to three days per week are allowed. Requests go to the team lead in the HR portal, and an approval stays valid for six months. The company pays 25 EUR per month towards internet costs, added to the salary automatically. Working from another country is limited to 20 days per year and must be reported to the payroll team in advance.\n\n## Equipment\n\nNew joiners receive a laptop, a headset and a second monitor on their first day. A replacement is ordered through the service desk; standard models arrive within five working days. Personal purchases of up to 300 EUR for an ergonomic chair or desk are refunded once every three years against an invoice.\n\n## Training\n\nEach person has a yearly budget of 1 200 EUR and three paid days. Courses longer than a week need a learning agreement: leaving within twelve months after the course means paying back half of the cost. Language lessons are covered in full and do not count against the budget.\n\n## Health and safety\n\nFirst-aid kits are kept next to every kitchen. Each floor has two trained first aiders, whose names are posted by the lifts. Accidents, even small ones, are reported within 24 hours using the incident form. Fire drills take place twice a year, in April and October.\n\n## Leaving the company\n\nThe notice period is one month during probation and three months afterwards. Unused holiday is paid out with the last salary. All equipment is returned to the service desk on the last working day, and access cards stop working at midnight.\n",
+    "IT security policy": "# IT security policy\n\nThe policy covers every device and account used for company work, including personal phones that receive company e-mail.\n\n## Passwords\n\nThey must have at least 14 characters and are never reused across systems. A password manager is provided to everyone. Changes are forced only after a suspected leak, not on a schedule. Multi-factor authentication is mandatory for e-mail, the VPN and the HR portal.\n\n## Laptops\n\nDisks are encrypted before handover, and the screen locks after five minutes without activity. Updates install automatically every Wednesday night; a machine that has missed two updates is blocked from the network until it catches up. Only the service desk may grant administrator rights, for at most 24 hours.\n\n## Lost or stolen devices\n\nCall the security hotline on extension 4444 at once, at any hour. The device is wiped remotely within one hour of the call. Theft must also be reported to the police, and the report number is sent to the service desk within two days.\n\n## E-mail\n\nMessages from outside the company are marked with a yellow banner. Suspicious messages are forwarded to phishing@northwind.example and then deleted. Automatic forwarding to private addresses is blocked. Attachments larger than 25 MB are shared through the company file store instead.\n\n## Software\n\nOnly programs from the company software centre may be installed. Anything else needs a request with a business reason and is reviewed by the security team within five working days. Browser extensions are limited to an approved list of twelve.\n\n## Remote access\n\nThe VPN connects automatically outside the office. Public Wi-Fi in hotels and airports is allowed only with the VPN on. Sessions end after ten hours and require signing in again.\n",
+    "Office facilities guide": "# Office facilities guide\n\nThis guide describes the Berlin head office at Lindenstrasse 12 and the services run by the facilities team.\n\n## Parking\n\nThe garage under the building has 60 spaces, booked in the facilities app up to two weeks ahead. Eight spaces with chargers are reserved for electric cars, for at most four hours per day. Guests use the public garage across the street; reception validates their tickets for three hours.\n\n## Kitchen\n\nCoffee, tea, fruit and milk are free. Food left in the fridges is thrown away every Friday at 16:00. Dishwashers are started by whoever fills them last, and the cleaning team empties them in the morning.\n\n## Meeting rooms\n\nRooms are booked in the calendar; a booking not checked in within 15 minutes is released. The large hall on the ground floor seats 120 and is booked through the facilities team at least five days in advance. Catering for more than ten people is ordered two days ahead.\n\n## Printing\n\nPrinters release jobs only after the badge is tapped, so pages never wait in the tray. Colour printing is limited to 200 pages per person per month. Confidential paper goes into the locked grey bins, which are shredded on site every Tuesday.\n\n## Visitors\n\nGuests are registered in the visitor system by noon the day before. They receive a day badge at reception and must be accompanied at all times. Deliveries for employees are kept at the mail room for seven days.\n\n## Cleaning and maintenance\n\nDesks are cleaned every evening if they are empty, so personal items go into the lockers. Broken lights, chairs or blinds are reported in the facilities app and repaired within three working days. The building is closed between 22:00 and 06:00 except for people with night access.\n"
+  },
+  "questions": [
+    {
+      "q": "How many days a week can I work from home?",
+      "doc": "Employee handbook"
+    },
+    {
+      "q": "Does the company pay for my internet when I work remotely?",
+      "doc": "Employee handbook"
+    },
+    {
+      "q": "How much money can I spend on courses each year?",
+      "doc": "Employee handbook"
+    },
+    {
+      "q": "Do I have to pay back a training if I quit?",
+      "doc": "Employee handbook"
+    },
+    {
+      "q": "When does core time start?",
+      "doc": "Employee handbook"
+    },
+    {
+      "q": "Will I get money for an ergonomic chair?",
+      "doc": "Employee handbook"
+    },
+    {
+      "q": "How long is my notice period after probation?",
+      "doc": "Employee handbook"
+    },
+    {
+      "q": "How long must my password be?",
+      "doc": "IT security policy"
+    },
+    {
+      "q": "What do I do if my laptop is stolen?",
+      "doc": "IT security policy"
+    },
+    {
+      "q": "Can I install software myself?",
+      "doc": "IT security policy"
+    },
+    {
+      "q": "Where should I send a phishing e-mail?",
+      "doc": "IT security policy"
+    },
+    {
+      "q": "When does my screen lock automatically?",
+      "doc": "IT security policy"
+    },
+    {
+      "q": "Is hotel Wi-Fi allowed for work?",
+      "doc": "IT security policy"
+    },
+    {
+      "q": "How do I book a parking space?",
+      "doc": "Office facilities guide"
+    },
+    {
+      "q": "Where can my guests park?",
+      "doc": "Office facilities guide"
+    },
+    {
+      "q": "When is the fridge cleared?",
+      "doc": "Office facilities guide"
+    },
+    {
+      "q": "How many colour pages can I print per month?",
+      "doc": "Office facilities guide"
+    },
+    {
+      "q": "How do I book the large hall?",
+      "doc": "Office facilities guide"
+    },
+    {
+      "q": "How long does the mail room keep my parcels?",
+      "doc": "Office facilities guide"
+    },
+    {
+      "q": "What does the canteen serve for lunch?",
+      "doc": null
+    },
+    {
+      "q": "How do I apply for a company bike?",
+      "doc": null
+    },
+    {
+      "q": "Who is the CEO of Northwind?",
+      "doc": null
+    },
+    {
+      "q": "What is the dress code in the office?",
+      "doc": null
+    },
+    {
+      "q": "When is the summer party?",
+      "doc": null
+    },
+    {
+      "q": "Can I bring my dog to work?",
+      "doc": null
+    },
+    {
+      "q": "Does the company pay for a gym membership?",
+      "doc": null
+    },
+    {
+      "q": "What was our revenue last year?",
+      "doc": null
+    },
+    {
+      "q": "Who won the company football tournament?",
+      "doc": null
+    }
+  ]
+}

@@ -7,7 +7,7 @@ import {keyFromName} from "@/shared/lib/keyFromName";
 import {formatDateTime, formatRelativeTime} from "@/shared/lib/time";
 import {reconnectDelay} from "@/shared/lib/ws";
 import {allowedUploadClassifications, fileStem, isDocumentUpdateNewer, type DocumentListItem} from "@pages/documents/model/documents";
-import {AUDIT_ACTIONS, auditActionKey} from "@pages/audit/model/audit";
+import {AUDIT_ACTIONS, auditActionKey} from "@/entities/audit/model";
 import {mockApi, reply} from "@/test/api";
 import {renderApp, sessionUser} from "@/test/app";
 

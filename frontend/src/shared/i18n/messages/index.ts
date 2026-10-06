@@ -7,7 +7,7 @@ export type {MessageKey};
 export type CustomMessageKey = `custom.${string}`;
 export {en};
 
-export const LOCALES = ["en", "es", "fr"] as const;
+const LOCALES = ["en", "es", "fr"] as const;
 export type Locale = (typeof LOCALES)[number];
 
 export const DEFAULT_LOCALE: Locale = "en";
@@ -27,7 +27,7 @@ export type MessageOverrides = Partial<
     Record<Locale, Partial<Record<MessageKey | CustomMessageKey, string>>>
 >;
 
-export function isLocale(value: string | undefined): value is Locale {
+function isLocale(value: string | undefined): value is Locale {
     return LOCALES.includes(value as Locale);
 }
 

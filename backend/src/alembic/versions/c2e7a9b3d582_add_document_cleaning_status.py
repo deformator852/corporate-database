@@ -6,15 +6,14 @@ Create Date: 2026-09-29 10:00:00.000000
 
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 from alembic import op
 
-
 revision: str = "c2e7a9b3d582"
-down_revision: Union[str, Sequence[str], None] = "b1d6f8a2c471"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "b1d6f8a2c471"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -22,8 +21,7 @@ def upgrade() -> None:
     op.create_check_constraint(
         "documents_status_check",
         "documents",
-        "status IN ('queued','parsing','chunking','cleaning','embedding',"
-        "'completed','failed')",
+        "status IN ('queued','parsing','chunking','cleaning','embedding','completed','failed')",
     )
 
 

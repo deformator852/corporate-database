@@ -1,6 +1,6 @@
 """Sessions, sign-in throttling, revocation, WebSocket origin."""
 
-from conftest import csrf, login, run
+from conftest import csrf, login
 
 
 def test_login_and_me(client, make_user):
@@ -111,9 +111,7 @@ def test_disabled_user_is_signed_out_and_cannot_sign_in(client, make_user):
         response = client.post(f"/api/v1/users/{user_id}/disable", headers=csrf(client))
         assert response.status_code == 200 and response.json()["disabled"] is True
         assert employee.get("/api/v1/auth/me").status_code == 401
-        refresh = employee.post(
-            "/api/v1/auth/refresh", headers=csrf(employee, "csrf_refresh_token")
-        )
+        refresh = employee.post("/api/v1/auth/refresh", headers=csrf(employee, "csrf_refresh_token"))
         assert refresh.status_code == 401
         # Wrong password: the same answer as for anyone else.
         assert login(employee, email, "wrong-password").status_code == 401

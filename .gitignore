@@ -8,3 +8,7 @@ node_modules
 /backups/
 # pytest --cov data
 .coverage
+
+# The advanced edition installs its packages here; not part of the core.
+/backend/src/advanced/
+/frontend/src/advanced/

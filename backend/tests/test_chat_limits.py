@@ -4,15 +4,15 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from conftest import run
 from sqlalchemy import update
 
-from conftest import run
 from exceptions import AppError
 
 
 @pytest.fixture
 def limit(monkeypatch):
-    import services.chat_limit as chat_limit
+    import services.chat.limit as chat_limit
 
     def set_limit(value: int) -> None:
         monkeypatch.setattr(chat_limit, "chat_questions_per_10_min", lambda: value)
@@ -22,7 +22,7 @@ def limit(monkeypatch):
 
 
 def test_second_question_waits_for_the_first_answer(limit, make_user):
-    from services.chat_limit import finish_chat_request, start_chat_request
+    from services.chat.limit import finish_chat_request, start_chat_request
 
     user_id, _, _ = make_user()
     other_id, _, _ = make_user()
@@ -36,21 +36,19 @@ def test_second_question_waits_for_the_first_answer(limit, make_user):
 
 
 def test_simultaneous_questions_let_only_one_through(limit, make_user):
-    from services.chat_limit import start_chat_request
+    from services.chat.limit import start_chat_request
 
     user_id, _, _ = make_user()
 
     async def race() -> list[object]:
-        return await asyncio.gather(
-            *(start_chat_request(user_id) for _ in range(5)), return_exceptions=True
-        )
+        return await asyncio.gather(*(start_chat_request(user_id) for _ in range(5)), return_exceptions=True)
 
     results = run(race())
     assert sum(isinstance(r, int) for r in results) == 1
 
 
 def test_questions_per_10_minutes(limit, make_user):
-    from services.chat_limit import finish_chat_request, start_chat_request
+    from services.chat.limit import finish_chat_request, start_chat_request
 
     limit(3)
     user_id, _, _ = make_user()
@@ -66,7 +64,7 @@ def test_questions_per_10_minutes(limit, make_user):
 def test_crashed_answer_does_not_block_forever(limit, make_user):
     from database import AsyncSessionLocal
     from models import ChatRequest
-    from services.chat_limit import start_chat_request
+    from services.chat.limit import start_chat_request
 
     user_id, _, _ = make_user()
     request_id = run(start_chat_request(user_id))
@@ -85,8 +83,9 @@ def test_crashed_answer_does_not_block_forever(limit, make_user):
 
 
 def test_second_tab_is_refused_until_the_first_answer_stops(client, make_user, limit, monkeypatch):
-    import api.v1.chat as chat_api
     from conftest import login
+
+    import api.v1.chat as chat_api
 
     async def endless_answer(*_args):
         await asyncio.Event().wait()  # an answer still being written

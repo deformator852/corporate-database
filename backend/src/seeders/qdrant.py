@@ -1,4 +1,4 @@
-from services.rag import Rag
+from services.search.rag import Rag
 
 
 async def seed_qdrant() -> None:

@@ -1,40 +1,23 @@
 import {Bell, BellOff, CircleAlert, CircleCheck, X} from "lucide-react";
-import {useCallback, useEffect, useState} from "react";
+import {useEffect, useEffectEvent, useState} from "react";
 
 import {Button} from "@/components/ui/button";
 import {Popover, PopoverContent, PopoverTrigger} from "@/components/ui/popover";
 import {useI18n} from "@/shared/i18n/I18nProvider";
-import {notificationTypeKey} from "@/shared/i18n/keys";
 import {localeIntlTag} from "@/shared/i18n/messages";
-import {getApiErrorMessage} from "@/shared/lib/api/errors";
-import {connectSocket} from "@/shared/lib/ws";
 import {cn} from "cn";
-import {
-    clearNotifications,
-    deleteNotification,
-    getNotificationsPage,
-    notificationsSocketUrl,
-} from "@/widgets/notifications/api/notifications";
 import {
     formatNotificationTime,
     formatRelativeTime,
     isFailure,
-    isNotificationItem,
-    NOTIFICATIONS_PER_PAGE,
-    type NotificationItem,
-    type NotificationListPage,
+    notificationTypeKey,
 } from "@/widgets/notifications/model/notifications";
+import {useNotificationFeed} from "@/widgets/notifications/model/useNotificationFeed";
 import {useNotificationReadBatch} from "@/widgets/notifications/model/useNotificationReadBatch";
-
-type LoadState =
-    | {status: "ready"; data: NotificationListPage}
-    | {status: "error"; message: string};
 
 export function NotificationBell() {
     const {t, locale} = useI18n();
     const [open, setOpen] = useState(false);
-    const [load, setLoad] = useState<LoadState | null>(null);
-    const [loadingMore, setLoadingMore] = useState(false);
     // State, not a ref: the list mounts after the popover opens, and the
     // read observer must attach once it exists.
     const [list, setList] = useState<HTMLUListElement | null>(null);
@@ -42,68 +25,10 @@ export function NotificationBell() {
     // even though they are marked read as soon as they are seen.
     const [fresh, setFresh] = useState<ReadonlySet<number>>(new Set());
     const {queue, flush} = useNotificationReadBatch();
-
-    const data = load?.status === "ready" ? load.data : null;
+    const feed = useNotificationFeed();
+    const {data} = feed;
     const unreadCount = data?.unread_count ?? 0;
-
-    const loadPage = useCallback(async (page: number, append: boolean) => {
-        const next = await getNotificationsPage(page);
-        setLoad((current) => {
-            if (!append || current?.status !== "ready") {
-                return {status: "ready", data: next};
-            }
-            const seen = new Set(current.data.items.map((item) => item.id));
-            return {
-                status: "ready",
-                data: {
-                    ...next,
-                    items: [
-                        ...current.data.items,
-                        ...next.items.filter((item) => !seen.has(item.id)),
-                    ],
-                },
-            };
-        });
-    }, []);
-
-    useEffect(() => {
-        let cancelled = false;
-        void getNotificationsPage(1)
-            .then((next) => {
-                if (!cancelled) {
-                    setLoad({status: "ready", data: next});
-                }
-            })
-            .catch((reason) => {
-                if (!cancelled) {
-                    setLoad({
-                        status: "error",
-                        message: getApiErrorMessage(
-                            reason,
-                            t("notifications.loadError"),
-                        ),
-                    });
-                }
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, []);
-
-    useEffect(() => {
-        return connectSocket(notificationsSocketUrl(), (raw) => {
-            let payload: unknown;
-            try {
-                payload = JSON.parse(raw);
-            } catch {
-                return;
-            }
-            if (!isNotificationItem(payload)) {
-                return;
-            }
-            setLoad((current) => mergeIncoming(current, payload));
-        });
-    }, []);
+    const markRead = useEffectEvent(feed.markRead);
 
     const unreadKey =
         data?.items
@@ -130,7 +55,7 @@ export function NotificationBell() {
                     seen.add(id);
                     queue(id);
                     setFresh((current) => new Set(current).add(id));
-                    setLoad((current) => markLocalRead(current, id));
+                    markRead(id);
                 }
             },
             {root, threshold: 0.6},
@@ -143,60 +68,9 @@ export function NotificationBell() {
         };
     }, [open, list, unreadKey, queue]);
 
-    async function handleClear() {
-        try {
-            await clearNotifications();
-            setLoad((current) =>
-                current?.status === "ready"
-                    ? {
-                          status: "ready",
-                          data: {
-                              ...current.data,
-                              items: [],
-                              total: 0,
-                              pages: 0,
-                              unread_count: 0,
-                          },
-                      }
-                    : current,
-            );
-        } catch (reason) {
-            setLoad({
-                status: "error",
-                message: getApiErrorMessage(reason, t("notifications.clearError")),
-            });
-        }
-    }
-
-    async function handleDismiss(id: number) {
-        const before = load;
-        setLoad((current) => removeLocal(current, id));
-        try {
-            await deleteNotification(id);
-        } catch {
-            setLoad(before);
-        }
-    }
-
-    async function handleScroll() {
-        if (
-            list == null ||
-            load?.status !== "ready" ||
-            loadingMore ||
-            load.data.page >= load.data.pages
-        ) {
-            return;
-        }
-        if (list.scrollHeight - list.scrollTop - list.clientHeight > 80) {
-            return;
-        }
-        setLoadingMore(true);
-        try {
-            await loadPage(load.data.page + 1, true);
-        } catch {
-            // Keep the already loaded page; the next scroll can retry.
-        } finally {
-            setLoadingMore(false);
+    function handleScroll() {
+        if (list != null && list.scrollHeight - list.scrollTop - list.clientHeight <= 80) {
+            void feed.loadMore();
         }
     }
 
@@ -254,37 +128,20 @@ export function NotificationBell() {
                         size="sm"
                         className="text-muted-foreground"
                         disabled={!data || data.total === 0}
-                        onClick={() => {
-                            void handleClear();
-                        }}
+                        onClick={() => void feed.clear()}
                     >
                         {t("notifications.clearAll")}
                     </Button>
                 </div>
-                {load?.status === "error" ? (
+                {feed.error ? (
                     <div className="flex flex-col items-start gap-3 px-4 py-5">
-                        <p className="text-sm text-muted-foreground">{load.message}</p>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                                void loadPage(1, false).catch((reason) => {
-                                    setLoad({
-                                        status: "error",
-                                        message: getApiErrorMessage(
-                                            reason,
-                                            t("notifications.loadError"),
-                                        ),
-                                    });
-                                });
-                            }}
-                        >
+                        <p className="text-sm text-muted-foreground">{feed.error}</p>
+                        <Button type="button" variant="outline" size="sm" onClick={feed.retry}>
                             {t("common.tryAgain")}
                         </Button>
                     </div>
                 ) : !data || data.items.length === 0 ? (
-                    load == null ? (
+                    feed.loading ? (
                         <p className="px-4 py-8 text-center text-sm text-muted-foreground">
                             {t("notifications.loading")}
                         </p>
@@ -361,7 +218,7 @@ export function NotificationBell() {
                                         aria-label={t("notifications.dismiss")}
                                         title={t("notifications.dismiss")}
                                         onClick={() => {
-                                            void handleDismiss(item.id);
+                                            void feed.dismiss(item.id);
                                         }}
                                         className="absolute top-2.5 right-2.5 flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity outline-none group-hover:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-ring/50 [@media(hover:none)]:opacity-100"
                                     >
@@ -375,78 +232,4 @@ export function NotificationBell() {
             </PopoverContent>
         </Popover>
     );
-}
-
-function mergeIncoming(
-    current: LoadState | null,
-    incoming: NotificationItem,
-): LoadState | null {
-    if (current == null || current.status !== "ready") {
-        return {
-            status: "ready",
-            data: {
-                items: [incoming],
-                page: 1,
-                per_page: NOTIFICATIONS_PER_PAGE,
-                total: 1,
-                pages: 1,
-                unread_count: incoming.read ? 0 : 1,
-            },
-        };
-    }
-    if (current.data.items.some((item) => item.id === incoming.id)) {
-        return current;
-    }
-    return {
-        status: "ready",
-        data: {
-            ...current.data,
-            items: [incoming, ...current.data.items],
-            total: current.data.total + 1,
-            unread_count: incoming.read
-                ? current.data.unread_count
-                : current.data.unread_count + 1,
-        },
-    };
-}
-
-function markLocalRead(current: LoadState | null, id: number): LoadState | null {
-    if (current == null || current.status !== "ready") {
-        return current;
-    }
-    const index = current.data.items.findIndex((item) => item.id === id);
-    if (index < 0 || current.data.items[index].read) {
-        return current;
-    }
-    const items = current.data.items.slice();
-    items[index] = {...items[index], read: true};
-    return {
-        status: "ready",
-        data: {
-            ...current.data,
-            items,
-            unread_count: Math.max(0, current.data.unread_count - 1),
-        },
-    };
-}
-
-function removeLocal(current: LoadState | null, id: number): LoadState | null {
-    if (current == null || current.status !== "ready") {
-        return current;
-    }
-    const removed = current.data.items.find((item) => item.id === id);
-    if (removed == null) {
-        return current;
-    }
-    return {
-        status: "ready",
-        data: {
-            ...current.data,
-            items: current.data.items.filter((item) => item.id !== id),
-            total: Math.max(0, current.data.total - 1),
-            unread_count: removed.read
-                ? current.data.unread_count
-                : Math.max(0, current.data.unread_count - 1),
-        },
-    };
 }

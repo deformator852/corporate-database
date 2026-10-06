@@ -1,7 +1,9 @@
+import type {MessageKey} from "@/shared/i18n/messages";
+
 export const NOTIFICATIONS_PER_PAGE = 20;
 export const NOTIFICATION_READ_BATCH_MS = 2000;
 
-export const NOTIFICATION_TYPES = [
+const NOTIFICATION_TYPES = [
     "document.completed",
     "documents.completed",
     "document.store_failed",
@@ -28,7 +30,7 @@ export type NotificationListPage = {
     unread_count: number;
 };
 
-export function isNotificationType(value: string): value is NotificationType {
+function isNotificationType(value: string): value is NotificationType {
     return (NOTIFICATION_TYPES as readonly string[]).includes(value);
 }
 
@@ -52,3 +54,7 @@ export function isFailure(type: NotificationType): boolean {
 }
 
 export {formatDateTime as formatNotificationTime, formatRelativeTime} from "@/shared/lib/time";
+
+export function notificationTypeKey(type: NotificationType): MessageKey {
+    return `notifications.type.${type}` as MessageKey;
+}

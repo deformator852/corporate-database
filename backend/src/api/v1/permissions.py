@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 
 from api.deps import get_permission_service, require_permission
-from schemas.error import ErrorSchema
+from schemas.error import error_responses
 from schemas.permission import PermissionListResponseSchema
 from services.permission import PermissionService
 
@@ -12,16 +12,11 @@ router = APIRouter(
     tags=["permissions"],
 )
 
-ERROR_RESPONSES = {
-    401: {"model": ErrorSchema},
-    403: {"model": ErrorSchema},
-}
-
 
 @router.get(
     "",
     response_model=PermissionListResponseSchema,
-    responses=ERROR_RESPONSES,
+    responses=error_responses(401, 403),
     dependencies=[Depends(require_permission("permissions.list"))],
 )
 async def list_permissions(

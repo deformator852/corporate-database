@@ -23,11 +23,7 @@ RETRIEVE_PERMISSIONS = frozenset(
 def allowed_classifications(permission_keys: Iterable[str]) -> tuple[str, ...]:
     keys = set(permission_keys)
     allowed = [DocumentClassification.STANDARD.value]
-    if (
-        RESTRICTED_PERMISSION in keys
-        or CONFIDENTIAL_PERMISSION in keys
-        or SECRET_PERMISSION in keys
-    ):
+    if RESTRICTED_PERMISSION in keys or CONFIDENTIAL_PERMISSION in keys or SECRET_PERMISSION in keys:
         allowed.append(DocumentClassification.RESTRICTED.value)
     if CONFIDENTIAL_PERMISSION in keys or SECRET_PERMISSION in keys:
         allowed.append(DocumentClassification.CONFIDENTIAL.value)
@@ -53,7 +49,14 @@ async def user_permission_keys(session: AsyncSession, user_id: int) -> set[str]:
     return set(keys)
 
 
-async def classifications_for_user(
-    session: AsyncSession, user_id: int
-) -> tuple[str, ...]:
+async def classifications_for_user(session: AsyncSession, user_id: int) -> tuple[str, ...]:
     return allowed_classifications(await user_permission_keys(session, user_id))
+
+
+async def event_classifications(session: AsyncSession, user_id: int) -> tuple[str, ...] | None:
+    """Classifications whose live document events the user may receive;
+    None without the right to list documents."""
+    keys = await user_permission_keys(session, user_id)
+    if "documents.list" not in keys:
+        return None
+    return allowed_classifications(keys)

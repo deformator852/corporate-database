@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 
 from api.deps import get_audit_service, require_permission
 from schemas.audit import AuditListResponseSchema
-from schemas.error import ErrorSchema
+from schemas.error import error_responses
 from services.audit import AuditService
 
 router = APIRouter(
@@ -16,7 +16,7 @@ router = APIRouter(
 @router.get(
     "",
     response_model=AuditListResponseSchema,
-    responses={401: {"model": ErrorSchema}, 403: {"model": ErrorSchema}},
+    responses=error_responses(401, 403),
     dependencies=[Depends(require_permission("audit.list"))],
 )
 async def list_audit(
@@ -26,10 +26,5 @@ async def list_audit(
     action: Annotated[str, Query(max_length=64)] = "",
     service: AuditService = Depends(get_audit_service),
 ) -> AuditListResponseSchema:
-    entries, total = await service.list_entries(
-        page=page, per_page=per_page, q=q, action=action
-    )
-    return AuditListResponseSchema.from_page(
-        entries, page=page, per_page=per_page, total=total
-    )
-
+    entries, total = await service.list_entries(page=page, per_page=per_page, q=q, action=action)
+    return AuditListResponseSchema.from_page(entries, page=page, per_page=per_page, total=total)

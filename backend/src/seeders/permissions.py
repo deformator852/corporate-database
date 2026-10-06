@@ -29,9 +29,7 @@ ROLE_PERMISSIONS = (
     ("roles.delete", "Delete role", "Delete a role"),
 )
 
-PERMISSION_PERMISSIONS = (
-    ("permissions.list", "List permissions", "View the list of permissions"),
-)
+PERMISSION_PERMISSIONS = (("permissions.list", "List permissions", "View the list of permissions"),)
 
 DOCUMENT_PERMISSIONS = (
     ("documents.list", "List documents", "View the list of documents"),
@@ -77,20 +75,13 @@ ALL_PERMISSIONS = (
     + DOCUMENT_PERMISSIONS
     + AUDIT_PERMISSIONS
     + SYSTEM_PERMISSIONS
-    + tuple(
-        permission
-        for plugin in plugins()
-        for permission in getattr(plugin, "PERMISSIONS", ())
-    )
+    + tuple(permission for plugin in plugins() for permission in getattr(plugin, "PERMISSIONS", ()))
 )
 
 
 async def seed_permissions(session: AsyncSession) -> None:
     wanted = {key: (name, description) for key, name, description in ALL_PERMISSIONS}
-    existing = {
-        permission.key: permission
-        for permission in await session.scalars(select(Permission))
-    }
+    existing = {permission.key: permission for permission in await session.scalars(select(Permission))}
 
     for key, (name, description) in wanted.items():
         permission = existing.get(key)
@@ -104,13 +95,9 @@ async def seed_permissions(session: AsyncSession) -> None:
     await _delete_unused_permissions(session, wanted_keys=set(wanted))
 
 
-async def _delete_unused_permissions(
-    session: AsyncSession, *, wanted_keys: set[str]
-) -> None:
+async def _delete_unused_permissions(session: AsyncSession, *, wanted_keys: set[str]) -> None:
     assigned_ids = set(await session.scalars(select(role_permissions.c.permission_id)))
-    leftovers = await session.scalars(
-        select(Permission).where(Permission.key.not_in(wanted_keys))
-    )
+    leftovers = await session.scalars(select(Permission).where(Permission.key.not_in(wanted_keys)))
     for permission in leftovers:
         if permission.id in assigned_ids:
             continue

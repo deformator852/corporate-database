@@ -13,7 +13,7 @@ from models.user import User
 from security import security, user_session_valid
 from services.audit import AuditService
 from services.auth import AuthService
-from services.chat_history import ChatHistoryService
+from services.chat.history import ChatHistoryService
 from services.documents.document import DocumentService
 from services.notifications.notification import NotificationService
 from services.permission import PermissionService
@@ -36,9 +36,7 @@ def get_permission_service(
     return PermissionService(session)
 
 
-def get_audit_service(
-    request: Request, session: AsyncSession = Depends(get_db, scope="function")
-) -> AuditService:
+def get_audit_service(request: Request, session: AsyncSession = Depends(get_db, scope="function")) -> AuditService:
     return AuditService(session, request.client.host if request.client else None)
 
 
@@ -82,7 +80,7 @@ async def get_current_user(
         raise AppError("unauthorized", "Not authenticated", status_code=401) from exc
 
     user = await session.get(User, user_id)
-    if not user_session_valid(user, payload):
+    if user is None or not user_session_valid(user, payload):
         raise AppError("unauthorized", "Not authenticated", status_code=401)
     return user
 

@@ -27,7 +27,7 @@ class ChatRequestSchema(BaseModel):
     messages: list[ChatMessageSchema] = Field(min_length=1, max_length=40)
 
     @model_validator(mode="after")
-    def last_message_from_user(self) -> "ChatRequestSchema":
+    def last_message_from_user(self) -> ChatRequestSchema:
         if self.messages[-1].role != "user":
             raise ValueError("The last message must be from the user.")
         return self
@@ -119,10 +119,7 @@ class ChatConversationListSchema(BaseModel):
     def from_page(cls, items: list, *, page: int, per_page: int, total: int) -> Self:
         pages = (total + per_page - 1) // per_page if per_page and total else 0
         return cls(
-            items=[
-                ChatConversationItemSchema(id=c.id, title=c.title, updated_at=c.updated_at)
-                for c in items
-            ],
+            items=[ChatConversationItemSchema(id=c.id, title=c.title, updated_at=c.updated_at) for c in items],
             page=page,
             per_page=per_page,
             total=total,

@@ -76,6 +76,9 @@ cd backend
 uv run python evals/search_relevance.py MODEL   # calibrates min_score of an embedding model
 uv run python evals/chat_sources.py LANGUAGE    # checks the sources the chat shows (needs Ollama)
 uv run python evals/text_cleanup.py LANGUAGE    # what cleanup rules give search on noisy documents
+uv run python evals/chunk_context.py MODEL      # what the header row gives search in table chunks
+uv run python evals/chunking.py MODEL           # cutting at sections against cutting by size
+uv run python evals/keyword_search.py MODEL     # keyword search for names and codes in tables
 ```
 
 Put the `min_score` it prints into the model's entry in `src/settings.py`.

@@ -11,9 +11,9 @@ from models.rbac.constants import ADMIN_ROLE_KEY
 from models.rbac.role import Role
 from models.user import User
 from schemas.user import UserCreateSchema, UserUpdateSchema
+from security import sessions_cutoff
 from services.documents.access import user_permission_keys
 from services.grant import ensure_can_grant, ensure_can_manage, role_keys
-from security import sessions_cutoff
 from services.password import hash_password
 
 
@@ -21,9 +21,7 @@ class UserService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def list_users(
-        self, page: int = 1, per_page: int = 20
-    ) -> tuple[list[User], int]:
+    async def list_users(self, page: int = 1, per_page: int = 20) -> tuple[list[User], int]:
         total = await self.session.scalar(select(func.count()).select_from(User))
         users = await self.session.scalars(
             select(User)
@@ -36,9 +34,7 @@ class UserService:
 
     async def get_user(self, user_id: int) -> User | None:
         return await self.session.scalar(
-            select(User)
-            .where(User.id == user_id)
-            .options(selectinload(User.roles).selectinload(Role.permissions))
+            select(User).where(User.id == user_id).options(selectinload(User.roles).selectinload(Role.permissions))
         )
 
     async def create_user(self, data: UserCreateSchema, *, actor_id: int) -> User:
@@ -57,9 +53,7 @@ class UserService:
         await self._flush_user(user)
         return user
 
-    async def update_user(
-        self, user_id: int, data: UserUpdateSchema, *, actor_id: int
-    ) -> User:
+    async def update_user(self, user_id: int, data: UserUpdateSchema, *, actor_id: int) -> User:
         actor_keys = await user_permission_keys(self.session, actor_id)
         user = await self._require_user(user_id)
         ensure_can_manage(actor_keys, role_keys(user.roles))
@@ -126,9 +120,7 @@ class UserService:
             raise AppError("not_found", "User not found", status_code=404)
         return user
 
-    async def _ensure_email_available(
-        self, email: str, *, exclude_id: int | None = None
-    ) -> None:
+    async def _ensure_email_available(self, email: str, *, exclude_id: int | None = None) -> None:
         query = select(User.id).where(User.email == email)
         if exclude_id is not None:
             query = query.where(User.id != exclude_id)
@@ -146,9 +138,7 @@ class UserService:
             return []
         roles = list(
             await self.session.scalars(
-                select(Role)
-                .where(Role.key.in_(unique_keys))
-                .options(selectinload(Role.permissions))
+                select(Role).where(Role.key.in_(unique_keys)).options(selectinload(Role.permissions))
             )
         )
         if len(roles) != len(unique_keys):

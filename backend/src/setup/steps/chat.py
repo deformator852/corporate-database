@@ -77,6 +77,4 @@ class ChatStep:
 
         upsert_env(ENV_PATH, "CHAT_QUESTIONS_PER_10_MIN", str(questions))
         upsert_env(ENV_PATH, "LLM_PARALLEL", str(parallel))
-        console.print(
-            f"Wrote CHAT_QUESTIONS_PER_10_MIN={questions} and LLM_PARALLEL={parallel} to {ENV_PATH}"
-        )
+        console.print(f"Wrote CHAT_QUESTIONS_PER_10_MIN={questions} and LLM_PARALLEL={parallel} to {ENV_PATH}")

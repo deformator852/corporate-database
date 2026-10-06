@@ -1,5 +1,5 @@
 import {api} from "@/shared/lib/api/client";
-import {AUDIT_PER_PAGE, type AuditListPage} from "@pages/audit/model/audit";
+import {AUDIT_PER_PAGE, type AuditListPage} from "@/entities/audit/model";
 
 export async function getAuditPage(
     page: number,

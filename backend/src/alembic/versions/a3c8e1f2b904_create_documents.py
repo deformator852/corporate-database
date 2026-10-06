@@ -6,16 +6,16 @@ Create Date: 2026-09-21 11:40:00.000000
 
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 revision: str = "a3c8e1f2b904"
-down_revision: Union[str, Sequence[str], None] = "676f0c98d06c"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "676f0c98d06c"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -45,9 +45,7 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint("length(name) BETWEEN 1 AND 200"),
         sa.CheckConstraint("progress BETWEEN 0 AND 100"),
-        sa.CheckConstraint(
-            "status IN ('queued','parsing','chunking','embedding','completed','failed')"
-        ),
+        sa.CheckConstraint("status IN ('queued','parsing','chunking','embedding','completed','failed')"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )

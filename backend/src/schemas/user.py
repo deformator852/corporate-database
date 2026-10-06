@@ -92,10 +92,7 @@ class UserWriteSchema(BaseModel):
 
 def _password_fits(value: str | None) -> str | None:
     if value is not None and not password_fits(value):
-        raise ValueError(
-            f"Password is too long (max {MAX_PASSWORD_BYTES} bytes; "
-            "non-Latin letters take 2 bytes each)"
-        )
+        raise ValueError(f"Password is too long (max {MAX_PASSWORD_BYTES} bytes; non-Latin letters take 2 bytes each)")
     return value
 
 
@@ -134,9 +131,7 @@ class UserDetailSchema(BaseModel):
     actions_total: int
 
     @classmethod
-    def from_user(
-        cls, user: User, *, actions_total: int, last_sign_in_at: datetime | None
-    ) -> Self:
+    def from_user(cls, user: User, *, actions_total: int, last_sign_in_at: datetime | None) -> Self:
         return cls(
             id=user.id,
             first_name=user.first_name,

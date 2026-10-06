@@ -1,10 +1,14 @@
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, CheckConstraint, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
 from models.mixins import TimestampMixin
+
+if TYPE_CHECKING:  # relationships only; the real import would be circular
+    from models.user import User
 
 
 class NotificationType(StrEnum):
@@ -27,7 +31,7 @@ class Notification(TimestampMixin, Base):
     type: Mapped[str] = mapped_column(String(50))
     message: Mapped[str] = mapped_column(Text)
     read: Mapped[bool] = mapped_column(Boolean, default=False)
-    user: Mapped["User"] = relationship()
+    user: Mapped[User] = relationship()
 
     __table_args__ = (
         CheckConstraint(

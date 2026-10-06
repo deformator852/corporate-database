@@ -1,4 +1,4 @@
-export type ChatRole = "user" | "assistant";
+type ChatRole = "user" | "assistant";
 
 /** A document an answer was built from. */
 export type ChatSource = {

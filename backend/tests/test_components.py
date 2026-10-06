@@ -10,20 +10,21 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
+from conftest import csrf, login, process, run, upload
+from fakes import FakeOllama
 from ollama import ResponseError
 
-from conftest import csrf, login, process, run, upload
 from exceptions import AppError
-from fakes import FakeOllama
 from schemas.chat import ChatMessageSchema
+from services.chat.context_document import ContextDocument
+from services.chat.generator import OllamaGenerator, document_budget_chars
 from services.documents.parser import DocumentParser
-from services.generator import OllamaGenerator, document_budget_chars
 
 # Parsing
 
 
-def _pdf(text: str) -> bytes:
-    stream = f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET".encode()
+def _pdf(text: str, extra: str = "") -> bytes:
+    stream = f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET {extra}".encode()
     objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
@@ -80,6 +81,42 @@ def _xlsx(rows: list[list[object]]) -> bytes:
     return buffer.getvalue()
 
 
+def _ruled_table(rows: list[list[str]], top: int = 680) -> str:
+    """PDF drawing commands for a table with grid lines, as office programs
+    export one: 150 x 20 points per cell."""
+    commands = []
+    for r, row in enumerate(rows):
+        for c, value in enumerate(row):
+            commands.append(f"BT /F1 10 Tf {78 + 150 * c} {top - 20 * r - 14} Td ({value}) Tj ET")
+    bottom, right = top - 20 * len(rows), 72 + 150 * len(rows[0])
+    commands += [f"72 {top - 20 * r} m {right} {top - 20 * r} l S" for r in range(len(rows) + 1)]
+    commands += [f"{72 + 150 * c} {top} m {72 + 150 * c} {bottom} l S" for c in range(len(rows[0]) + 1)]
+    return " ".join(commands)
+
+
+def test_a_pdf_table_keeps_each_row_on_one_line():
+    table = [["Department", "Budget"], ["Engineering", "5000000"], ["Sales", "3500000"]]
+    text = DocumentParser().parse(_pdf("Budgets 2025", _ruled_table(table)), "budgets.pdf")
+    assert text.split("\n") == ["Budgets 2025", "Department\tBudget", "Engineering\t5000000", "Sales\t3500000"]
+
+
+def test_word_and_odt_headings_become_markdown():
+    from docx import Document
+
+    document = Document()
+    document.add_heading("Hotels", 1)
+    document.add_paragraph("Up to 180 EUR per night.")
+    document.add_heading("Taxis", 2)
+    buffer = io.BytesIO()
+    document.save(buffer)
+    assert DocumentParser().parse(buffer.getvalue(), "a.docx") == "# Hotels\nUp to 180 EUR per night.\n## Taxis"
+    odt = _odt(
+        '</text:p><text:h text:outline-level="2">Taxis</text:h>'
+        "<text:p>Night<text:s/>only, <text:span>after</text:span> 23:00."
+    )
+    assert DocumentParser().parse(odt, "a.odt") == "## Taxis\nNight only, after 23:00."
+
+
 def _odt(text: str) -> bytes:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
@@ -98,7 +135,11 @@ def _odt(text: str) -> bytes:
     [
         ("a.pdf", _pdf("Invoice 42 total 900"), "Invoice 42 total 900"),
         ("a.docx", _docx("Contract clause 3.2"), "Contract clause 3.2"),
-        ("a.docx", _docx_table([["Department", "Budget"], ["Sales", "1.2M"]]), "Budgets\nDepartment\tBudget\nSales\t1.2M"),
+        (
+            "a.docx",
+            _docx_table([["Department", "Budget"], ["Sales", "1.2M"]]),
+            "Budgets\nDepartment\tBudget\nSales\t1.2M",
+        ),
         ("a.odt", _odt("Minutes of the board"), "Minutes of the board"),
         ("a.xlsx", _xlsx([["Name", "Salary"], ["Ana", 1200], [None, None]]), "Ana\t1200"),
         ("a.csv", b"Name,City\nAna,Madrid\n", "Ana\tMadrid"),
@@ -132,9 +173,19 @@ def test_old_word_files_are_converted_on_upload(client, make_user, infra, tmp_pa
     source = tmp_path / "memo.docx"
     source.write_bytes(_docx("Quarterly memo about vacation days"))
     subprocess.run(
-        ["soffice", "--headless", f"-env:UserInstallation={(tmp_path / 'lo').as_uri()}",
-         "--convert-to", "doc", "--outdir", str(tmp_path), str(source)],
-        check=True, capture_output=True, timeout=120,
+        [
+            "soffice",
+            "--headless",
+            f"-env:UserInstallation={(tmp_path / 'lo').as_uri()}",
+            "--convert-to",
+            "doc",
+            "--outdir",
+            str(tmp_path),
+            str(source),
+        ],
+        check=True,
+        capture_output=True,
+        timeout=120,
     )
     _, email, password = make_user(["documents.list", "documents.create"])
     login(client, email, password)
@@ -177,6 +228,10 @@ def test_other_zip_named_doc_is_rejected(client, make_user, infra):
 # LLM client
 
 
+def _doc(document_id: int, text: str, *, name: str = "", filename: str = "") -> ContextDocument:
+    return ContextDocument(document_id, name, filename, "standard", text)
+
+
 def _messages(*contents: str) -> list[ChatMessageSchema]:
     roles = ["user", "assistant"]
     return [ChatMessageSchema(role=roles[i % 2], content=c) for i, c in enumerate(contents)]
@@ -186,7 +241,7 @@ def test_prompt_carries_documents_recent_history_and_language(monkeypatch):
     monkeypatch.setenv("APP_LANGUAGE", "fr")
     llm = FakeOllama()
     history = ["old question", "old answer", *[f"turn {i}" for i in range(9)], "What is the budget?"]
-    documents = [{"filename": "policy.txt", "text": "Budget is 500 EUR."}, {"name": "Empty", "text": " "}]
+    documents = [_doc(1, "Budget is 500 EUR.", filename="policy.txt"), _doc(2, " ", name="Empty")]
 
     answer, _ = run(OllamaGenerator(llm).complete(_messages(*history), documents))
 
@@ -194,7 +249,9 @@ def test_prompt_carries_documents_recent_history_and_language(monkeypatch):
     assert answer == llm.answer
     assert "Always reply in French" in sent[0]["content"]
     assert [m["content"] for m in sent[1:-1]] == history[:-1]  # the whole chat fits
-    assert sent[-1]["content"].startswith("Documents:\nDocument: policy.txt\nBudget is 500 EUR.\n\nQuestion:\nWhat is the budget?")
+    assert sent[-1]["content"].startswith(
+        "Documents:\nDocument: policy.txt\nBudget is 500 EUR.\n\nQuestion:\nWhat is the budget?"
+    )
     assert "SOURCES:" in sent[-1]["content"]
 
 
@@ -215,7 +272,7 @@ def test_history_keeps_the_newest_messages_within_a_quarter_of_the_context(monke
 def test_long_documents_are_cut_to_fit_the_context(monkeypatch):
     monkeypatch.setenv("LLM_NUM_CTX", "4096")
     llm = FakeOllama()
-    documents = [{"filename": f"d{i}.txt", "text": "word " * 10_000} for i in range(2)]
+    documents = [_doc(i, "word " * 10_000, filename=f"d{i}.txt") for i in range(2)]
 
     run(OllamaGenerator(llm).complete(_messages("Summarize"), documents))
 
@@ -318,9 +375,17 @@ def test_system_page_shows_what_is_broken(client, make_user, infra, monkeypatch)
 
     services = {s["name"]: s for s in client.get("/api/v1/system/status").json()["services"]}
 
-    assert services["storage"] == {"name": "storage", "status": "down", "detail": "MinIO refused the app user: AccessDenied"}
+    assert services["storage"] == {
+        "name": "storage",
+        "status": "down",
+        "detail": "MinIO refused the app user: AccessDenied",
+    }
     assert services["queue"]["status"] == "down" and "broker unreachable" in services["queue"]["detail"]
-    assert services["llm"] == {"name": "llm", "status": "down", "detail": "Model missing:model is not downloaded in Ollama."}
+    assert services["llm"] == {
+        "name": "llm",
+        "status": "down",
+        "detail": "Model missing:model is not downloaded in Ollama.",
+    }
 
 
 def test_queue_check_counts_workers_and_jobs(monkeypatch):
@@ -352,8 +417,9 @@ def test_queue_check_counts_workers_and_jobs(monkeypatch):
 
 
 def test_socket_closes_when_the_token_expires(client, make_user):
-    from security import security
     from starlette.websockets import WebSocketDisconnect
+
+    from security import security
 
     user_id, _, _ = make_user()
     token = security.create_access_token(uid=str(user_id), expiry=timedelta(seconds=1))
@@ -365,11 +431,12 @@ def test_socket_closes_when_the_token_expires(client, make_user):
 
 
 def test_socket_closes_when_access_is_taken_away(client, make_user, monkeypatch):
+    from sqlalchemy import delete
+    from starlette.websockets import WebSocketDisconnect
+
     import api.ws
     from database import AsyncSessionLocal
     from models.rbac.association import role_users
-    from sqlalchemy import delete
-    from starlette.websockets import WebSocketDisconnect
 
     monkeypatch.setattr(api.ws, "RECHECK_SECONDS", 0.2)
     user_id, email, password = make_user(["documents.list"])
@@ -389,8 +456,9 @@ def test_socket_closes_when_access_is_taken_away(client, make_user, monkeypatch)
 
 
 def test_chat_socket_closes_after_sign_out(client, make_user, monkeypatch):
-    import api.v1.chat
     from starlette.websockets import WebSocketDisconnect
+
+    import api.v1.chat
 
     monkeypatch.setattr(api.v1.chat, "RECHECK_SECONDS", 0.2)
     _, email, password = make_user()
@@ -421,11 +489,12 @@ def test_validation_errors_use_the_common_shape(client, make_user):
 
 
 def test_idle_chats_and_old_limit_records_are_purged(make_user):
+    from sqlalchemy import select
+
     from database import AsyncSessionLocal
     from models import ChatConversation, ChatRequest
-    from services.chat_history import ChatHistoryService
-    from services.chat_limit import purge_chat_requests
-    from sqlalchemy import select
+    from services.chat.history import ChatHistoryService
+    from services.chat.limit import purge_chat_requests
 
     user_id, _, _ = make_user()
     long_ago = datetime.now(UTC) - timedelta(days=100)
@@ -465,13 +534,12 @@ def test_a_failed_commit_is_reported_not_answered_with_success(client, make_user
     assert response.status_code == 500
 
 
-
 # Sources the model names
 
 
 DOCS = [
-    {"document_id": 1, "filename": "policy.txt", "name": "Travel policy", "text": "Meals: 47 EUR a day."},
-    {"document_id": 2, "filename": "canteen.txt", "name": "Canteen", "text": "Lunch costs 6.50 EUR."},
+    _doc(1, "Meals: 47 EUR a day.", name="Travel policy", filename="policy.txt"),
+    _doc(2, "Lunch costs 6.50 EUR.", name="Canteen", filename="canteen.txt"),
 ]
 
 
@@ -498,11 +566,11 @@ def test_the_sources_line_is_cut_and_names_the_used_documents(answer, text, used
 
     assert content == text
     assert "".join(streamed).strip() == text  # never shown, even while streaming
-    assert [d["document_id"] for d in documents] == used
+    assert [d.document_id for d in documents] == used
 
 
 def test_a_sources_line_split_across_pieces_is_still_hidden():
-    from services.generator import _HideSourcesLine
+    from services.chat.answer_sources import HideSourcesLine
 
     shown: list[str] = []
 
@@ -510,7 +578,7 @@ def test_a_sources_line_split_across_pieces_is_still_hidden():
         shown.append(piece)
 
     async def scenario() -> None:
-        stream = _HideSourcesLine(collect)
+        stream = HideSourcesLine(collect)
         for piece in ["Lunch costs 6.50", " EUR.\nSo", "urces", ": canteen", ".txt"]:
             await stream.feed(piece)
         await stream.flush()
@@ -544,7 +612,7 @@ def test_hits_below_the_model_threshold_are_not_used(client, make_user, infra, m
     import dataclasses
 
     import settings
-    from services.chat import NO_DOCUMENTS_ANSWER
+    from services.chat.chat import NO_DOCUMENTS_ANSWER
 
     spec = settings.EMBEDDING_MODELS["multilingual-e5-small"]
     monkeypatch.setitem(settings.EMBEDDING_MODELS, "multilingual-e5-small", dataclasses.replace(spec, min_score=0.99))
@@ -562,10 +630,32 @@ def test_hits_below_the_model_threshold_are_not_used(client, make_user, infra, m
     assert not any(call["stream"] for call in infra.llm.calls)  # the model is not asked
 
 
+def test_a_code_in_the_question_finds_its_chunk_below_the_threshold(client, make_user, infra, monkeypatch):
+    import dataclasses
+
+    import settings
+
+    spec = settings.EMBEDDING_MODELS["multilingual-e5-small"]
+    monkeypatch.setitem(settings.EMBEDDING_MODELS, "multilingual-e5-small", dataclasses.replace(spec, min_score=0.99))
+    _, email, password = make_user(["documents.list", "documents.create"])
+    login(client, email, password)
+    document_id = upload(client, "Assets", b"LT-3044 ThinkPad, warranty until 2027-03-14.", "assets.txt").json()["id"]
+    process(document_id)
+    infra.llm.answer = "The warranty ends on 2027-03-14.\nSOURCES: Assets"
+
+    headers = {"origin": "https://testserver", "cookie": f"my_token={client.cookies.get('my_token')}"}
+    with client.websocket_connect("/api/v1/chat/ws", headers=headers) as chat:
+        chat.send_json({"type": "ask", "messages": [{"role": "user", "content": "When does LT-3044 expire?"}]})
+        while (answer := chat.receive_json())["type"] != "answer":
+            pass
+
+    assert [source["id"] for source in answer["sources"]] == [document_id]
+
+
 def test_an_answer_that_repeats_the_question_is_judged_by_all_its_words():
-    from services.generator import _support
+    from services.chat.answer_sources import support
 
     question = "Is alcohol paid back by the company?"
     answer = "No, the company does not pay back alcohol."
-    assert _support(answer, question, {"text": "Alcohol, fines and entertainment are never paid back."}) >= 0.2
-    assert _support(answer, question, {"text": "Visitors park in zone C."}) == 0
+    assert support(answer, question, _doc(1, "Alcohol, fines and entertainment are never paid back.")) >= 0.2
+    assert support(answer, question, _doc(2, "Visitors park in zone C.")) == 0

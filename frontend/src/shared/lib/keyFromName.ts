@@ -1,4 +1,4 @@
-export const KEY_MAX_LENGTH = 50;
+const KEY_MAX_LENGTH = 50;
 
 const NON_KEY = /[^a-z0-9]+/g;
 

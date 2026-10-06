@@ -1,9 +1,9 @@
-import {useEffect, useState} from "react";
-import {useSearchParams} from "react-router";
+import {useEffect, useEffectEvent, useState} from "react";
 
 import {useI18n} from "@/shared/i18n/I18nProvider";
+import {usePageParam} from "@/shared/lib/hooks/usePageParam";
+import {useRequest} from "@/shared/lib/hooks/useRequest";
 import {can} from "@/shared/lib/api/me";
-import {getApiErrorMessage} from "@/shared/lib/api/errors";
 import {connectSocket} from "@/shared/lib/ws";
 import {
     deleteDocument,
@@ -12,108 +12,46 @@ import {
 } from "@pages/documents/api/documents";
 import {
     DOCUMENTS_PER_PAGE,
-    isDocumentStatus,
     isDocumentUpdateNewer,
     normalizeDocumentItem,
     type DocumentListItem,
     type DocumentListPage,
 } from "@pages/documents/model/documents";
+import {isDocumentStatus} from "@/entities/document/model";
 import {ConfirmDialog} from "@/shared/ui/ConfirmDialog";
 import {DocumentList} from "@pages/documents/ui/DocumentList";
 import {DocumentUploadForm} from "@pages/documents/ui/DocumentUploadForm";
-
-function parsePage(value: string | null): number {
-    const page = Number(value);
-    if (!Number.isInteger(page) || page < 1) {
-        return 1;
-    }
-    return page;
-}
-
-type LoadState =
-    | {key: string; status: "ready"; data: DocumentListPage}
-    | {key: string; status: "error"; message: string};
 
 export function Documents() {
     const {t} = useI18n();
     const canCreate = can("documents.create");
     const canList = can("documents.list");
     const canDelete = can("documents.delete");
-    const [searchParams, setSearchParams] = useSearchParams();
-    const page = parsePage(searchParams.get("page"));
-    const [reloadKey, setReloadKey] = useState(0);
-    const requestKey = `${page}:${reloadKey}`;
-    const [load, setLoad] = useState<LoadState | null>(null);
+    const [page, goToPage] = usePageParam();
+    const {status, data, error, reload, update} = useRequest(
+        canList ? String(page) : null,
+        () => getDocumentsPage(page),
+        t("documents.loadError"),
+    );
     const [deleting, setDeleting] = useState<DocumentListItem | null>(null);
 
-    useEffect(() => {
-        if (!canList) {
+    const onDocumentEvent = useEffectEvent((raw: string) => {
+        let payload: unknown;
+        try {
+            payload = JSON.parse(raw);
+        } catch {
             return;
         }
-        let cancelled = false;
-        void getDocumentsPage(page)
-            .then((data) => {
-                if (!cancelled) {
-                    setLoad({key: requestKey, status: "ready", data});
-                }
-            })
-            .catch((reason) => {
-                if (!cancelled) {
-                    setLoad({
-                        key: requestKey,
-                        status: "error",
-                        message: getApiErrorMessage(
-                            reason,
-                            t("documents.loadError"),
-                        ),
-                    });
-                }
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [canList, page, reloadKey, requestKey]);
+        if (isDocumentEvent(payload)) {
+            update((current) => mergeDocument(current, normalizeDocumentItem(payload), page));
+        }
+    });
 
     useEffect(() => {
-        if (!canList) {
-            return;
+        if (canList) {
+            return connectSocket(documentsSocketUrl(), onDocumentEvent);
         }
-        return connectSocket(documentsSocketUrl(), (raw) => {
-            let payload: unknown;
-            try {
-                payload = JSON.parse(raw);
-            } catch {
-                return;
-            }
-            if (!isDocumentEvent(payload)) {
-                return;
-            }
-            setLoad((current) =>
-                mergeDocument(current, normalizeDocumentItem(payload), page),
-            );
-        });
-    }, [canList, page]);
-
-    const goToPage = (nextPage: number) => {
-        setSearchParams((current) => {
-            const params = new URLSearchParams(current);
-            if (nextPage <= 1) {
-                params.delete("page");
-            } else {
-                params.set("page", String(nextPage));
-            }
-            return params;
-        });
-    };
-
-    const isCurrent = load?.key === requestKey;
-    const listStatus = !canList
-        ? "ready"
-        : !isCurrent
-          ? "loading"
-          : load.status;
-    const data = isCurrent && load.status === "ready" ? load.data : null;
-    const error = isCurrent && load.status === "error" ? load.message : null;
+    }, [canList]);
 
     return (
         <div className="stack stack--lg w-full">
@@ -128,13 +66,7 @@ export function Documents() {
                 <div className="w-full rounded-xl bg-card p-4 ring-1 ring-foreground/10">
                     <DocumentUploadForm
                         onUploaded={(document) => {
-                            setLoad((current) =>
-                                mergeDocument(
-                                    current,
-                                    normalizeDocumentItem(document),
-                                    page,
-                                ),
-                            );
+                            update((current) => mergeDocument(current, normalizeDocumentItem(document), page));
                         }}
                     />
                 </div>
@@ -147,11 +79,11 @@ export function Documents() {
             {canList ? (
                 <DocumentList
                     headingId="documents-heading"
-                    status={listStatus}
+                    status={status}
                     error={error}
                     data={data}
                     page={page}
-                    onRetry={() => setReloadKey((key) => key + 1)}
+                    onRetry={reload}
                     onPageChange={goToPage}
                     canDelete={canDelete}
                     onDelete={setDeleting}
@@ -180,7 +112,7 @@ export function Documents() {
                         goToPage(page - 1);
                         return;
                     }
-                    setReloadKey((key) => key + 1);
+                    reload();
                 }}
             />
         </div>
@@ -202,36 +134,19 @@ function isDocumentEvent(value: unknown): value is DocumentListItem {
     );
 }
 
-function mergeDocument(
-    current: LoadState | null,
-    incoming: DocumentListItem,
-    page: number,
-): LoadState | null {
-    if (current == null || current.status !== "ready") {
-        return current;
-    }
-    const items = current.data.items;
-    const index = items.findIndex((item) => item.id === incoming.id);
+function mergeDocument(current: DocumentListPage, incoming: DocumentListItem, page: number): DocumentListPage {
+    const index = current.items.findIndex((item) => item.id === incoming.id);
     if (index >= 0) {
-        if (!isDocumentUpdateNewer(incoming, items[index])) {
+        if (!isDocumentUpdateNewer(incoming, current.items[index])) {
             return current;
         }
-        const next = items.slice();
-        next[index] = {...items[index], ...incoming};
-        return {
-            ...current,
-            data: {...current.data, items: next},
-        };
+        const items = current.items.slice();
+        items[index] = {...items[index], ...incoming};
+        return {...current, items};
     }
+    // A new document shows on the first page only.
     if (page !== 1) {
         return current;
     }
-    return {
-        ...current,
-        data: {
-            ...current.data,
-            items: [incoming, ...items].slice(0, DOCUMENTS_PER_PAGE),
-            total: current.data.total + 1,
-        },
-    };
+    return {...current, items: [incoming, ...current.items].slice(0, DOCUMENTS_PER_PAGE), total: current.total + 1};
 }

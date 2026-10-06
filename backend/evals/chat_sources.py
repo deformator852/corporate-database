@@ -21,9 +21,11 @@ from dotenv import load_dotenv
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
-from schemas.chat import ChatMessageSchema  # noqa: E402
 from search_relevance import kept, score  # noqa: E402
-from services.generator import OllamaGenerator  # noqa: E402
+
+from schemas.chat import ChatMessageSchema
+from services.chat.context_document import ContextDocument
+from services.chat.generator import OllamaGenerator  # noqa: E402
 from settings import embedding_model, language  # noqa: E402
 
 
@@ -37,14 +39,17 @@ async def main(lang: str) -> None:
     right = wrong_sources = leaked = 0
     for item, (expected, best) in zip(data["questions"], scores, strict=True):
         given = sorted(kept(best, spec.min_score or 0.0), key=lambda doc: -best[doc])
-        documents = [{"document_id": doc, "filename": f"{doc}.txt", "text": data["documents"][doc]} for doc in given]
+        documents = [
+            ContextDocument(index, doc, f"{doc}.txt", "standard", data["documents"][doc])
+            for index, doc in enumerate(given)
+        ]
         streamed: list[str] = []
 
         async def collect(piece: str, out: list[str] = streamed) -> None:
             out.append(piece)
 
         answer, used = await generator.complete([ChatMessageSchema(role="user", content=item["q"])], documents, collect)
-        named = {d["document_id"] for d in used}
+        named = {d.name for d in used}
         ok = named == expected if expected else not named
         right += ok
         wrong_sources += bool(named - expected)
@@ -53,7 +58,10 @@ async def main(lang: str) -> None:
         if not ok:
             print(f"     answer: {answer[:140]!r}")
     total = len(data["questions"])
-    print(f"\nRight sources {right}/{total}; answers naming a wrong document {wrong_sources}; sources line leaked {leaked}")
+    print(
+        f"\nRight sources {right}/{total}; answers naming a wrong document {wrong_sources}; "
+        f"sources line leaked {leaked}"
+    )
 
 
 if __name__ == "__main__":

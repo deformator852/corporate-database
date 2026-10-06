@@ -17,8 +17,7 @@ class LanguageStep:
 
     def run(self, console: Console) -> None:
         console.print(
-            "The interface, the assistant's answers, and the embedding models "
-            "offered next all follow this language."
+            "The interface, the assistant's answers, and the embedding models offered next all follow this language."
         )
         current = current_language()
         codes = list(LANGUAGES)

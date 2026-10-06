@@ -18,10 +18,10 @@ import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
 import {cn} from "cn";
 import {useI18n} from "@/shared/i18n/I18nProvider";
-import {documentStatusKey} from "@/shared/i18n/keys";
+import {documentStatusKey} from "@/entities/document/model";
 import type {MessageKey} from "@/shared/i18n/messages";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
-import type {DocumentStatus} from "@pages/documents/model/documents";
+import type {DocumentStatus} from "@/entities/document/model";
 import {getSystemStatus} from "@pages/system/api/system";
 import {SYSTEM_REFRESH_MS, type ServiceStatus, type SystemStatus} from "@pages/system/model/system";
 

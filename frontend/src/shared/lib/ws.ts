@@ -3,8 +3,8 @@ import {refreshSession} from "@/shared/lib/api/client";
 import {isUnauthorized} from "@/shared/lib/api/errors";
 
 // Server close codes (backend/src/api/ws.py).
-export const CLOSE_SESSION_ENDED = 4401;
-export const CLOSE_FORBIDDEN = 4403;
+const CLOSE_SESSION_ENDED = 4401;
+const CLOSE_FORBIDDEN = 4403;
 const RETRY_MS = 2000;
 const FORBIDDEN_RETRY_MS = 30_000;
 

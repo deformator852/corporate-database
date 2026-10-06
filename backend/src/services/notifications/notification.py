@@ -24,13 +24,9 @@ class NotificationService:
         per_page: int = 20,
     ) -> tuple[list[Notification], int, int]:
         filters = Notification.user_id == user_id
-        total = await self.session.scalar(
-            select(func.count()).select_from(Notification).where(filters)
-        )
+        total = await self.session.scalar(select(func.count()).select_from(Notification).where(filters))
         unread_count = await self.session.scalar(
-            select(func.count())
-            .select_from(Notification)
-            .where(filters, Notification.read.is_(False))
+            select(func.count()).select_from(Notification).where(filters, Notification.read.is_(False))
         )
         items = await self.session.scalars(
             select(Notification)
@@ -122,9 +118,7 @@ class NotificationService:
         await self.session.commit()
 
     async def clear(self, user_id: int) -> None:
-        items = await self.session.scalars(
-            select(Notification).where(Notification.user_id == user_id)
-        )
+        items = await self.session.scalars(select(Notification).where(Notification.user_id == user_id))
         for item in items:
             await self.session.delete(item)
         await self.session.commit()

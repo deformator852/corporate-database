@@ -7,7 +7,7 @@ from authx import AuthX, AuthXConfig
 from authx.schema import RequestToken, TokenPayload
 from dotenv import load_dotenv
 from fastapi import Cookie, WebSocket
-from sqlalchemy import delete, select
+from sqlalchemy import delete
 from starlette.responses import Response
 
 from database import AsyncSessionLocal
@@ -35,7 +35,7 @@ def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-async def is_token_revoked(token: str) -> bool:
+async def is_token_revoked(token: str, **_: object) -> bool:
     async with AsyncSessionLocal() as session:
         found = await session.get(RevokedToken, _token_hash(token))
     return found is not None
@@ -52,9 +52,7 @@ async def revoke_tokens(*tokens: str | None) -> None:
     async with AsyncSessionLocal() as session:
         await session.execute(delete(RevokedToken).where(RevokedToken.expires_at < now))
         for token in {token for token in tokens if token}:
-            await session.merge(
-                RevokedToken(token_hash=_token_hash(token), expires_at=expires_at)
-            )
+            await session.merge(RevokedToken(token_hash=_token_hash(token), expires_at=expires_at))
         await session.commit()
 
 
@@ -80,11 +78,12 @@ async def session_active(payload: TokenPayload, token: str) -> bool:
         return False
     try:
         user_id = int(payload.sub)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return False
     async with AsyncSessionLocal() as session:
         user = await session.get(User, user_id)
     return user_session_valid(user, payload)
+
 
 ACCESS_COOKIE_MAX_AGE = int(ACCESS_TOKEN_EXPIRES.total_seconds())
 REFRESH_COOKIE_MAX_AGE = int(REFRESH_TOKEN_EXPIRES.total_seconds())

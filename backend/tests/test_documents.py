@@ -4,8 +4,8 @@ import io
 import zipfile
 
 import pytest
-
 from conftest import login, run
+
 from exceptions import AppError
 from services.documents.upload_check import check_upload
 
@@ -54,9 +54,10 @@ class _MemoryStorage:
 
 
 def _document(classification: str) -> int:
+    from sqlalchemy import select
+
     from database import AsyncSessionLocal
     from models import Document, User
-    from sqlalchemy import select
 
     async def create() -> int:
         async with AsyncSessionLocal() as session:

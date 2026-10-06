@@ -11,9 +11,7 @@ NotificationEvent = dict[str, object]
 
 
 def notification_event(notification: Notification) -> NotificationEvent:
-    created_at = (
-        notification.created_at.isoformat() if notification.created_at else None
-    )
+    created_at = notification.created_at.isoformat() if notification.created_at else None
     return {
         "id": notification.id,
         "user_id": notification.user_id,
@@ -72,7 +70,7 @@ async def consume_notification_events(
                 async with message.process():
                     try:
                         payload = json.loads(message.body.decode())
-                    except (UnicodeDecodeError, json.JSONDecodeError):
+                    except UnicodeDecodeError, json.JSONDecodeError:
                         continue
                     try:
                         await on_event(payload)

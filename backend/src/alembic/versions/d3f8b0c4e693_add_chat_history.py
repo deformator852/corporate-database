@@ -6,17 +6,17 @@ Create Date: 2026-09-29 14:00:00.000000
 
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
+from alembic import op
 
 revision: str = "d3f8b0c4e693"
-down_revision: Union[str, Sequence[str], None] = "c2e7a9b3d582"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "c2e7a9b3d582"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -31,7 +31,9 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_chat_conversations_updated_at"), "chat_conversations", ["updated_at"], unique=False)
-    op.create_index("ix_chat_conversations_user_id_updated_at", "chat_conversations", ["user_id", "updated_at"], unique=False)
+    op.create_index(
+        "ix_chat_conversations_user_id_updated_at", "chat_conversations", ["user_id", "updated_at"], unique=False
+    )
     op.create_table(
         "chat_messages",
         sa.Column("id", sa.Integer(), nullable=False),

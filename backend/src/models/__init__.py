@@ -2,6 +2,7 @@ from .audit import AuditAction, AuditLog
 from .chat import ChatConversation, ChatMessageRecord
 from .chat_request import ChatRequest
 from .document import Document, DocumentClassification, DocumentStatus
+from .document_line import DocumentLine
 from .document_text import DocumentText
 from .notification import Notification, NotificationType
 from .rbac import Permission, Role
@@ -18,6 +19,7 @@ __all__ = [
     "Document",
     "DocumentClassification",
     "DocumentStatus",
+    "DocumentLine",
     "DocumentText",
     "Notification",
     "NotificationType",
