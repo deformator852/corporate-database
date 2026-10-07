@@ -310,7 +310,8 @@ sesión.
 
 Una ruta con el mismo `path` reemplaza la página del núcleo, e `index: true`
 reemplaza el Inicio. Las rutas del núcleo son `index` (Inicio), `documents`,
-`users`, `users/:userId`, `roles`, `permissions`, `audit` y `system`.
+`users`, `users/:userId`, `roles`, `permissions`, `feedback`, `chat-history`,
+`chat-history/:conversationId`, `account`, `audit` y `system`.
 
 ```tsx
 routes: [{path: "users", Component: MyUsersPage}],

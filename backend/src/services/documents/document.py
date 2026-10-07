@@ -5,20 +5,23 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Protocol
 
-from sqlalchemy import ColumnElement, func, select
+from sqlalchemy import ColumnElement, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from encryption import keyed_digest
 from exceptions import AppError
 from i18n import t
 from models.document import DONE_STATUSES, Document, DocumentStatus
-from schemas.document import DocumentUploadSchema
+from models.document_text import DocumentText
+from schemas.document import DocumentUpdateSchema, DocumentUploadSchema
 from services.documents.access import (
     classifications_for_user,
     retrieval_classifications,
     user_permission_keys,
 )
+from services.documents.events import DocumentEventPublisher
 from services.documents.office import convert_doc_to_docx
+from services.documents.parser import PAGE_BREAK
 from services.documents.upload_check import check_upload
 from services.notifications.notification import NotificationService
 from services.search.rag import Rag
@@ -60,6 +63,38 @@ CONTENT_TYPES = {
     ".md": "text/markdown",
     ".mdx": "text/markdown",
 }
+
+
+# Saved chat answers list their sources as [{id, name, filename}]; they show
+# the document's current name.
+_RENAME_IN_CHAT_SOURCES = text(
+    """
+    UPDATE chat_messages SET sources = (
+        SELECT jsonb_agg(
+            CASE WHEN (source->>'id')::int = CAST(:id AS int)
+                THEN jsonb_set(source, '{name}', to_jsonb(CAST(:name AS text)))
+                ELSE source END
+            ORDER BY position)
+        FROM jsonb_array_elements(sources) WITH ORDINALITY AS item(source, position)
+    )
+    WHERE sources @> jsonb_build_array(jsonb_build_object('id', CAST(:id AS int)))
+    """
+)
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentChunk:
+    text: str
+    # 1-based PDF page the chunk starts on; None for other files.
+    page: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentRevision:
+    """A document's name and classification at one moment."""
+
+    name: str
+    classification: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,7 +150,8 @@ class DocumentService:
         documents = await self.session.scalars(
             select(Document)
             .where(*conditions)
-            .order_by(Document.created_at.desc(), Document.id.desc())
+            # Failed first: they wait for someone to retry or delete them.
+            .order_by((Document.status == DocumentStatus.FAILED).desc(), Document.created_at.desc(), Document.id.desc())
             .offset((page - 1) * per_page)
             .limit(per_page)
         )
@@ -140,20 +176,7 @@ class DocumentService:
             allowed = await self._allowed(user_id)
             if classification not in allowed:
                 raise AppError("forbidden", "Insufficient permissions", status_code=403)
-            waiting = await self.session.scalar(
-                select(func.count())
-                .select_from(Document)
-                .where(
-                    Document.user_id == user_id,
-                    Document.status.not_in(DONE_STATUSES),
-                )
-            )
-            if (waiting or 0) >= MAX_WAITING_DOCUMENTS:
-                raise AppError(
-                    "rate_limited",
-                    "Too many of your documents are waiting to be processed. Upload more when some are ready.",
-                    status_code=429,
-                )
+            await self._ensure_queue_room(user_id)
             content = await data.file.read(MAX_BYTES + 1)
             if not content:
                 raise AppError("invalid", "The file is empty.", status_code=400)
@@ -204,28 +227,58 @@ class DocumentService:
                 except AppError:
                     pass
                 raise
-            try:
-                self.queue.enqueue(document.id)
-            except Exception as exc:
-                document.status = DocumentStatus.FAILED
-                document.error_message = t("Could not queue the document.")
-                await self.session.commit()
-                raise AppError(
-                    "unavailable",
-                    "Could not queue the document.",
-                    status_code=503,
-                ) from exc
+            await self._enqueue(document)
             return document, converted
         finally:
             await data.file.close()
 
-    async def delete_document(self, document_id: int, user_id: int) -> Document:
-        document = await self.session.scalar(select(Document).where(Document.id == document_id))
-        if document is None:
-            raise AppError("not_found", "Document not found", status_code=404)
+    async def retry_document(self, document_id: int, user_id: int) -> Document:
+        """Queues a failed document again; its file is still stored."""
+        document = await self._visible(document_id, await self._allowed(user_id))
+        if document.status != DocumentStatus.FAILED:
+            raise AppError("conflict", "Only a failed document can be processed again.", status_code=409)
+        await self._ensure_queue_room(user_id)
+        document.status = DocumentStatus.QUEUED
+        document.progress = 0
+        document.error_message = None
+        await self.session.commit()
+        await self._enqueue(document)
+        await self._publish(document)
+        return document
+
+    async def update_document(
+        self, document_id: int, user_id: int, changes: DocumentUpdateSchema
+    ) -> tuple[Document, DocumentRevision]:
+        """Renames the document or changes its classification, in Postgres and
+        on its search chunks in Qdrant. Returns the document and what it was."""
         allowed = await self._allowed(user_id)
-        if document.classification not in allowed:
-            raise AppError("not_found", "Document not found", status_code=404)
+        document = await self._visible(document_id, allowed)
+        previous = DocumentRevision(document.name, document.classification)
+        if document.status not in DONE_STATUSES:
+            # The worker writes the chunks with the values it read at the start.
+            raise AppError("conflict", "Wait until the document is processed.", status_code=409)
+        classification = changes.classification.value if changes.classification else document.classification
+        if classification not in allowed:
+            raise AppError("forbidden", "Insufficient permissions", status_code=403)
+        document.name = changes.name or document.name
+        document.classification = classification
+        if previous == DocumentRevision(document.name, document.classification):
+            return document, previous
+        if document.name != previous.name:
+            await self.session.execute(_RENAME_IN_CHAT_SOURCES, {"id": document.id, "name": document.name})
+        if document.status == DocumentStatus.COMPLETED:
+            # Before the commit: if Qdrant fails, Postgres keeps the old values.
+            rag = Rag()
+            try:
+                await rag.update_document(document.id, name=document.name, classification=classification)
+            finally:
+                await rag.client.close()
+        await self.session.commit()
+        await self._publish(document)
+        return document, previous
+
+    async def delete_document(self, document_id: int, user_id: int) -> Document:
+        document = await self._visible(document_id, await self._allowed(user_id))
         rag = Rag()
         try:
             await rag.delete_document(document.id)
@@ -250,6 +303,25 @@ class DocumentService:
         content = await asyncio.to_thread(self.storage.get, document.object_key)
         return document, content
 
+    async def read_chunk(self, document_id: int, user_id: int, index: int) -> tuple[Document, DocumentChunk]:
+        """A chunk of the document as stored for search, for showing where an
+        answer came from; same clearance rule as opening the file."""
+        allowed = retrieval_classifications(await user_permission_keys(self.session, user_id))
+        document = await self._visible(document_id, allowed)
+        rag = Rag()
+        try:
+            found = await rag.chunks_by_index(document.id, [index])
+        finally:
+            await rag.client.close()
+        if index not in found:
+            raise AppError("not_found", "Fragment not found", status_code=404)
+        text, start = found[index]
+        page = None
+        if Path(document.filename).suffix.lower() == ".pdf":
+            full = await self.session.scalar(select(DocumentText.text).where(DocumentText.document_id == document.id))
+            page = (full or "")[:start].count(PAGE_BREAK) + 1
+        return document, DocumentChunk(text=text, page=page)
+
     async def _refuse_duplicate(self, digest: bytes, allowed: tuple[str, ...]) -> None:
         """The same file twice only clutters search. Checked among documents
         the user may see: naming a hidden one would reveal that it exists."""
@@ -263,6 +335,53 @@ class DocumentService:
 
     async def _allowed(self, user_id: int) -> tuple[str, ...]:
         return await classifications_for_user(self.session, user_id)
+
+    async def _visible(self, document_id: int, allowed: tuple[str, ...]) -> Document:
+        document = await self.session.get(Document, document_id)
+        # 404 for both missing and forbidden: do not reveal what exists.
+        if document is None or document.classification not in allowed:
+            raise AppError("not_found", "Document not found", status_code=404)
+        return document
+
+    async def _ensure_queue_room(self, user_id: int) -> None:
+        waiting = await self.session.scalar(
+            select(func.count())
+            .select_from(Document)
+            .where(
+                Document.user_id == user_id,
+                Document.status.not_in(DONE_STATUSES),
+            )
+        )
+        if (waiting or 0) >= MAX_WAITING_DOCUMENTS:
+            raise AppError(
+                "rate_limited",
+                "Too many of your documents are waiting to be processed. Upload more when some are ready.",
+                status_code=429,
+            )
+
+    async def _enqueue(self, document: Document) -> None:
+        try:
+            self.queue.enqueue(document.id)
+        except Exception as exc:
+            document.status = DocumentStatus.FAILED
+            document.error_message = t("Could not queue the document.")
+            await self.session.commit()
+            raise AppError(
+                "unavailable",
+                "Could not queue the document.",
+                status_code=503,
+            ) from exc
+
+    async def _publish(self, document: Document) -> None:
+        """Shows the change in other open document lists; they reload anyway."""
+        await self.session.refresh(document)
+        events = DocumentEventPublisher()
+        try:
+            await events.publish(document)
+        except Exception:  # noqa: BLE001 - live view only, like the worker's events
+            pass
+        finally:
+            await events.close()
 
     async def _delete_row(self, document: Document) -> None:
         await self.session.delete(document)

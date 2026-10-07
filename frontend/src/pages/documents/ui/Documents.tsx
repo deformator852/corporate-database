@@ -11,11 +11,13 @@ import {
     deleteDocument,
     documentsSocketUrl,
     getDocumentsPage,
+    retryDocument,
 } from "@pages/documents/api/documents";
 import {
     allowedUploadClassifications,
     DOCUMENT_STATUS_FILTERS,
     DOCUMENTS_PER_PAGE,
+    failedFirst,
     isDocumentUpdateNewer,
     isFiltered,
     type DocumentFilters,
@@ -26,6 +28,7 @@ import {
 } from "@pages/documents/model/documents";
 import {isDocumentStatus, type DocumentClassification} from "@/entities/document/model";
 import {ConfirmDialog} from "@/shared/ui/ConfirmDialog";
+import {DocumentEditDialog} from "@pages/documents/ui/DocumentEditDialog";
 import {DocumentFilterBar} from "@pages/documents/ui/DocumentFilterBar";
 import {DocumentList} from "@pages/documents/ui/DocumentList";
 import {DocumentUploadForm} from "@pages/documents/ui/DocumentUploadForm";
@@ -35,6 +38,7 @@ export function Documents() {
     const canCreate = can("documents.create");
     const canList = can("documents.list");
     const canDelete = can("documents.delete");
+    const canUpdate = can("documents.update");
     const [page, goToPage] = usePageParam();
     const [params, updateParams] = useUrlParams();
     const classifications = allowedUploadClassifications(
@@ -51,6 +55,12 @@ export function Documents() {
         t("documents.loadError"),
     );
     const [deleting, setDeleting] = useState<DocumentListItem | null>(null);
+    const [editing, setEditing] = useState<DocumentListItem | null>(null);
+    const replaceDocument = (document: DocumentListItem) =>
+        update((current) => ({
+            ...current,
+            items: current.items.map((item) => (item.id === document.id ? document : item)),
+        }));
 
     const onDocumentEvent = useEffectEvent((raw: string) => {
         let payload: unknown;
@@ -65,9 +75,12 @@ export function Documents() {
         }
     });
 
+    // Progress sent while the socket was down is lost: load the list again.
+    const onReconnect = useEffectEvent(reload);
+
     useEffect(() => {
         if (canList) {
-            return connectSocket(documentsSocketUrl(), onDocumentEvent);
+            return connectSocket(documentsSocketUrl(), onDocumentEvent, onReconnect);
         }
     }, [canList]);
 
@@ -123,8 +136,31 @@ export function Documents() {
                     filtered={filtered}
                     onClearFilters={() => updateParams({q: "", status: "", access: "", page: "1"})}
                     onPageChange={goToPage}
-                    canDelete={canDelete}
-                    onDelete={setDeleting}
+                    actions={{
+                        onEdit: canUpdate ? setEditing : undefined,
+                        onProcessAgain: canCreate
+                            ? async (document) => {
+                                  await retryDocument(document.id);
+                                  // No longer failed: it leaves the top of the list.
+                                  reload();
+                              }
+                            : undefined,
+                        onDelete: canDelete ? setDeleting : undefined,
+                    }}
+                />
+            ) : null}
+
+            {editing ? (
+                <DocumentEditDialog
+                    key={editing.id}
+                    document={editing}
+                    classifications={classifications}
+                    onOpenChange={(open) => {
+                        if (!open) {
+                            setEditing(null);
+                        }
+                    }}
+                    onSaved={replaceDocument}
                 />
             ) : null}
 
@@ -190,11 +226,16 @@ function mergeDocument(current: DocumentListPage, incoming: DocumentListItem, pa
         }
         const items = current.items.slice();
         items[index] = {...items[index], ...incoming};
-        return {...current, items};
+        // One that just failed moves up with the other failed ones.
+        return {...current, items: failedFirst(items)};
     }
     // A new document shows on the first page only.
     if (page !== 1) {
         return current;
     }
-    return {...current, items: [incoming, ...current.items].slice(0, DOCUMENTS_PER_PAGE), total: current.total + 1};
+    return {
+        ...current,
+        items: failedFirst([incoming, ...current.items]).slice(0, DOCUMENTS_PER_PAGE),
+        total: current.total + 1,
+    };
 }

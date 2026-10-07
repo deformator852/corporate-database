@@ -43,17 +43,22 @@ export function useNotificationFeed() {
 
     useEffect(
         () =>
-            connectSocket(notificationsSocketUrl(), (raw) => {
-                let payload: unknown;
-                try {
-                    payload = JSON.parse(raw);
-                } catch {
-                    return;
-                }
-                if (isNotificationItem(payload)) {
-                    setLoad((current) => mergeIncoming(current, payload));
-                }
-            }),
+            connectSocket(
+                notificationsSocketUrl(),
+                (raw) => {
+                    let payload: unknown;
+                    try {
+                        payload = JSON.parse(raw);
+                    } catch {
+                        return;
+                    }
+                    if (isNotificationItem(payload)) {
+                        setLoad((current) => mergeIncoming(current, payload));
+                    }
+                },
+                // Notices sent while the socket was down arrive only this way.
+                () => void loadFirstOnMount(),
+            ),
         [],
     );
 

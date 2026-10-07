@@ -15,6 +15,7 @@ from services.audit import AuditService
 from services.auth import AuthService
 from services.chat.feedback import FeedbackService
 from services.chat.history import ChatHistoryService
+from services.chat.review import ChatReviewService
 from services.documents.document import DocumentService
 from services.notifications.notification import NotificationService
 from services.permission import PermissionService
@@ -58,6 +59,12 @@ def get_chat_history_service(
     session: AsyncSession = Depends(get_db, scope="function"),
 ) -> ChatHistoryService:
     return ChatHistoryService(session)
+
+
+def get_chat_review_service(
+    session: AsyncSession = Depends(get_db, scope="function"),
+) -> ChatReviewService:
+    return ChatReviewService(session)
 
 
 def get_feedback_service(

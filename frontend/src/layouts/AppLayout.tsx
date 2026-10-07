@@ -93,13 +93,15 @@ function SignOutButton() {
 }
 
 function HeaderUser({user}: {user: SessionUser}) {
+    const {t} = useI18n();
     const name = `${user.first_name} ${user.last_name}`.trim();
     const initials = `${user.first_name.charAt(0)}${user.last_name.charAt(0)}`.toUpperCase();
 
     return (
-        <div
-            className="flex items-center gap-2 pl-1"
-            title={user.email}
+        <Link
+            to="/account"
+            className="flex items-center gap-2 rounded-md pl-1 outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+            title={t("account.title")}
         >
             <span
                 className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium"
@@ -116,6 +118,6 @@ function HeaderUser({user}: {user: SessionUser}) {
             <span className="sr-only sm:hidden">
                 {name}, {user.email}
             </span>
-        </div>
+        </Link>
     );
 }

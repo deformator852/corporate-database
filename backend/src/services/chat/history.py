@@ -32,6 +32,29 @@ class ChatHistoryService:
         )
         return list(items), total or 0
 
+    async def search_conversations(
+        self, user_id: int, query: str, page: int = 1, per_page: int = 20
+    ) -> tuple[list[ChatConversation], int]:
+        """The user's chats whose title or a message holds `query`, case
+        aside, newest first. Titles and messages are encrypted, so Postgres
+        cannot search them: they are decrypted and searched here."""
+        # ponytail: decrypts every chat of the user per search; fine within
+        # CHAT_RETENTION_DAYS, index searchable digests if users keep thousands.
+        needle = query.strip().casefold()
+        conversations = await self.session.scalars(
+            select(ChatConversation)
+            .where(ChatConversation.user_id == user_id)
+            .options(selectinload(ChatConversation.messages))
+            .order_by(ChatConversation.updated_at.desc(), ChatConversation.id.desc())
+        )
+        found = [
+            conversation
+            for conversation in conversations
+            if needle in conversation.title.casefold()
+            or any(needle in message.content.casefold() for message in conversation.messages)
+        ]
+        return found[(page - 1) * per_page : page * per_page], len(found)
+
     async def get(self, user_id: int, conversation_id: int) -> ChatConversation:
         conversation = await self.session.scalar(
             select(ChatConversation)
@@ -74,9 +97,12 @@ class ChatHistoryService:
         await self.session.flush()
         return message
 
-    async def delete(self, user_id: int, conversation_id: int) -> None:
-        conversation = await self.get(user_id, conversation_id)
-        await self.session.delete(conversation)
+    def last_answer(self, conversation: ChatConversation, message_id: int) -> ChatMessageRecord:
+        """The answer to regenerate: only the chat's last message can be."""
+        last = conversation.messages[-1] if conversation.messages else None
+        if last is None or last.id != message_id or last.role != "assistant":
+            raise AppError("conflict", "This answer can no longer be regenerated.", status_code=409)
+        return last
 
     async def purge_older_than(self, days: int) -> int:
         """Deletes conversations idle for `days`; messages go with them."""

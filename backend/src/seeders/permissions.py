@@ -33,7 +33,8 @@ PERMISSION_PERMISSIONS = (("permissions.list", "List permissions", "View the lis
 
 DOCUMENT_PERMISSIONS = (
     ("documents.list", "List documents", "View the list of documents"),
-    ("documents.create", "Create document", "Upload a new document"),
+    ("documents.create", "Create document", "Upload a new document or process a failed one again"),
+    ("documents.update", "Update document", "Rename a document or change its access level"),
     ("documents.delete", "Delete document", "Delete a document"),
     (
         "documents.restricted",
@@ -57,6 +58,16 @@ CHAT_PERMISSIONS = (
         "chat.feedback",
         "View answer ratings",
         "See answers users rated, with their questions, to find where the assistant goes wrong",
+    ),
+    (
+        "chat.history",
+        "View chat history",
+        "Read the saved chats of users with no more access than yours",
+    ),
+    (
+        "chat.purge",
+        "Clear chat history",
+        "Delete saved chats of users with no more access than yours, all or for a period",
     ),
 )
 

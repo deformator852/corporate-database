@@ -5,7 +5,7 @@ from api.deps import get_audit_service, get_auth_service, get_current_user
 from exceptions import AppError
 from models.audit import AuditAction
 from models.user import User
-from schemas.auth import LoginSchema, SessionUserSchema
+from schemas.auth import LoginSchema, PasswordChangeSchema, SessionUserSchema
 from schemas.error import error_responses
 from security import config, revoke_tokens, security, set_auth_cookies
 from services.audit import AuditService
@@ -68,6 +68,27 @@ async def logout(
     )
     security.unset_cookies(response)
     audit.record(AuditAction.LOGOUT, actor=user)
+
+
+@router.post(
+    "/password",
+    status_code=204,
+    responses=error_responses(400, 401, 429),
+)
+async def change_password(
+    payload: PasswordChangeSchema,
+    request: Request,
+    response: Response,
+    user: User = Depends(get_current_user),
+    auth: AuthService = Depends(get_auth_service),
+) -> None:
+    """The user's own password. Every session ends, this one too."""
+    await auth.change_password(user, payload)
+    await revoke_tokens(
+        request.cookies.get(config.JWT_ACCESS_COOKIE_NAME),
+        request.cookies.get(config.JWT_REFRESH_COOKIE_NAME),
+    )
+    security.unset_cookies(response)
 
 
 @router.get(

@@ -90,7 +90,7 @@ class UserWriteSchema(BaseModel):
         return cleaned
 
 
-def _password_fits(value: str | None) -> str | None:
+def check_password_fits(value: str | None) -> str | None:
     if value is not None and not password_fits(value):
         raise ValueError(f"Password is too long (max {MAX_PASSWORD_BYTES} bytes; non-Latin letters take 2 bytes each)")
     return value
@@ -99,7 +99,7 @@ def _password_fits(value: str | None) -> str | None:
 class UserCreateSchema(UserWriteSchema):
     password: str = Field(min_length=8, max_length=100)
 
-    _fits = field_validator("password")(_password_fits)
+    _fits = field_validator("password")(check_password_fits)
 
 
 class UserUpdateSchema(UserWriteSchema):
@@ -112,7 +112,7 @@ class UserUpdateSchema(UserWriteSchema):
             return None
         return value
 
-    _fits = field_validator("password")(_password_fits)
+    _fits = field_validator("password")(check_password_fits)
 
 
 class UserDetailSchema(BaseModel):

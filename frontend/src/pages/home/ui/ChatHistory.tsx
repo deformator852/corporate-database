@@ -1,6 +1,8 @@
-import {MessageSquare, SquarePen, Trash2} from "lucide-react";
+import {MessageSquare, Search, SquarePen} from "lucide-react";
 
 import {Button} from "@/components/ui/button";
+import {Input} from "@/components/ui/input";
+import {useDebouncedSearch} from "@/shared/lib/hooks/useDebouncedSearch";
 import {cn} from "cn";
 import {useI18n} from "@/shared/i18n/I18nProvider";
 import type {MessageKey} from "@/shared/i18n/messages";
@@ -13,7 +15,9 @@ type ChatHistoryProps = {
     disabled: boolean;
     onNew: () => void;
     onOpen: (id: number) => void;
-    onDelete: (id: number) => void;
+    /** The search in effect; `onSearch` gets the text once typing pauses. */
+    query: string;
+    onSearch: (query: string) => void;
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -45,16 +49,34 @@ export function ChatHistory({
     disabled,
     onNew,
     onOpen,
-    onDelete,
+    query,
+    onSearch,
 }: ChatHistoryProps) {
     const {t} = useI18n();
+    const [search, setSearch] = useDebouncedSearch(query, onSearch);
     return (
         <div className="flex h-full min-h-0 flex-col">
-            <div className="shrink-0 p-2">
+            <div className="flex shrink-0 flex-col gap-1.5 p-2">
                 <Button type="button" variant="ghost" className="w-full justify-start" disabled={disabled} onClick={onNew}>
                     <SquarePen aria-hidden />
                     {t("chat.newChat")}
                 </Button>
+                <div className="relative">
+                    <Search
+                        className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+                        aria-hidden
+                    />
+                    <Input
+                        type="search"
+                        value={search}
+                        placeholder={t("chat.searchHistory")}
+                        aria-label={t("chat.searchHistory")}
+                        autoComplete="off"
+                        maxLength={100}
+                        className="pl-8"
+                        onChange={(event) => setSearch(event.target.value)}
+                    />
+                </div>
             </div>
             {error ? (
                 <p role="alert" className="px-3 py-4 text-sm text-destructive">
@@ -65,7 +87,7 @@ export function ChatHistory({
             ) : conversations.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-sm text-muted-foreground">
                     <MessageSquare className="size-5" aria-hidden />
-                    {t("chat.historyEmpty")}
+                    {query ? t("chat.historyNoMatch") : t("chat.historyEmpty")}
                 </div>
             ) : (
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2">
@@ -76,7 +98,7 @@ export function ChatHistory({
                                 {group.items.map((conversation) => {
                                     const active = conversation.id === activeId;
                                     return (
-                                        <li key={conversation.id} className="group relative">
+                                        <li key={conversation.id}>
                                             <button
                                                 type="button"
                                                 disabled={disabled}
@@ -84,21 +106,11 @@ export function ChatHistory({
                                                 title={conversation.title}
                                                 onClick={() => onOpen(conversation.id)}
                                                 className={cn(
-                                                    "block w-full cursor-pointer truncate rounded-lg px-2.5 py-2 pr-9 text-left text-sm outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed",
+                                                    "block w-full cursor-pointer truncate rounded-lg px-2.5 py-2 text-left text-sm outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed",
                                                     active && "bg-muted font-medium",
                                                 )}
                                             >
                                                 {conversation.title}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                disabled={disabled}
-                                                aria-label={t("chat.deleteChat")}
-                                                title={t("chat.deleteChat")}
-                                                onClick={() => onDelete(conversation.id)}
-                                                className="absolute top-1/2 right-1.5 flex size-7 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 outline-none transition-opacity group-hover:opacity-100 hover:bg-background hover:text-destructive focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-ring/50 [@media(hover:none)]:opacity-100"
-                                            >
-                                                <Trash2 className="size-3.5" aria-hidden />
                                             </button>
                                         </li>
                                     );

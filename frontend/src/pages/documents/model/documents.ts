@@ -110,6 +110,10 @@ export function isDocumentUpdateNewer(
     if (!isDocumentStatus(incoming.status) || !isDocumentStatus(current.status)) {
         return true;
     }
+    // Queued again after a failure (Retry); only the retry announces "queued".
+    if (current.status === "failed" && incoming.status === "queued") {
+        return true;
+    }
     if (current.status === "completed" && incoming.status !== "completed") {
         return false;
     }
@@ -126,6 +130,11 @@ export function isDocumentUpdateNewer(
         return incomingRank > currentRank;
     }
     return incoming.progress >= current.progress;
+}
+
+/** Failed documents first, as the server lists them; the rest keep their order. */
+export function failedFirst(items: DocumentListItem[]): DocumentListItem[] {
+    return items.toSorted((a, b) => Number(b.status === "failed") - Number(a.status === "failed"));
 }
 
 export function fileExtension(filename: string): string {

@@ -97,7 +97,12 @@ def test_cannot_delete_yourself_or_the_last_admin(client, make_user):
     login(client, email, password)
     for other in others:
         client.post(f"/api/v1/users/{other}/disable", headers=csrf(client))
-    listed = client.get("/api/v1/users", params={"per_page": 100}).json()["items"]
+    # Every page: the suite's users outnumber one page.
+    listed, page = [], 1
+    while not any(u["id"] == admin_id for u in listed):
+        body = client.get("/api/v1/users", params={"per_page": 100, "page": page}).json()
+        assert body["items"], "admin not listed"
+        listed, page = body["items"], page + 1
     assert next(u for u in listed if u["id"] == admin_id)["is_last_admin"] is True
     removed = client.patch(f"/api/v1/users/{admin_id}", headers=csrf(client), json=_payload(email, role_keys=[]))
     assert removed.status_code == 409

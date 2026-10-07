@@ -1,4 +1,4 @@
-import {CircleAlert, FileText, Trash2} from "lucide-react";
+import {CircleAlert, FileText, Pencil, RotateCw, Trash2} from "lucide-react";
 import {useState} from "react";
 
 import {Button} from "@/components/ui/button";
@@ -29,13 +29,20 @@ type DocumentListProps = {
     error: string | null;
     data: DocumentListPage | null;
     page: number;
-    canDelete?: boolean;
+    /** Row actions the user may take; the column shows if any. */
+    actions?: DocumentActions;
     onRetry: () => void;
     onPageChange: (page: number) => void;
-    onDelete?: (document: DocumentListItem) => void;
     /** Empty because of the filters, not because there are no documents. */
     filtered?: boolean;
     onClearFilters?: () => void;
+};
+
+type DocumentActions = {
+    onEdit?: (document: DocumentListItem) => void;
+    /** Processes a failed document again; rejects with the server's reason. */
+    onProcessAgain?: (document: DocumentListItem) => Promise<void>;
+    onDelete?: (document: DocumentListItem) => void;
 };
 
 export function DocumentList({
@@ -44,10 +51,9 @@ export function DocumentList({
     error,
     data,
     page,
-    canDelete = false,
+    actions = {},
     onRetry,
     onPageChange,
-    onDelete,
     filtered = false,
     onClearFilters,
 }: DocumentListProps) {
@@ -55,7 +61,8 @@ export function DocumentList({
     const items = data?.items ?? [];
     const total = data?.total ?? 0;
     const pages = data?.pages ?? 0;
-    const columns = canDelete ? 6 : 5;
+    const hasActions = Boolean(actions.onEdit || actions.onProcessAgain || actions.onDelete);
+    const columns = hasActions ? 6 : 5;
 
     if (status === "error") {
         return (
@@ -88,7 +95,7 @@ export function DocumentList({
                             <TableHead>{t("common.access")}</TableHead>
                             <TableHead>{t("common.status")}</TableHead>
                             <TableHead className="px-4">{t("common.progress")}</TableHead>
-                            {canDelete ? (
+                            {hasActions ? (
                                 <TableHead className="px-4">
                                     <span className="sr-only">{t("common.actions")}</span>
                                 </TableHead>
@@ -110,8 +117,7 @@ export function DocumentList({
                                 <DocumentRow
                                     key={document.id}
                                     document={document}
-                                    canDelete={canDelete}
-                                    onDelete={onDelete}
+                                    actions={hasActions ? actions : null}
                                 />
                             ))
                         )}
@@ -134,16 +140,34 @@ export function DocumentList({
 
 function DocumentRow({
     document,
-    canDelete,
-    onDelete,
+    actions,
 }: {
     document: DocumentListItem;
-    canDelete: boolean;
-    onDelete?: (document: DocumentListItem) => void;
+    /** null: no actions column. */
+    actions: DocumentActions | null;
 }) {
     const {t} = useI18n();
     const status = document.status as DocumentStatus;
     const [openError, setOpenError] = useState<string | null>(null);
+    const [retrying, setRetrying] = useState(false);
+    const [retryError, setRetryError] = useState<string | null>(null);
+    const failed = document.status === "failed";
+    const processing = !failed && document.status !== "completed";
+
+    async function processAgain() {
+        if (!actions?.onProcessAgain) {
+            return;
+        }
+        setRetrying(true);
+        setRetryError(null);
+        try {
+            await actions.onProcessAgain(document);
+        } catch (reason) {
+            setRetryError(getApiErrorMessage(reason, t("documents.retry.error")));
+        } finally {
+            setRetrying(false);
+        }
+    }
     return (
         <TableRow>
             <TableCell className="px-4 font-medium">
@@ -202,22 +226,57 @@ function DocumentRow({
                     </span>
                 </div>
             </TableCell>
-            {canDelete ? (
+            {actions ? (
                 <TableCell className="px-4">
-                    <div className="flex justify-end">
-                        <Button
-                            type="button"
-                            variant="destructive"
-                            size="sm"
-                            aria-label={t("documents.delete.title", {
-                                name: document.name,
-                            })}
-                            onClick={() => onDelete?.(document)}
-                        >
-                            <Trash2 aria-hidden />
-                            {t("common.delete")}
-                        </Button>
+                    <div className="flex flex-wrap justify-end gap-1.5">
+                        {failed && actions.onProcessAgain ? (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={retrying}
+                                aria-label={t("documents.retry.label", {name: document.name})}
+                                onClick={() => void processAgain()}
+                            >
+                                <RotateCw aria-hidden className={retrying ? "animate-spin" : undefined} />
+                                {t("documents.retry.button")}
+                            </Button>
+                        ) : null}
+                        {actions.onEdit ? (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                // While processing, the worker writes the values it started with.
+                                disabled={processing}
+                                title={processing ? t("documents.edit.waitProcessing") : undefined}
+                                aria-label={t("documents.edit.label", {name: document.name})}
+                                onClick={() => actions.onEdit?.(document)}
+                            >
+                                <Pencil aria-hidden />
+                                {t("common.edit")}
+                            </Button>
+                        ) : null}
+                        {actions.onDelete ? (
+                            <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                aria-label={t("documents.delete.title", {
+                                    name: document.name,
+                                })}
+                                onClick={() => actions.onDelete?.(document)}
+                            >
+                                <Trash2 aria-hidden />
+                                {t("common.delete")}
+                            </Button>
+                        ) : null}
                     </div>
+                    {retryError ? (
+                        <p role="alert" className="mt-1 text-right text-xs text-destructive">
+                            {retryError}
+                        </p>
+                    ) : null}
                 </TableCell>
             ) : null}
         </TableRow>

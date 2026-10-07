@@ -4,6 +4,7 @@ import {
     CHAT_HISTORY,
     isChatServerMessage,
     type ChatAskMessage,
+    type ChatAskOptions,
     type ChatCancelMessage,
     type ChatMessage,
     type ChatReply,
@@ -31,6 +32,7 @@ export type ChatSocket = {
         messages: Pick<ChatMessage, "role" | "content">[],
         conversationId: number | null,
         handlers?: ChatHandlers,
+        options?: ChatAskOptions,
     ) => Promise<ChatReply>;
     cancel: () => void;
     close: () => void;
@@ -127,11 +129,13 @@ export function connectChatSocket(): ChatSocket {
     timer = window.setTimeout(open, 0);
 
     return {
-        send(messages, conversationId, handlers = {}) {
+        send(messages, conversationId, handlers = {}, options = {}) {
             const body: ChatAskMessage = {
                 type: "ask",
                 messages: messages.slice(-CHAT_HISTORY),
                 conversation_id: conversationId,
+                document_ids: options.documentIds ?? [],
+                replace_message_id: options.replaceMessageId ?? null,
             };
             const target = socket;
             if (target == null || closed) {

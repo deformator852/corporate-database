@@ -33,6 +33,26 @@ export function describe(t: TranslateFn, entry: AuditEntry): string {
     if (typeof details.classification === "string") {
         parts.push(t("audit.details.access", {value: accessLabel(t, details.classification)}));
     }
+    // A document edit: what it was before.
+    if (typeof details.previous_name === "string" && details.previous_name !== entry.target_label) {
+        parts.push(t("audit.details.previousName", {value: details.previous_name}));
+    }
+    if (
+        typeof details.previous_classification === "string" &&
+        details.previous_classification !== details.classification
+    ) {
+        parts.push(t("audit.details.previousAccess", {value: accessLabel(t, details.previous_classification)}));
+    }
+    // Cleared chat history: the period and how many chats went.
+    if (typeof details.deleted === "number") {
+        const day = (value: unknown) => (typeof value === "string" ? new Date(value).toLocaleDateString() : "…");
+        parts.push(
+            details.since == null && details.until == null
+                ? t("audit.details.allTime")
+                : t("audit.details.period", {from: day(details.since), to: day(details.until)}),
+        );
+        parts.push(t("audit.details.deletedChats", {count: details.deleted}));
+    }
     if (Array.isArray(details.documents)) {
         const documents = details.documents as {name?: unknown; classification?: unknown}[];
         parts.push(

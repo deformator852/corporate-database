@@ -307,7 +307,8 @@ cookies.
 
 A route with the same `path` replaces the core page, and `index: true`
 replaces Home. The core paths are `index` (Home), `documents`, `users`,
-`users/:userId`, `roles`, `permissions`, `audit` and `system`.
+`users/:userId`, `roles`, `permissions`, `feedback`, `chat-history`,
+`chat-history/:conversationId`, `account`, `audit` and `system`.
 
 ```tsx
 routes: [{path: "users", Component: MyUsersPage}],

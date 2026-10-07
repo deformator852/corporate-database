@@ -310,7 +310,8 @@ cookies de session.
 
 Une route avec le même `path` remplace la page du noyau, et `index: true`
 remplace l'Accueil. Les chemins du noyau sont `index` (Accueil), `documents`,
-`users`, `users/:userId`, `roles`, `permissions`, `audit` et `system`.
+`users`, `users/:userId`, `roles`, `permissions`, `feedback`, `chat-history`,
+`chat-history/:conversationId`, `account`, `audit` et `system`.
 
 ```tsx
 routes: [{path: "users", Component: MyUsersPage}],

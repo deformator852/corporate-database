@@ -107,7 +107,7 @@ function RatedAnswerCard({item}: {item: RatedAnswer}) {
                 <p className="text-xs font-medium text-muted-foreground">{t("feedback.answer")}</p>
                 <p className="text-sm break-words whitespace-pre-wrap">{item.answer}</p>
             </div>
-            {item.sources.length ? <SourceList sources={item.sources} /> : null}
+            {item.sources.length ? <SourceList sources={item.sources} answer={item.answer} /> : null}
         </Card>
     );
 }

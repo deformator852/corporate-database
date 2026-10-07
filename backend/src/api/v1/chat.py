@@ -14,10 +14,18 @@ from fastapi import (
 )
 from pydantic import Field, TypeAdapter, ValidationError
 
-from api.deps import get_chat_history_service, get_current_user, get_feedback_service, require_permission
+from api.deps import (
+    get_audit_service,
+    get_chat_history_service,
+    get_chat_review_service,
+    get_current_user,
+    get_feedback_service,
+    require_permission,
+)
 from api.ws import RECHECK_SECONDS, seconds_left, still_allowed
 from exceptions import AppError
 from i18n import t
+from models.audit import AuditAction
 from models.user import User
 from schemas.chat import (
     RATING_VALUES,
@@ -29,18 +37,25 @@ from schemas.chat import (
     ChatConversationSchema,
     ChatDeltaSchema,
     ChatFeedbackListSchema,
+    ChatPurgedSchema,
+    ChatPurgeSchema,
     ChatRatingSchema,
+    ChatReviewConversationSchema,
+    ChatReviewListSchema,
     ChatSocketErrorSchema,
     ChatSourceSchema,
     ChatStartedSchema,
+    ChatUserSchema,
     Rating,
 )
 from schemas.error import error_responses, validation_message
 from security import get_ws_payload
+from services.audit import AuditService
 from services.chat.feedback import FeedbackService
 from services.chat.generator import OllamaGenerator
 from services.chat.history import ChatHistoryService
 from services.chat.limit import finish_chat_request, start_chat_request
+from services.chat.review import ChatPeriod, ChatReviewService
 from services.chat.turn import answer_question
 from services.search.embedding import EmbeddingModel, get_embedding_model
 
@@ -63,10 +78,15 @@ router = APIRouter(
 async def list_conversations(
     page: Annotated[int, Query(ge=1)] = 1,
     per_page: Annotated[int, Query(ge=1, le=100)] = 30,
+    q: Annotated[str, Query(max_length=100)] = "",
     user: User = Depends(get_current_user),
     history: ChatHistoryService = Depends(get_chat_history_service),
 ) -> ChatConversationListSchema:
-    items, total = await history.list_conversations(user.id, page=page, per_page=per_page)
+    """The user's own chats; `q` finds those whose title or messages hold it."""
+    if q.strip():
+        items, total = await history.search_conversations(user.id, q, page=page, per_page=per_page)
+    else:
+        items, total = await history.list_conversations(user.id, page=page, per_page=per_page)
     return ChatConversationListSchema.from_page(items, page=page, per_page=per_page, total=total)
 
 
@@ -84,18 +104,75 @@ async def get_conversation(
     return ChatConversationSchema.from_conversation(conversation)
 
 
-@router.delete(
-    "/conversations/{conversation_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    responses=error_responses(401, 404),
+@router.get(
+    "/review/conversations",
+    response_model=ChatReviewListSchema,
+    responses=error_responses(401, 403),
 )
-async def delete_conversation(
+async def review_conversations(
+    user_id: Annotated[int | None, Query(ge=1)] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    per_page: Annotated[int, Query(ge=1, le=100)] = 20,
+    actor: User = Depends(require_permission("chat.history")),
+    review: ChatReviewService = Depends(get_chat_review_service),
+) -> ChatReviewListSchema:
+    """Every reachable user's chats, or one user's."""
+    items, total = await review.list_conversations(actor.id, user_id, page, per_page)
+    return ChatReviewListSchema.from_page(items, page=page, per_page=per_page, total=total)
+
+
+@router.get(
+    "/review/conversations/{conversation_id}",
+    response_model=ChatReviewConversationSchema,
+    responses=error_responses(401, 403, 404),
+)
+async def review_conversation(
     conversation_id: int,
-    user: User = Depends(get_current_user),
-    history: ChatHistoryService = Depends(get_chat_history_service),
-) -> Response:
-    await history.delete(user.id, conversation_id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    actor: User = Depends(require_permission("chat.history")),
+    review: ChatReviewService = Depends(get_chat_review_service),
+    audit: AuditService = Depends(get_audit_service),
+) -> ChatReviewConversationSchema:
+    found = await review.get(actor.id, conversation_id)
+    # Whose chat was read; never its title, which is the first question.
+    audit.record(
+        AuditAction.CHAT_VIEW,
+        actor=actor,
+        target_type="user",
+        target_id=found.user.id,
+        target_label=found.user.email,
+        details={"conversation_id": conversation_id},
+    )
+    return ChatReviewConversationSchema(
+        **ChatConversationSchema.from_conversation(found.conversation).model_dump(),
+        user=ChatUserSchema.from_user(found.user),
+    )
+
+
+@router.post(
+    "/review/purge",
+    response_model=ChatPurgedSchema,
+    responses=error_responses(400, 401, 403, 404),
+)
+async def purge_conversations(
+    payload: ChatPurgeSchema,
+    actor: User = Depends(require_permission("chat.purge")),
+    review: ChatReviewService = Depends(get_chat_review_service),
+    audit: AuditService = Depends(get_audit_service),
+) -> ChatPurgedSchema:
+    """Deletes chats last active in the period: one user's or every reachable one's."""
+    deleted = await review.purge(actor.id, payload.user_id, ChatPeriod(payload.since, payload.until))
+    audit.record(
+        AuditAction.CHAT_PURGE,
+        actor=actor,
+        target_type="user" if payload.user_id else None,
+        target_id=payload.user_id,
+        details={
+            "since": payload.since.isoformat() if payload.since else None,
+            "until": payload.until.isoformat() if payload.until else None,
+            "deleted": deleted,
+        },
+    )
+    return ChatPurgedSchema(deleted=deleted)
 
 
 @router.put(
@@ -315,8 +392,7 @@ async def _generate(
 
     turn = await answer_question(
         user_id,
-        ask.messages,
-        ask.conversation_id,
+        ask,
         ip=ip,
         embedder=embedder,
         generator=generator,
@@ -328,7 +404,7 @@ async def _generate(
         content=turn.content,
         conversation_id=turn.conversation_id,
         message_id=turn.message_id,
-        sources=[ChatSourceSchema(id=d.document_id, name=d.name, filename=d.filename) for d in turn.sources],
+        sources=[ChatSourceSchema(**source) for source in turn.sources],
     )
 
 

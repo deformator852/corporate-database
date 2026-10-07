@@ -183,20 +183,31 @@ class Rag:
         except (RequestError, ResponseHandlingException) as exc:
             _raise_unavailable(exc)
 
+    async def update_document(self, document_id: int, *, name: str, classification: str) -> None:
+        """New name and classification on every chunk of the document."""
+        try:
+            if not await self.client.collection_exists(COLLECTION_NAME):
+                return
+            await self.client.set_payload(
+                collection_name=COLLECTION_NAME,
+                payload={"name": name, "classification": classification},
+                points=_document_filter(document_id),
+                wait=True,
+            )
+        except UnexpectedResponse as exc:
+            if exc.status_code == 404:
+                return
+            _raise_from_unexpected(exc)
+        except (RequestError, ResponseHandlingException) as exc:
+            _raise_unavailable(exc)
+
     async def delete_document(self, document_id: int) -> None:
         try:
             if not await self.client.collection_exists(COLLECTION_NAME):
                 return
             await self.client.delete(
                 collection_name=COLLECTION_NAME,
-                points_selector=Filter(
-                    must=[
-                        FieldCondition(
-                            key="document_id",
-                            match=MatchValue(value=document_id),
-                        )
-                    ]
-                ),
+                points_selector=_document_filter(document_id),
             )
         except UnexpectedResponse as exc:
             if exc.status_code == 404:
@@ -211,15 +222,21 @@ class Rag:
         *,
         question: str = "",
         allowed_classifications: Sequence[str],
+        document_ids: Sequence[int] = (),
         limit: int = 8,
     ) -> list[SearchHit]:
         """Chunks closest to `vector`, each with its cosine `score`, plus
         chunks holding every identifier of `question` (keywords.identifiers)
         found by keyword. Those are marked `exact`: they count as relevant
-        whatever their score."""
+        whatever their score. `document_ids`, if any, limit the search to
+        those documents."""
         if not allowed_classifications or limit < 1:
             return []
         query_filter = self._classification_filter(allowed_classifications)
+        if document_ids:
+            query_filter = Filter(
+                must=[query_filter, FieldCondition(key="document_id", match=MatchAny(any=list(document_ids)))]
+            )
         wanted = identifiers(question)
         try:
             if not await self.client.collection_exists(COLLECTION_NAME):
@@ -383,6 +400,10 @@ def _cosine(query: list[float], stored: object) -> float:
     if not isinstance(stored, list):
         return 0.0
     return float(sum(a * b for a, b in zip(query, stored, strict=False)))
+
+
+def _document_filter(document_id: int) -> Filter:
+    return Filter(must=[FieldCondition(key="document_id", match=MatchValue(value=document_id))])
 
 
 def _chunk_context(document_id: int, index: int) -> str:

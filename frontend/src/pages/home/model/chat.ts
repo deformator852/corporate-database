@@ -2,7 +2,11 @@ import type {AnswerRating, ChatSource} from "@/entities/chat/model";
 
 type ChatRole = "user" | "assistant";
 
-/** A document an answer was built from. */
+/** A document the user chose to ask about. */
+export type ChatDocument = {id: number; name: string};
+
+/** Most documents a question may be limited to (backend ChatAskSchema). */
+export const MAX_CHAT_DOCUMENTS = 20;
 
 export type ChatMessage = {
     id: string;
@@ -65,6 +69,16 @@ export type ChatAskMessage = {
     messages: Pick<ChatMessage, "role" | "content">[];
     /** Continue a saved chat; null starts a new one. */
     conversation_id: number | null;
+    /** Answer only from these documents; empty searches all. */
+    document_ids: number[];
+    /** Regenerate: the new answer replaces this one, the chat's last. */
+    replace_message_id: number | null;
+};
+
+/** What a question is asked with besides the messages. */
+export type ChatAskOptions = {
+    documentIds?: number[];
+    replaceMessageId?: number | null;
 };
 
 export type ChatCancelMessage = {

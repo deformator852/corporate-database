@@ -7,7 +7,9 @@ import {keyFromName} from "@/shared/lib/keyFromName";
 import {formatDateTime, formatRelativeTime} from "@/shared/lib/time";
 import {reconnectDelay} from "@/shared/lib/ws";
 import {allowedUploadClassifications, fileStem, isDocumentUpdateNewer, type DocumentListItem} from "@pages/documents/model/documents";
-import {AUDIT_ACTIONS, auditActionKey} from "@/entities/audit/model";
+import {AUDIT_ACTIONS, auditActionKey, type AuditEntry} from "@/entities/audit/model";
+import {describe as describeEntry} from "@/entities/audit/format";
+import type {TranslateFn} from "@/shared/i18n/I18nProvider";
 import {mockApi, reply} from "@/test/api";
 import {renderApp, sessionUser} from "@/test/app";
 
@@ -48,6 +50,22 @@ describe("Formatting and rules", () => {
         expect(keyFromName(name)).toBe(key);
     });
 
+    it("describes document edits and cleared chat history in the audit log", () => {
+        const t = ((key: keyof typeof en, params: Record<string, unknown> = {}) =>
+            en[key].replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(params[name]))) as TranslateFn;
+        const entry = (details: Record<string, unknown>, target_label: string | null = null): AuditEntry => ({
+            id: 1, created_at: "", actor_id: 1, actor_email: null, action: "", target_type: null, target_id: null, target_label, details, ip: null,
+        });
+
+        expect(describeEntry(t, entry({classification: "secret", previous_name: "Plans", previous_classification: "standard"}, "Merger")))
+            .toBe("Access: Secret · Was named Plans · Access was Standard");
+        expect(describeEntry(t, entry({classification: "standard", previous_name: "Menu", previous_classification: "standard"}, "Menu")))
+            .toBe("Access: Standard");  // nothing changed but what is shown
+        expect(describeEntry(t, entry({since: null, until: null, deleted: 4}))).toBe("All time · Chats deleted: 4");
+        expect(describeEntry(t, entry({since: "2026-09-01T00:00:00Z", until: null, deleted: 0})))
+            .toMatch(/^Period: .+ – … · Chats deleted: 0$/);
+    });
+
     it("offers upload levels up to the user's clearance", () => {
         expect(allowedUploadClassifications(false, false, false)).toEqual(["standard"]);
         expect(allowedUploadClassifications(false, false, true)).toEqual(["standard", "restricted", "confidential", "secret"]);
@@ -59,7 +77,8 @@ describe("Formatting and rules", () => {
         expect(isDocumentUpdateNewer(doc("embedding", 70), doc("parsing", 15))).toBe(true);
         expect(isDocumentUpdateNewer(doc("parsing", 15), doc("embedding", 70))).toBe(false);
         expect(isDocumentUpdateNewer(doc("embedding", 60), doc("completed", 100))).toBe(false);
-        expect(isDocumentUpdateNewer(doc("queued", 0), doc("failed", 30))).toBe(false);
+        expect(isDocumentUpdateNewer(doc("parsing", 15), doc("failed", 30))).toBe(false);
+        expect(isDocumentUpdateNewer(doc("queued", 0), doc("failed", 30))).toBe(true);  // Retry
         expect(isDocumentUpdateNewer(doc("completed", 100), doc("failed", 30))).toBe(true);  // processed again
     });
 

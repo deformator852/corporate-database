@@ -41,6 +41,20 @@ export async function uploadDocument(
     return data;
 }
 
+export async function updateDocument(
+    documentId: number,
+    changes: Pick<DocumentListItem, "name" | "classification">,
+): Promise<DocumentListItem> {
+    const {data} = await api.patch<DocumentListItem>(`/documents/${documentId}`, changes);
+    return normalizeDocumentItem(data);
+}
+
+/** Queues a failed document again. */
+export async function retryDocument(documentId: number): Promise<DocumentListItem> {
+    const {data} = await api.post<DocumentListItem>(`/documents/${documentId}/retry`);
+    return normalizeDocumentItem(data);
+}
+
 export async function deleteDocument(documentId: number): Promise<void> {
     await api.delete(`/documents/${documentId}`);
 }

@@ -1,9 +1,12 @@
 from datetime import datetime
 from typing import Literal, Self
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import AwareDatetime, BaseModel, Field, field_validator, model_validator
 
 from schemas.model_config import MODEL_CONFIG
+
+# Documents a question may be limited to.
+MAX_CHAT_DOCUMENTS = 20
 
 
 class ChatMessageSchema(BaseModel):
@@ -37,6 +40,17 @@ class ChatAskSchema(ChatRequestSchema):
     type: Literal["ask"]
     # Continue a saved chat; None starts a new one.
     conversation_id: int | None = Field(default=None, ge=1)
+    # Answer only from these documents; empty searches all the user may see.
+    document_ids: list[int] = Field(default_factory=list, max_length=MAX_CHAT_DOCUMENTS)
+    # Regenerate: this answer, the chat's last message, is replaced by the
+    # new one, and the question (already saved) is not saved again.
+    replace_message_id: int | None = Field(default=None, ge=1)
+
+    @model_validator(mode="after")
+    def replace_in_saved_chat(self) -> ChatAskSchema:
+        if self.replace_message_id is not None and self.conversation_id is None:
+            raise ValueError("Only an answer of a saved chat can be regenerated.")
+        return self
 
 
 class ChatCancelSchema(BaseModel):
@@ -53,6 +67,9 @@ class ChatSourceSchema(BaseModel):
     id: int
     name: str
     filename: str
+    # The chunk the answer was taken from (GET /documents/{id}/chunks/{n});
+    # None for answers saved before quotes existed or when search was down.
+    chunk: int | None = None
 
 
 class ChatAnswerSchema(BaseModel):
@@ -181,12 +198,83 @@ class ChatConversationSchema(BaseModel):
         )
 
 
-class ChatFeedbackUserSchema(BaseModel):
+class ChatUserSchema(BaseModel):
+    """Whose chat or rating it is."""
+
     model_config = MODEL_CONFIG
 
     id: int
     name: str
     email: str
+
+    @classmethod
+    def from_user(cls, user) -> Self:
+        return cls(id=user.id, name=f"{user.first_name} {user.last_name}".strip(), email=user.email)
+
+
+class ChatReviewItemSchema(ChatConversationItemSchema):
+    """Another user's chat, in the chat history list."""
+
+    created_at: datetime
+    message_count: int
+    user: ChatUserSchema
+
+
+class ChatReviewListSchema(BaseModel):
+    model_config = MODEL_CONFIG
+
+    items: list[ChatReviewItemSchema]
+    page: int
+    per_page: int
+    total: int
+    pages: int
+
+    @classmethod
+    def from_page(cls, items: list, *, page: int, per_page: int, total: int) -> Self:
+        return cls(
+            items=[
+                ChatReviewItemSchema(
+                    id=item.conversation.id,
+                    title=item.conversation.title,
+                    created_at=item.conversation.created_at,
+                    updated_at=item.conversation.updated_at,
+                    message_count=item.message_count,
+                    user=ChatUserSchema.from_user(item.user),
+                )
+                for item in items
+            ],
+            page=page,
+            per_page=per_page,
+            total=total,
+            pages=(total + per_page - 1) // per_page if per_page and total else 0,
+        )
+
+
+class ChatReviewConversationSchema(ChatConversationSchema):
+    user: ChatUserSchema
+
+
+class ChatPurgeSchema(BaseModel):
+    """Chats last active in [since, until) are deleted; a missing end is
+    open. `user_id` limits it to one user."""
+
+    model_config = MODEL_CONFIG
+
+    user_id: int | None = Field(default=None, ge=1)
+    since: AwareDatetime | None = None
+    until: AwareDatetime | None = None
+
+    @model_validator(mode="after")
+    def period_in_order(self) -> ChatPurgeSchema:
+        if self.since is not None and self.until is not None and self.since >= self.until:
+            raise ValueError("The start of the period must be before its end.")
+        return self
+
+
+class ChatPurgedSchema(BaseModel):
+    model_config = MODEL_CONFIG
+
+    deleted: int
 
 
 class ChatFeedbackItemSchema(BaseModel):
@@ -201,7 +289,7 @@ class ChatFeedbackItemSchema(BaseModel):
     sources: list[ChatSourceSchema]
     rated_at: datetime
     # None once the user is deleted.
-    user: ChatFeedbackUserSchema | None
+    user: ChatUserSchema | None
 
 
 class ChatFeedbackListSchema(BaseModel):
@@ -224,13 +312,7 @@ class ChatFeedbackListSchema(BaseModel):
                     answer=item.answer,
                     sources=[ChatSourceSchema(**source) for source in item.sources],
                     rated_at=item.rated_at,
-                    user=ChatFeedbackUserSchema(
-                        id=item.user.id,
-                        name=f"{item.user.first_name} {item.user.last_name}".strip(),
-                        email=item.user.email,
-                    )
-                    if item.user
-                    else None,
+                    user=ChatUserSchema.from_user(item.user) if item.user else None,
                 )
                 for item in items
             ],

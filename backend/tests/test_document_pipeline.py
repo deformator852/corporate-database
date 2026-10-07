@@ -225,6 +225,88 @@ def test_a_hidden_copy_is_not_revealed(client, make_user, infra):
     assert upload(client, "Minutes", b"Minutes of the board.", "minutes.txt").status_code == 201
 
 
+def test_a_failed_document_is_listed_first_and_processed_again(client, make_user, infra):
+    _, email, password = make_user(WRITER)
+    login(client, email, password)
+    broken = upload(client, "Broken", b'{"a": ', "broken.json").json()["id"]
+    process(broken)
+    later = upload(client, "Leave rules", b"Leave is 26 days.", "leave.txt").json()["id"]
+
+    assert [item["id"] for item in client.get("/api/v1/documents").json()["items"]][:2] == [broken, later]
+    retried = client.post(f"/api/v1/documents/{broken}/retry", headers=csrf(client))
+
+    assert retried.status_code == 200
+    assert (retried.json()["status"], retried.json()["error_message"]) == ("queued", None)
+    assert infra.queue.ids.count(broken) == 2
+    again = client.post(f"/api/v1/documents/{broken}/retry", headers=csrf(client))
+    assert (again.status_code, again.json()["message"]) == (409, "Only a failed document can be processed again.")
+    assert client.post(f"/api/v1/documents/{later}/retry", headers=csrf(client)).status_code == 409
+
+
+def test_editing_a_document_changes_it_in_every_store(client, make_user, infra):
+    from services.chat.chat import NO_DOCUMENTS_ANSWER
+
+    _, reader_email, reader_password = make_user(["documents.list"])
+    _, email, password = make_user([*WRITER, "documents.update", "documents.confidential"])
+    login(client, email, password)
+    document_id = upload(client, "Travel policy", POLICY.encode(), "policy.txt").json()["id"]
+    url = f"/api/v1/documents/{document_id}"
+    assert client.patch(url, headers=csrf(client), json={"name": "Early"}).status_code == 409  # still queued
+    process(document_id)
+    with client.websocket_connect("/api/v1/chat/ws", headers=_ws(client)) as chat:
+        chat.send_json(_ask("What is the travel budget?"))
+        _, answer = _collect(chat)
+
+    edited = client.patch(url, headers=csrf(client), json={"name": "Trips", "classification": "confidential"})
+
+    assert edited.status_code == 200 and edited.json()["name"] == "Trips"
+    assert (_document(document_id).name, _document(document_id).classification) == ("Trips", "confidential")
+    assert {(p["name"], p["classification"]) for p in _points(infra, document_id)} == {("Trips", "confidential")}
+    saved = client.get(f"/api/v1/chat/conversations/{answer['conversation_id']}").json()["messages"]
+    assert saved[1]["sources"][0]["name"] == "Trips"
+    assert client.patch(url, headers=csrf(client), json={"classification": "secret"}).status_code == 403
+    assert client.patch(url, headers=csrf(client), json={"name": "  "}).status_code == 400
+
+    async def audited() -> dict:
+        from database import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as session:
+            query = text("SELECT details FROM audit_logs WHERE action = 'documents.update' AND target_id = :i")
+            return await session.scalar(query, {"i": str(document_id)})
+
+    assert run(audited())["previous_classification"] == "standard"
+    client.post("/api/v1/auth/logout", headers=csrf(client))
+    login(client, reader_email, reader_password)
+    assert client.patch(url, headers=csrf(client), json={"name": "Mine"}).status_code == 403
+    assert document_id not in [item["id"] for item in client.get("/api/v1/documents").json()["items"]]
+    with client.websocket_connect("/api/v1/chat/ws", headers=_ws(client)) as chat:
+        chat.send_json(_ask("What is the travel budget?"))
+        _, hidden = _collect(chat)
+    assert hidden["content"] == NO_DOCUMENTS_ANSWER
+
+
+def test_an_edit_is_kept_out_of_postgres_while_search_is_down(client, make_user, infra, monkeypatch):
+    from qdrant_client.http.exceptions import ResponseHandlingException
+
+    _, email, password = make_user([*WRITER, "documents.update", "documents.confidential"])
+    login(client, email, password)
+    document_id = upload(client, "Travel policy", POLICY.encode(), "policy.txt").json()["id"]
+    process(document_id)
+    url = f"/api/v1/documents/{document_id}"
+    unchanged = client.patch(url, headers=csrf(client), json={"name": "Travel policy"})
+    assert unchanged.status_code == 200 and unchanged.json()["name"] == "Travel policy"
+
+    async def down(*args, **kwargs):
+        raise ResponseHandlingException(ConnectionError("Qdrant is down"))
+
+    monkeypatch.setattr(infra.qdrant._client, "set_payload", down)
+    failed = client.patch(url, headers=csrf(client), json={"name": "Trips", "classification": "confidential"})
+
+    assert failed.status_code == 503
+    assert (_document(document_id).name, _document(document_id).classification) == ("Travel policy", "standard")
+    assert {(p["name"], p["classification"]) for p in _points(infra, document_id)} == {("Travel policy", "standard")}
+
+
 def test_search_results_keep_table_values_that_cleanup_rules_drop(client, make_user, infra):
     _, email, password = make_user(WRITER)
     login(client, email, password)
@@ -373,6 +455,121 @@ def test_rated_answers_reach_those_who_review_them(client, make_user, infra):
     login(client, reviewer_email, reviewer_password)
     listed = client.get("/api/v1/chat/feedback", params={"rating": "down"}).json()["items"]
     assert message not in [i["message_id"] for i in listed]
+
+
+def test_chat_answers_only_from_the_chosen_documents(client, make_user, infra, monkeypatch):
+    import dataclasses
+    import os
+
+    import settings
+    from services.chat.chat import NO_DOCUMENTS_ANSWER
+
+    _, email, password = make_user(WRITER)
+    login(client, email, password)
+    travel = upload(client, "Travel policy", POLICY.encode(), "policy.txt").json()["id"]
+    trips = upload(client, "Trips", b"The travel budget for trips abroad is 900 EUR.", "trips.txt").json()["id"]
+    process(travel)
+    process(trips)
+
+    def ask(question: str, document_ids: list[int]) -> dict:
+        with client.websocket_connect("/api/v1/chat/ws", headers=_ws(client)) as chat:
+            chat.send_json({**_ask(question), "document_ids": document_ids})
+            return _collect(chat)[1]
+
+    infra.llm.answer = "It is 900 EUR.\nSOURCES: Trips"
+    answer = ask("What is the travel budget?", [trips])
+    assert [source["id"] for source in answer["sources"]] == [trips]
+    prompt = str(infra.llm.calls[-1]["messages"])
+    assert "900 EUR" in prompt and "500 EUR" not in prompt
+    # Scores below any floor, yet the document is the one the user chose.
+    key = os.environ["EMBEDDING_MODEL"]
+    monkeypatch.setitem(
+        settings.EMBEDDING_MODELS, key, dataclasses.replace(settings.EMBEDDING_MODELS[key], min_score=0.99)
+    )
+    assert ask("Summarize it", [])["content"] == NO_DOCUMENTS_ANSWER
+    assert ask("Summarize it", [trips])["content"] != NO_DOCUMENTS_ANSWER
+    assert "900 EUR" in str(infra.llm.calls[-1]["messages"])
+
+
+def test_a_source_shows_the_passage_the_answer_came_from(client, make_user, infra):
+    from test_components import _pdf
+
+    _, email, password = make_user([*WRITER, "documents.confidential"])
+    login(client, email, password)
+    policy = upload(client, "Travel policy", POLICY.encode(), "policy.txt").json()["id"]
+    process(policy)
+
+    with client.websocket_connect("/api/v1/chat/ws", headers=_ws(client)) as chat:
+        chat.send_json(_ask("What is the travel budget?"))
+        _, answer = _collect(chat)
+
+    chunk = answer["sources"][0]["chunk"]
+    saved = client.get(f"/api/v1/chat/conversations/{answer['conversation_id']}").json()["messages"][1]
+    assert saved["sources"][0]["chunk"] == chunk
+    passage = client.get(f"/api/v1/documents/{policy}/chunks/{chunk}").json()
+    assert "500 EUR" in passage["text"] and passage["page"] is None  # the budget, not "Section 3."
+    assert client.get(f"/api/v1/documents/{policy}/chunks/9999").status_code == 404
+
+    scan = upload(client, "Scan", _pdf("The travel budget is 500 EUR."), "scan.pdf", "confidential").json()["id"]
+    process(scan)
+    assert client.get(f"/api/v1/documents/{scan}/chunks/0").json()["page"] == 1
+    client.post("/api/v1/auth/logout", headers=csrf(client))
+
+    _, reader_email, reader_password = make_user(["documents.list"])
+    login(client, reader_email, reader_password)
+    assert client.get(f"/api/v1/documents/{scan}/chunks/0").status_code == 404  # above their clearance
+
+
+def test_a_regenerated_answer_replaces_the_old_one(client, make_user, infra):
+    _, email, password = make_user(WRITER)
+    login(client, email, password)
+    process(upload(client, "Travel policy", POLICY.encode(), "policy.txt").json()["id"])
+    question = {"role": "user", "content": "What is the travel budget?"}
+    with client.websocket_connect("/api/v1/chat/ws", headers=_ws(client)) as chat:
+        chat.send_json(_ask(question["content"]))
+        _, first = _collect(chat)
+        regenerate = {**_ask(question["content"]), "conversation_id": first["conversation_id"]}
+        infra.llm.answer = "Trips may cost 500 EUR."
+        chat.send_json({**regenerate, "replace_message_id": first["message_id"]})
+        _, second = _collect(chat)
+        chat.send_json({**regenerate, "replace_message_id": first["message_id"]})  # gone already
+        stale = _next(chat)
+
+    saved = client.get(f"/api/v1/chat/conversations/{first['conversation_id']}").json()["messages"]
+    assert [(m["role"], m["content"]) for m in saved] == [
+        ("user", question["content"]),
+        ("assistant", "Trips may cost 500 EUR."),
+    ]
+    assert saved[1]["id"] == second["message_id"] != first["message_id"]
+    assert stale == {"type": "error", "code": "conflict", "message": "This answer can no longer be regenerated."}
+
+
+def test_a_stopped_regeneration_replaces_the_old_answer_with_what_was_written(client, make_user, infra):
+    import time
+
+    _, email, password = make_user(WRITER)
+    login(client, email, password)
+    process(upload(client, "Travel policy", POLICY.encode(), "policy.txt").json()["id"])
+    with client.websocket_connect("/api/v1/chat/ws", headers=_ws(client)) as chat:
+        chat.send_json(_ask("What is the travel budget?"))
+        _, first = _collect(chat)
+        infra.llm.answer = "Trips abroad may cost up to five hundred euros per person."
+        infra.llm.delay = 0.05
+        replace = {"conversation_id": first["conversation_id"], "replace_message_id": first["message_id"]}
+        chat.send_json({**_ask("What is the travel budget?"), **replace})
+        piece = _next(chat)["content"]
+        chat.send_json({"type": "cancel"})
+        while chat.receive_json()["type"] != "cancelled":
+            pass
+
+    url = f"/api/v1/chat/conversations/{first['conversation_id']}"
+    for _ in range(40):
+        saved = client.get(url).json()["messages"]
+        if saved[-1]["id"] != first["message_id"]:
+            break
+        time.sleep(0.05)
+    assert [m["role"] for m in saved] == ["user", "assistant"]
+    assert saved[1]["content"].startswith(piece.strip()) and saved[1]["id"] != first["message_id"]
 
 
 def test_chat_can_reproduce_a_document_named_in_the_question(client, make_user, infra):

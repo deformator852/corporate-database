@@ -32,13 +32,20 @@ export async function reconnectDelay(code: number): Promise<number | null> {
     }
 }
 
+/**
+ * A socket that reconnects until the returned function closes it.
+ * `onReconnect` runs each time it is open again after a drop: events sent
+ * while it was down are lost, so callers reload what they show.
+ */
 export function connectSocket(
     url: string,
     onMessage: (data: string) => void,
+    onReconnect?: () => void,
 ): () => void {
     let closed = false;
     let socket: WebSocket | null = null;
     let timer: number | undefined;
+    let wasOpen = false;
 
     const open = () => {
         if (closed) {
@@ -46,6 +53,12 @@ export function connectSocket(
         }
         const next = new WebSocket(url);
         socket = next;
+        next.addEventListener("open", () => {
+            if (wasOpen) {
+                onReconnect?.();
+            }
+            wasOpen = true;
+        });
         next.addEventListener("message", (event) => {
             if (typeof event.data === "string") {
                 onMessage(event.data);

@@ -1,5 +1,5 @@
 import {ArrowUp, Square} from "lucide-react";
-import {type FormEvent, type KeyboardEvent} from "react";
+import {type FormEvent, type KeyboardEvent, type ReactNode} from "react";
 
 import {Button} from "@/components/ui/button";
 import {Textarea} from "@/components/ui/textarea";
@@ -11,6 +11,8 @@ type ChatComposerProps = {
     onChange: (value: string) => void;
     onSubmit: () => void;
     onCancel: () => void;
+    /** Shown above the input (the document picker). */
+    toolbar?: ReactNode;
 };
 
 export function ChatComposer({
@@ -19,6 +21,7 @@ export function ChatComposer({
     onChange,
     onSubmit,
     onCancel,
+    toolbar,
 }: ChatComposerProps) {
     const {t} = useI18n();
     const canSend = !pending && value.trim().length > 0;
@@ -48,42 +51,45 @@ export function ChatComposer({
 
     return (
         <form
-            className="flex shrink-0 items-end gap-2 border-t border-border p-3"
+            className="flex shrink-0 flex-col gap-2 border-t border-border p-3"
             aria-label={t("chat.sendForm")}
             onSubmit={handleSubmit}
         >
-            <label className="sr-only" htmlFor="chat-message">
-                {t("chat.messageLabel")}
-            </label>
-            <Textarea
-                id="chat-message"
-                name="message"
-                rows={2}
-                value={value}
-                disabled={pending}
-                placeholder={t("chat.placeholder")}
-                className="max-h-40 min-h-12 resize-none"
-                onChange={(event) => onChange(event.target.value)}
-                onKeyDown={handleKeyDown}
-            />
-            {pending ? (
-                <Button
-                    type="submit"
-                    size="icon"
-                    aria-label={t("chat.stop")}
-                >
-                    <Square className="size-3.5 fill-current" />
-                </Button>
-            ) : (
-                <Button
-                    type="submit"
-                    size="icon"
-                    disabled={!canSend}
-                    aria-label={t("chat.send")}
-                >
-                    <ArrowUp />
-                </Button>
-            )}
+            {toolbar}
+            <div className="flex items-end gap-2">
+                <label className="sr-only" htmlFor="chat-message">
+                    {t("chat.messageLabel")}
+                </label>
+                <Textarea
+                    id="chat-message"
+                    name="message"
+                    rows={2}
+                    value={value}
+                    disabled={pending}
+                    placeholder={t("chat.placeholder")}
+                    className="max-h-40 min-h-12 resize-none"
+                    onChange={(event) => onChange(event.target.value)}
+                    onKeyDown={handleKeyDown}
+                />
+                {pending ? (
+                    <Button
+                        type="submit"
+                        size="icon"
+                        aria-label={t("chat.stop")}
+                    >
+                        <Square className="size-3.5 fill-current" />
+                    </Button>
+                ) : (
+                    <Button
+                        type="submit"
+                        size="icon"
+                        disabled={!canSend}
+                        aria-label={t("chat.send")}
+                    >
+                        <ArrowUp />
+                    </Button>
+                )}
+            </div>
         </form>
     );
 }

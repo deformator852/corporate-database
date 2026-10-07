@@ -75,9 +75,9 @@ read without the key.
    deploy/deploy.sh admin ADMIN-EMAIL
    ```
 
-8. Open `https://corpus.company.local` and sign in. On the **Users** page,
-   change the password. On the **System status** page, check that every
-   component shows **Running**.
+8. Open `https://corpus.company.local` and sign in. Click your name at the
+   top to open **My account**, and change the password. On the
+   **System status** page, check that every component shows **Running**.
 
 With `TLS=internal`, browsers do not trust the certificate until you install
 Caddy's root certificate on the users' computers. Print it with:
@@ -141,6 +141,29 @@ Every user gets one answer at a time, whatever the settings.
    ```sh
    deploy/deploy.sh up
    ```
+
+## Managing chat history
+
+Corpus saves every user's chats, encrypted. Users cannot delete their own
+chats. A chat is deleted automatically after 90 days without new messages; to
+change that, set `CHAT_RETENTION_DAYS` in `backend/.env` (`0` keeps chats
+forever) and run `deploy/deploy.sh up`.
+
+Three permissions give access to other users' chats. Assign them on the
+**Roles** page:
+
+| Permission | What it allows |
+|---|---|
+| View chat history | Read users' chats on the **Chat history** page and from a user's page |
+| Clear chat history | Delete chats: all of them, those of the last day, 3 days, week, month or year, or those between two dates. Each chat is deleted whole, with its messages and ratings |
+| View answer ratings | Read the answers users rated good or bad, with their questions |
+
+These permissions reach only users who hold no permission the reviewer lacks:
+someone without access to secret documents cannot read or delete the chats of
+someone who has it. Every chat a reviewer opens and every deletion is recorded
+in the **Audit log**.
+
+> Deleted chats cannot be restored, except from a backup.
 
 ## Backing up
 

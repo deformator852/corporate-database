@@ -1,5 +1,5 @@
-import {ThumbsDown, ThumbsUp} from "lucide-react";
-import {useEffect, useRef} from "react";
+import {Check, Copy, RefreshCw, ThumbsDown, ThumbsUp} from "lucide-react";
+import {useEffect, useRef, useState} from "react";
 
 import {Button} from "@/components/ui/button";
 import {SourceList} from "@/entities/chat/SourceList";
@@ -16,6 +16,8 @@ type ChatMessagesProps = {
     error: string | null;
     onRetry: () => void;
     onRate?: (message: ChatMessage, rating: AnswerRating | null) => void;
+    /** Asks the last question again; offered on the last answer. */
+    onRegenerate?: () => void;
 };
 
 function bubbleClass(role: ChatMessage["role"]) {
@@ -32,6 +34,7 @@ export function ChatMessages({
     error,
     onRetry,
     onRate,
+    onRegenerate,
 }: ChatMessagesProps) {
     const {t} = useI18n();
     const scrollerRef = useRef<HTMLDivElement>(null);
@@ -64,7 +67,7 @@ export function ChatMessages({
             aria-label={t("chat.conversation")}
             className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4"
         >
-            {messages.map((message) => (
+            {messages.map((message, index) => (
                 <div key={message.id} className="space-y-1.5">
                     <p
                         className={`rounded-2xl px-3.5 py-2.5 text-sm break-words whitespace-pre-wrap ${bubbleClass(message.role)}`}
@@ -75,10 +78,35 @@ export function ChatMessages({
                         {message.content}
                     </p>
                     {message.role === "assistant" && message.sources?.length ? (
-                        <SourceList sources={message.sources} />
+                        <SourceList sources={message.sources} answer={message.content} />
                     ) : null}
-                    {message.role === "assistant" && message.messageId != null && onRate ? (
-                        <RateAnswer rating={message.rating ?? null} onRate={(rating) => onRate(message, rating)} />
+                    {message.role === "assistant" ? (
+                        <div className="flex items-center gap-0.5">
+                            <CopyAnswer text={message.content} />
+                            {/* Saved answers only: the server replaces it by id. */}
+                            {index === messages.length - 1 &&
+                            message.messageId != null &&
+                            status !== "pending" &&
+                            onRegenerate ? (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-xs"
+                                    className="text-muted-foreground"
+                                    aria-label={t("chat.regenerate")}
+                                    title={t("chat.regenerate")}
+                                    onClick={onRegenerate}
+                                >
+                                    <RefreshCw aria-hidden />
+                                </Button>
+                            ) : null}
+                            {message.messageId != null && onRate ? (
+                                <RateAnswer
+                                    rating={message.rating ?? null}
+                                    onRate={(rating) => onRate(message, rating)}
+                                />
+                            ) : null}
+                        </div>
                     ) : null}
                 </div>
             ))}
@@ -134,7 +162,38 @@ export function ChatMessages({
     );
 }
 
-/** Documents an answer was built from; each opens the original file. */
+function CopyAnswer({text}: {text: string}) {
+    const {t} = useI18n();
+    const [copied, setCopied] = useState<"idle" | "copied" | "failed">("idle");
+    const label = copied === "copied" ? t("chat.copied") : copied === "failed" ? t("chat.copyError") : t("chat.copy");
+
+    async function copy() {
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopied("copied");
+        } catch {
+            // Clipboard blocked (permissions, insecure page): say so.
+            setCopied("failed");
+        }
+        window.setTimeout(() => setCopied("idle"), 2000);
+    }
+
+    return (
+        <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="text-muted-foreground"
+            aria-label={label}
+            title={label}
+            onClick={() => void copy()}
+        >
+            {copied === "copied" ? <Check aria-hidden /> : <Copy aria-hidden />}
+        </Button>
+    );
+}
+
+/** Good / bad buttons; pressing the chosen one again takes the rating back. */
 function RateAnswer({rating, onRate}: {rating: AnswerRating | null; onRate: (rating: AnswerRating | null) => void}) {
     const {t} = useI18n();
     const options = [

@@ -12,6 +12,9 @@ import {AuditLog} from "@pages/audit/ui/AuditLog";
 import {UserDetail} from "@pages/users/detail/ui/UserDetail";
 import {SystemStatusPage} from "@pages/system/ui/SystemStatusPage";
 import {RatedAnswers} from "@pages/feedback/ui/RatedAnswers";
+import {Account} from "@pages/account/ui/Account";
+import {ChatHistoryList} from "@pages/chat-history/ui/ChatHistoryList";
+import {ChatReview} from "@pages/chat-history/ui/ChatReview";
 import {extensions, mergeByKey} from "./extensions";
 
 /** `handle.can`: the permission a page needs. Without it the layout shows
@@ -61,6 +64,21 @@ const pageRoutes: RouteObject[] = [
         path: "feedback",
         Component: RatedAnswers,
         handle: {can: "chat.feedback"} satisfies RouteHandle,
+    },
+    {
+        // Every signed-in user's own account.
+        path: "account",
+        Component: Account,
+    },
+    {
+        path: "chat-history",
+        Component: ChatHistoryList,
+        handle: {can: "chat.history"} satisfies RouteHandle,
+    },
+    {
+        path: "chat-history/:conversationId",
+        Component: ChatReview,
+        handle: {can: "chat.history"} satisfies RouteHandle,
     },
 ];
 

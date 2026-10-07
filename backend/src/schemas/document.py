@@ -69,5 +69,34 @@ class DocumentUploadSchema(BaseModel):
         return cleaned
 
 
+class DocumentUpdateSchema(BaseModel):
+    """Fields left out stay as they are."""
+
+    model_config = MODEL_CONFIG
+
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    classification: DocumentClassification | None = None
+
+    @field_validator("name")
+    @classmethod
+    def strip_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Enter a name.")
+        return cleaned
+
+
+class DocumentChunkSchema(BaseModel):
+    """A passage of a document, as search stores it."""
+
+    model_config = MODEL_CONFIG
+
+    text: str
+    # 1-based PDF page it starts on; null for other files.
+    page: int | None
+
+
 class DocumentUploadResponseSchema(DocumentListItemSchema):
     converted: bool

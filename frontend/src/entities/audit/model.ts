@@ -8,6 +8,7 @@ export const AUDIT_ACTIONS = [
     "auth.login",
     "auth.login_failed",
     "auth.logout",
+    "auth.password_change",
     "users.create",
     "users.update",
     "users.disable",
@@ -17,9 +18,13 @@ export const AUDIT_ACTIONS = [
     "roles.update",
     "roles.delete",
     "documents.upload",
+    "documents.update",
+    "documents.retry",
     "documents.delete",
     "documents.view",
     "chat.answer",
+    "chat.view",
+    "chat.purge",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

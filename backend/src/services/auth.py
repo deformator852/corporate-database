@@ -1,3 +1,4 @@
+import secrets
 from datetime import UTC, datetime, timedelta
 
 from authx.schema import TokenPayload
@@ -11,10 +12,10 @@ from i18n import t
 from models.audit import AuditAction
 from models.rbac.role import Role
 from models.user import User
-from schemas.auth import LoginSchema
-from security import user_session_valid
+from schemas.auth import LoginSchema, PasswordChangeSchema
+from security import sessions_cutoff, user_session_valid
 from services.audit import AuditService
-from services.password import verify_password
+from services.password import hash_password, verify_password
 
 _USER_WITH_PERMISSIONS = selectinload(User.roles).selectinload(Role.permissions)
 
@@ -23,7 +24,9 @@ _USER_WITH_PERMISSIONS = selectinload(User.roles).selectinload(Role.permissions)
 # spraying many accounts from one machine.
 LOGIN_WINDOW = timedelta(minutes=15)
 MAX_FAILURES_PER_EMAIL = 5
-MAX_FAILURES_PER_IP = 20
+_UNKNOWN_USER_HASH = hash_password(secrets.token_urlsafe(16))
+# High: terminal servers, VPN and NAT put many users behind one address.
+MAX_FAILURES_PER_IP = 200
 
 
 class AuthService:
@@ -34,7 +37,10 @@ class AuthService:
     async def login(self, data: LoginSchema) -> User:
         await self._ensure_not_throttled(data.email)
         user = await self.session.scalar(select(User).where(User.email == data.email).options(_USER_WITH_PERMISSIONS))
-        if user is None or not verify_password(data.password, user.password):
+        # An unknown email is checked against a stand-in hash: answering
+        # faster would tell which emails have accounts.
+        password_ok = verify_password(data.password, user.password if user else _UNKNOWN_USER_HASH)
+        if user is None or not password_ok:
             await self._record_failure(data.email)
             raise AppError(
                 "invalid_credentials",
@@ -48,6 +54,21 @@ class AuthService:
             raise AppError("account_disabled", "This account is disabled", status_code=403)
         self.audit.record(AuditAction.LOGIN, actor=user)
         return user
+
+    async def change_password(self, user: User, data: PasswordChangeSchema) -> None:
+        """The user's own password, after the current one. Ends every session
+        of the user, this one too: they sign in again with the new password.
+        Wrong current passwords count as failed sign-ins (same throttle)."""
+        await self._ensure_not_throttled(user.email)
+        if not verify_password(data.current_password, user.password):
+            await self._record_failure(user.email)
+            # 400, not 401: the session is fine, and 401 would sign the user out.
+            raise AppError("invalid", "The current password is wrong.", status_code=400)
+        if data.new_password == data.current_password:
+            raise AppError("invalid", "The new password must differ from the current one.", status_code=400)
+        user.password = hash_password(data.new_password)
+        user.sessions_valid_after = sessions_cutoff()
+        self.audit.record(AuditAction.PASSWORD_CHANGE, actor=user)
 
     async def session_user(self, payload: TokenPayload) -> User | None:
         """The token's user, or None if deleted, disabled or signed out by a password change."""

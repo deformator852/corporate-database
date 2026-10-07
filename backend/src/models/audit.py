@@ -14,6 +14,7 @@ class AuditAction(StrEnum):
     LOGIN = "auth.login"
     LOGIN_FAILED = "auth.login_failed"
     LOGOUT = "auth.logout"
+    PASSWORD_CHANGE = "auth.password_change"
     USER_CREATE = "users.create"
     USER_UPDATE = "users.update"
     USER_DELETE = "users.delete"
@@ -23,9 +24,13 @@ class AuditAction(StrEnum):
     ROLE_UPDATE = "roles.update"
     ROLE_DELETE = "roles.delete"
     DOCUMENT_UPLOAD = "documents.upload"
+    DOCUMENT_UPDATE = "documents.update"
+    DOCUMENT_RETRY = "documents.retry"
     DOCUMENT_DELETE = "documents.delete"
     DOCUMENT_VIEW = "documents.view"
     CHAT_ANSWER = "chat.answer"
+    CHAT_VIEW = "chat.view"
+    CHAT_PURGE = "chat.purge"
 
 
 class AuditLog(Base):

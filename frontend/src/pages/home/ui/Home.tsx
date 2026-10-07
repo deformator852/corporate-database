@@ -4,7 +4,9 @@ import {useState} from "react";
 import {Button} from "@/components/ui/button";
 import {Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger} from "@/components/ui/sheet";
 import {useChat} from "@pages/home/model/useChat";
+import {can} from "@/shared/lib/api/me";
 import {ChatComposer} from "@pages/home/ui/ChatComposer";
+import {ChatDocumentPicker} from "@pages/home/ui/ChatDocumentPicker";
 import {ChatHistory} from "@pages/home/ui/ChatHistory";
 import {ChatMessages} from "@pages/home/ui/ChatMessages";
 import {useI18n} from "@/shared/i18n/I18nProvider";
@@ -38,13 +40,14 @@ function Home() {
             conversations={chat.conversations}
             error={chat.historyError}
             activeId={chat.conversationId}
+            query={chat.historyQuery}
+            onSearch={chat.searchHistory}
             disabled={pending}
             onNew={startNewChat}
             onOpen={(id) => {
                 setHistoryOpen(false);
                 void chat.openConversation(id);
             }}
-            onDelete={(id) => void chat.removeConversation(id)}
         />
     );
 
@@ -133,6 +136,7 @@ function Home() {
                     error={chat.error}
                     onRetry={chat.retry}
                     onRate={(message, rating) => void chat.rate(message, rating)}
+                    onRegenerate={chat.regenerate}
                 />
                 <ChatComposer
                     value={chat.draft}
@@ -140,6 +144,16 @@ function Home() {
                     onChange={chat.setDraft}
                     onSubmit={chat.submit}
                     onCancel={chat.cancel}
+                    toolbar={
+                        // The picker lists documents: it needs the right to list them.
+                        can("documents.list") ? (
+                            <ChatDocumentPicker
+                                value={chat.documents}
+                                onChange={chat.setDocuments}
+                                disabled={pending}
+                            />
+                        ) : null
+                    }
                 />
             </section>
         </div>

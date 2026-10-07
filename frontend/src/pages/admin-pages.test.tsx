@@ -171,6 +171,17 @@ describe("Notifications", () => {
         expect(await screen.findByRole("button", {name: "Notifications, 1 unread"})).toBeInTheDocument();
     });
 
+    it("picks up notifications sent while the live connection was down", async () => {
+        const {server} = renderApp("/", sessionUser());
+        await screen.findByRole("button", {name: "Notifications"});
+        const socket = await waitFor(() => FakeWebSocket.at("/api/v1/notifications/ws"));
+        server.on("GET", "/notifications", page([NOTE], 1));
+
+        act(() => socket.close(4401));
+
+        expect(await screen.findByRole("button", {name: "Notifications, 1 unread"})).toBeInTheDocument();
+    });
+
     it("clears all", async () => {
         const {user, server} = renderApp("/", sessionUser(), (s) => {
             s.on("GET", "/notifications", page([NOTE], 1));

@@ -1,8 +1,10 @@
 import asyncio
+from collections.abc import Sequence
 
 from sqlalchemy import func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from exceptions import AppError
 from i18n import t
 from models.document import Document, DocumentStatus
 from models.document_text import DocumentText
@@ -58,10 +60,13 @@ class ChatService:
         user_id: int,
         messages: list[ChatMessageSchema],
         on_delta: OnDelta | None = None,
+        *,
+        document_ids: Sequence[int] = (),
     ) -> tuple[str, list[ContextDocument], list[ContextDocument]]:
         """Answer text, the documents it used (shown as sources) and every
         document the model read (for the audit log). Generated text also
-        streams to `on_delta` as it arrives."""
+        streams to `on_delta` as it arrives. `document_ids`, if any, are the
+        only documents the answer may come from."""
         allowed = retrieval_classifications(await user_permission_keys(self.session, user_id))
         query = messages[-1].content
         documents: list[ContextDocument] = []
@@ -69,8 +74,8 @@ class ChatService:
         if allowed:
             rag = Rag()
             try:
-                hits = await self._search(_search_queries(messages), allowed, rag)
-                documents = await self._documents_for_reply(query, hits, allowed)
+                hits = await self._search(_search_queries(messages), allowed, rag, document_ids)
+                documents = await self._documents_for_reply(query, hits, allowed, document_ids)
                 if documents and _wants_full_document(query):
                     return _dump(documents), documents, documents
                 prompt_documents = await fit_to_context(documents, hits, rag, document_budget_chars(_MAX_DOCS))
@@ -85,24 +90,60 @@ class ChatService:
         used_ids = {document.document_id for document in used}
         return answer, [d for d in documents if d.document_id in used_ids], documents
 
-    async def _search(self, queries: list[str], allowed: tuple[str, ...], rag: Rag) -> list[SearchHit]:
+    async def cite(self, user_id: int, answer: str, sources: Sequence[ContextDocument]) -> dict[int, int]:
+        """For each source, the chunk closest to the answer: where the answer
+        was taken from, shown when the source is opened. By the answer, not
+        the question: a document named or chosen by the user has no search
+        hits. Missing ones (search down) only lose the quote."""
+        if not sources:
+            return {}
+        allowed = retrieval_classifications(await user_permission_keys(self.session, user_id))
+        vector = await asyncio.to_thread(self.embedder.embed_query, answer)
+        rag = Rag()
+        found: dict[int, int] = {}
+        try:
+            for source in sources:
+                hits = await rag.search(
+                    vector, allowed_classifications=allowed, document_ids=[source.document_id], limit=1
+                )
+                if hits:
+                    found[source.document_id] = hits[0].chunk_index
+        except AppError:
+            pass
+        finally:
+            await rag.client.close()
+        return found
+
+    async def _search(
+        self, queries: list[str], allowed: tuple[str, ...], rag: Rag, document_ids: Sequence[int]
+    ) -> list[SearchHit]:
         """Relevant hits of all `queries`, each chunk once with its best score.
-        Chunks holding the question's names and codes come first."""
+        Chunks holding the question's names and codes come first. In documents
+        the user chose every hit counts: they asked about those documents."""
         best: dict[tuple[int, int], SearchHit] = {}
         for query in queries:
             vector = await asyncio.to_thread(self.embedder.embed_query, query)
-            for hit in await rag.search(vector, question=query, allowed_classifications=allowed, limit=8):
+            found = await rag.search(
+                vector, question=query, allowed_classifications=allowed, document_ids=document_ids, limit=8
+            )
+            for hit in found:
                 key = (hit.document_id, hit.chunk_index)
                 if key not in best or _rank(hit) < _rank(best[key]):
                     best[key] = hit
-        return _relevant(sorted(best.values(), key=_rank))
+        ranked = sorted(best.values(), key=_rank)
+        return ranked if document_ids else _relevant(ranked)
 
     async def _documents_for_reply(
-        self, query: str, hits: list[SearchHit], allowed: tuple[str, ...]
+        self, query: str, hits: list[SearchHit], allowed: tuple[str, ...], document_ids: Sequence[int]
     ) -> list[ContextDocument]:
-        """Documents named in the question, then those of the hits, in order;
-        at most _MAX_DOCS, each with its saved text."""
-        ranked = list(dict.fromkeys([*await self._named_document_ids(query, allowed), *(h.document_id for h in hits)]))
+        """Documents named in the question, then those of the hits, then the
+        rest the user chose, in order; at most _MAX_DOCS, each with its saved
+        text. Chosen documents leave out all others."""
+        named = await self._named_document_ids(query, allowed)
+        ranked = list(dict.fromkeys([*named, *(h.document_id for h in hits), *document_ids]))
+        if document_ids:
+            chosen = set(document_ids)
+            ranked = [document_id for document_id in ranked if document_id in chosen]
         if not ranked:
             return []
         rows = {

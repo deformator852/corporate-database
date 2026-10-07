@@ -18,6 +18,19 @@ def test_actions_are_recorded_and_filtered(client, make_user):
     assert only["total"] >= 1 and all(i["action"] == "auth.logout" for i in only["items"])
 
 
+def test_audit_search_takes_percent_and_underscore_literally(client, make_user):
+    _, email, password = make_user(admin=True)
+    login(client, email, password)
+
+    def found(q: str) -> int:
+        return client.get("/api/v1/audit", params={"q": q, "per_page": 100}).json()["total"]
+
+    # Emails here are like "user-…@acme.io": "user_" only matches as a wildcard.
+    assert found(email.replace("-", "_", 1)) == 0
+    assert found("%") == 0
+    assert found(email) >= 1
+
+
 def test_audit_needs_permission(client, make_user):
     _, email, password = make_user(["documents.list"])
     login(client, email, password)

@@ -5,6 +5,7 @@ from fastapi import (
     APIRouter,
     Depends,
     Form,
+    Path,
     Query,
     Response,
     WebSocket,
@@ -23,8 +24,10 @@ from models.audit import AuditAction
 from models.document import Document, DocumentClassification
 from models.user import User
 from schemas.document import (
+    DocumentChunkSchema,
     DocumentListItemSchema,
     DocumentListResponseSchema,
+    DocumentUpdateSchema,
     DocumentUploadResponseSchema,
     DocumentUploadSchema,
 )
@@ -32,7 +35,7 @@ from schemas.error import error_responses
 from security import get_ws_payload
 from services.audit import AuditService
 from services.documents.access import event_classifications
-from services.documents.document import DocumentFilter, DocumentService, DocumentStatusFilter
+from services.documents.document import DocumentFilter, DocumentRevision, DocumentService, DocumentStatusFilter
 from services.documents.hub import hub
 
 router = APIRouter(
@@ -83,6 +86,47 @@ async def upload_document(
     return DocumentUploadResponseSchema(**item.model_dump(), converted=converted)
 
 
+@router.patch(
+    "/{document_id}",
+    response_model=DocumentListItemSchema,
+    responses=error_responses(400, 401, 403, 404, 409, 503),
+)
+async def update_document(
+    document_id: int,
+    payload: DocumentUpdateSchema,
+    user: User = Depends(require_permission("documents.update")),
+    service: DocumentService = Depends(get_document_service),
+    audit: AuditService = Depends(get_audit_service),
+) -> DocumentListItemSchema:
+    document, previous = await service.update_document(document_id, user.id, payload)
+    if previous != DocumentRevision(document.name, document.classification):
+        _audit(
+            audit,
+            AuditAction.DOCUMENT_UPDATE,
+            user,
+            document,
+            previous_name=previous.name,
+            previous_classification=previous.classification,
+        )
+    return DocumentListItemSchema.from_document(document)
+
+
+@router.post(
+    "/{document_id}/retry",
+    response_model=DocumentListItemSchema,
+    responses=error_responses(401, 403, 404, 409, 429, 503),
+)
+async def retry_document(
+    document_id: int,
+    user: User = Depends(require_permission("documents.create")),
+    service: DocumentService = Depends(get_document_service),
+    audit: AuditService = Depends(get_audit_service),
+) -> DocumentListItemSchema:
+    document = await service.retry_document(document_id, user.id)
+    _audit(audit, AuditAction.DOCUMENT_RETRY, user, document)
+    return DocumentListItemSchema.from_document(document)
+
+
 @router.delete(
     "/{document_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -99,14 +143,14 @@ async def delete_document(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-def _audit(audit: AuditService, action: AuditAction, user: User, document: Document) -> None:
+def _audit(audit: AuditService, action: AuditAction, user: User, document: Document, **details: str) -> None:
     audit.record(
         action,
         actor=user,
         target_type="document",
         target_id=document.id,
         target_label=document.name,
-        details={"filename": document.filename, "classification": document.classification},
+        details={"filename": document.filename, "classification": document.classification, **details},
     )
 
 
@@ -138,6 +182,31 @@ async def open_document_file(
             "Cache-Control": "no-store",
         },
     )
+
+
+@router.get(
+    "/{document_id}/chunks/{index}",
+    response_model=DocumentChunkSchema,
+    responses=error_responses(401, 403, 404, 503),
+)
+async def read_document_chunk(
+    document_id: int,
+    index: Annotated[int, Path(ge=0)],
+    user: User = Depends(get_current_user),
+    service: DocumentService = Depends(get_document_service),
+    audit: AuditService = Depends(get_audit_service),
+) -> DocumentChunkSchema:
+    """The passage a chat answer was taken from (a source's `chunk`)."""
+    document, chunk = await service.read_chunk(document_id, user.id, index)
+    audit.record(
+        AuditAction.DOCUMENT_VIEW,
+        actor=user,
+        target_type="document",
+        target_id=document.id,
+        target_label=document.name,
+        details={"filename": document.filename, "classification": document.classification, "chunk": index},
+    )
+    return DocumentChunkSchema(text=chunk.text, page=chunk.page)
 
 
 @router.websocket("/ws")

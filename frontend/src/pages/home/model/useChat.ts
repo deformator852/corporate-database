@@ -1,8 +1,16 @@
 import {useCallback, useEffect, useRef, useState} from "react";
 
 import {connectChatSocket, type ChatSocket} from "@pages/home/api/chat";
-import {deleteConversation, getConversation, listConversations, rateAnswer} from "@pages/home/api/history";
-import {ChatCancelledError, ChatRequestError, type ChatConversationItem, type ChatMessage, type ChatStatus} from "@pages/home/model/chat";
+import {getConversation, listConversations, rateAnswer} from "@pages/home/api/history";
+import {
+    ChatCancelledError,
+    ChatRequestError,
+    type ChatAskOptions,
+    type ChatConversationItem,
+    type ChatDocument,
+    type ChatMessage,
+    type ChatStatus,
+} from "@pages/home/model/chat";
 import {type AnswerRating} from "@/entities/chat/model";
 import {useI18n} from "@/shared/i18n/I18nProvider";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
@@ -30,15 +38,31 @@ export function useChat() {
     const [conversationId, setConversationId] = useState<number | null>(null);
     const [conversations, setConversations] = useState<ChatConversationItem[] | null>(null);
     const [historyError, setHistoryError] = useState<string | null>(null);
+    // Documents the questions are limited to; empty means all.
+    const [documents, setDocuments] = useState<ChatDocument[]>([]);
+    // What the last question was sent with, so Try again sends it the same way.
+    const lastOptions = useRef<ChatAskOptions>({});
+
+    // Search in the saved chats; empty lists them all.
+    const [historyQuery, setHistoryQuery] = useState("");
+    // Only the newest list request may show: an older search can answer later.
+    const historyRequest = useRef(0);
 
     const reloadHistory = useCallback(() => {
-        void listConversations()
+        const request = ++historyRequest.current;
+        void listConversations(historyQuery)
             .then((items) => {
-                setConversations(items);
-                setHistoryError(null);
+                if (request === historyRequest.current) {
+                    setConversations(items);
+                    setHistoryError(null);
+                }
             })
-            .catch((reason) => setHistoryError(getApiErrorMessage(reason, t("chat.historyLoadError"))));
-    }, [t]);
+            .catch((reason) => {
+                if (request === historyRequest.current) {
+                    setHistoryError(getApiErrorMessage(reason, t("chat.historyLoadError")));
+                }
+            });
+    }, [t, historyQuery]);
 
     useEffect(() => {
         reloadHistory();
@@ -53,7 +77,8 @@ export function useChat() {
         };
     }, []);
 
-    async function send(history: ChatMessage[]) {
+    async function send(history: ChatMessage[], options: ChatAskOptions) {
+        lastOptions.current = options;
         const socket = socketRef.current;
         if (socket == null) {
             setError(t("chat.errorSend"));
@@ -78,6 +103,7 @@ export function useChat() {
                         setStreaming(partial);
                     },
                 },
+                options,
             );
             appendAnswer(reply.content, reply.sources, reply.messageId);
             setConversationId(reply.conversationId);
@@ -105,6 +131,13 @@ export function useChat() {
                 setStatus("refused");
                 return;
             }
+            if (caught instanceof ChatRequestError && caught.code === "not_found" && conversationId != null) {
+                // The saved chat was cleared from the history: Try again
+                // continues in a new chat, with what is on screen.
+                setConversationId(null);
+                lastOptions.current = {documentIds: options.documentIds};
+                reloadHistory();
+            }
             const message =
                 caught instanceof ChatRequestError
                     ? caught.message
@@ -125,7 +158,21 @@ export function useChat() {
         const history = [...messages, userMessage];
         setMessages(history);
         setDraft("");
-        void send(history);
+        void send(history, {documentIds: documents.map((document) => document.id)});
+    }
+
+    /** Asks the last question again; the new answer replaces the last one. */
+    function regenerate() {
+        const last = messages.at(-1);
+        if (status === "pending" || last?.role !== "assistant" || last.messageId == null) {
+            return;
+        }
+        const history = messages.slice(0, -1);
+        setMessages(history);
+        void send(history, {
+            documentIds: documents.map((document) => document.id),
+            replaceMessageId: last.messageId,
+        });
     }
 
     function handleCancel() {
@@ -135,6 +182,7 @@ export function useChat() {
     function startNewChat() {
         setMessages([]);
         setConversationId(null);
+        setDocuments([]);
         setError(null);
         setStatus("idle");
     }
@@ -153,6 +201,7 @@ export function useChat() {
                 })),
             );
             setConversationId(conversation.id);
+            setDocuments([]);
             setError(null);
             setStatus("idle");
         } catch (reason) {
@@ -161,23 +210,11 @@ export function useChat() {
         }
     }
 
-    async function removeConversation(id: number) {
-        try {
-            await deleteConversation(id);
-            if (id === conversationId) {
-                startNewChat();
-            }
-            reloadHistory();
-        } catch (reason) {
-            setHistoryError(getApiErrorMessage(reason, t("chat.historyLoadError")));
-        }
-    }
-
     function handleRetry() {
         if (status === "pending") {
             return;
         }
-        void send(messages);
+        void send(messages, lastOptions.current);
     }
 
     /** Shown at once; put back if the server refuses it. */
@@ -206,12 +243,16 @@ export function useChat() {
         conversationId,
         conversations,
         historyError,
+        historyQuery,
+        searchHistory: setHistoryQuery,
+        documents,
+        setDocuments,
         submit: handleSubmit,
         cancel: handleCancel,
         retry: handleRetry,
+        regenerate,
         startNewChat,
         openConversation,
-        removeConversation,
         rate,
     };
 }

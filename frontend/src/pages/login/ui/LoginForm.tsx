@@ -17,6 +17,7 @@ export function LoginForm() {
     const {t} = useI18n();
     const navigate = useNavigate();
     const setUser = useSessionStore((state) => state.setUser);
+    const notice = useSessionStore((state) => state.notice);
     const loginSchema = useMemo(() => createLoginSchema(t), [t]);
     const {
         register,
@@ -61,6 +62,10 @@ export function LoginForm() {
                         <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden/>
                         <p>{errors.root.message}</p>
                     </div>
+                ) : notice ? (
+                    <p role="status" className="rounded-lg bg-muted px-3 py-2.5 text-sm">
+                        {notice}
+                    </p>
                 ) : null}
 
                 <Field data-invalid={!!errors.email || undefined}>

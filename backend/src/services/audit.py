@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.audit import AuditAction, AuditLog
 from models.user import User
+from services.text_search import contains
 
 
 class AuditService:
@@ -46,18 +47,9 @@ class AuditService:
         q: str = "",
         action: str = "",
     ) -> tuple[list[AuditLog], int]:
-        filters = []
+        filters = contains(q, AuditLog.actor_email, AuditLog.target_label, AuditLog.ip)
         if action:
             filters.append(AuditLog.action == action)
-        if q:
-            pattern = f"%{q}%"
-            filters.append(
-                or_(
-                    AuditLog.actor_email.ilike(pattern),
-                    AuditLog.target_label.ilike(pattern),
-                    AuditLog.ip.ilike(pattern),
-                )
-            )
         total = await self.session.scalar(select(func.count()).select_from(AuditLog).where(*filters))
         entries = await self.session.scalars(
             select(AuditLog)

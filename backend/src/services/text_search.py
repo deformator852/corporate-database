@@ -2,10 +2,12 @@ from sqlalchemy import ColumnElement, or_
 from sqlalchemy.orm import InstrumentedAttribute
 
 
-def contains(query: str, *columns: InstrumentedAttribute[str]) -> list[ColumnElement[bool]]:
+def contains(
+    query: str, *columns: InstrumentedAttribute[str] | InstrumentedAttribute[str | None]
+) -> list[ColumnElement[bool]]:
     """Filters for rows where any of `columns` holds `query`, case-insensitive
     and literally: % and _ typed by the user are not wildcards. An empty
-    query filters nothing."""
+    query filters nothing; a NULL column matches nothing."""
     term = query.strip()
     if not term:
         return []

@@ -52,11 +52,11 @@ class Document(TimestampMixin, Base):
         nullable=True,
     )
     user: Mapped[User | None] = relationship()
-    # Completed, but the owner has not been told yet: told in one notice
-    # once none of their documents is waiting (services/notifications).
     # Keyed digest of the uploaded bytes, to refuse the same file twice;
     # without the key it tells nothing about the content.
     content_digest: Mapped[bytes | None] = mapped_column(LargeBinary(16), index=True)
+    # Completed, but the owner has not been told yet: told in one notice
+    # once none of their documents is waiting (services/notifications).
     ready_unannounced: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
     __table_args__ = (

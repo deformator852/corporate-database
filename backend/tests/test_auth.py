@@ -1,5 +1,7 @@
 """Sessions, sign-in throttling, revocation, WebSocket origin."""
 
+import time
+
 from conftest import csrf, login
 
 
@@ -14,6 +16,56 @@ def test_wrong_password_is_401_and_long_password_is_not_500(client, make_user):
     assert login(client, email, "wrong-password").status_code == 401
     # bcrypt reads 72 bytes; 50 Cyrillic letters are 100 bytes.
     assert login(client, email, "п" * 50).status_code == 401
+
+
+def test_an_unknown_email_costs_a_password_check_too(client, monkeypatch):
+    import services.auth
+
+    checked: list[str] = []
+    real = services.auth.verify_password
+
+    def spy(plain: str, hashed: str) -> bool:
+        checked.append(plain)
+        return real(plain, hashed)
+
+    monkeypatch.setattr(services.auth, "verify_password", spy)
+
+    response = login(client, "nobody-here@corpus.test", "some-password")
+
+    # Answering without the (slow) check would tell which emails have accounts.
+    assert response.status_code == 401 and checked == ["some-password"]
+
+
+def test_users_change_their_own_password_and_sign_in_again(client, make_user):
+    _, email, password = make_user()
+    login(client, email, password)
+
+    def change(current: str, new: str):
+        return client.post(
+            "/api/v1/auth/password", headers=csrf(client), json={"current_password": current, "new_password": new}
+        )
+
+    wrong = change("wrong-password", "New-password-1")
+    assert (wrong.status_code, wrong.json()["message"]) == (400, "The current password is wrong.")
+    assert change(password, password).status_code == 400
+    assert change(password, "short").status_code == 400
+
+    assert change(password, "New-password-1").status_code == 204
+
+    assert client.get("/api/v1/auth/me").status_code == 401  # this session ended too
+    assert login(client, email, password).status_code == 401
+    # Sessions issued in the second of the change end too (1 s token precision).
+    time.sleep(1.1)
+    assert login(client, email, "New-password-1").status_code == 200
+    assert client.get("/api/v1/auth/me").json()["email"] == email
+
+
+def test_wrong_current_passwords_are_throttled_like_sign_ins(client, make_user):
+    _, email, password = make_user()
+    login(client, email, password)
+    body = {"current_password": "wrong-password", "new_password": "New-password-1"}
+    codes = [client.post("/api/v1/auth/password", headers=csrf(client), json=body).status_code for _ in range(6)]
+    assert codes == [400] * 5 + [429]
 
 
 def test_login_throttled_after_five_failures(client, make_user):

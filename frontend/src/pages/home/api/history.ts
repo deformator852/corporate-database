@@ -7,9 +7,10 @@ type ConversationPage = {
     total: number;
 };
 
-export async function listConversations(): Promise<ChatConversationItem[]> {
+/** The newest saved chats; `query` keeps those whose title or messages hold it. */
+export async function listConversations(query = ""): Promise<ChatConversationItem[]> {
     const {data} = await api.get<ConversationPage>("/chat/conversations", {
-        params: {per_page: 50},
+        params: {per_page: 50, q: query || undefined},
     });
     return data.items;
 }
@@ -17,10 +18,6 @@ export async function listConversations(): Promise<ChatConversationItem[]> {
 export async function getConversation(id: number): Promise<ChatConversation> {
     const {data} = await api.get<ChatConversation>(`/chat/conversations/${id}`);
     return data;
-}
-
-export async function deleteConversation(id: number): Promise<void> {
-    await api.delete(`/chat/conversations/${id}`);
 }
 
 /** null takes the rating back. */

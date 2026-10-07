@@ -1,10 +1,11 @@
 from typing import Self
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from models.user import User
 from schemas.email import Email
 from schemas.model_config import MODEL_CONFIG, ORM_MODEL_CONFIG
+from schemas.user import check_password_fits
 
 
 class LoginSchema(BaseModel):
@@ -12,6 +13,17 @@ class LoginSchema(BaseModel):
 
     email: Email
     password: str
+
+
+class PasswordChangeSchema(BaseModel):
+    """A user changing their own password."""
+
+    model_config = MODEL_CONFIG
+
+    current_password: str = Field(max_length=100)
+    new_password: str = Field(min_length=8, max_length=100)
+
+    _fits = field_validator("new_password")(check_password_fits)
 
 
 class SessionUserSchema(BaseModel):

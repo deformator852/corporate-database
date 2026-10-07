@@ -1,13 +1,16 @@
-import {ArrowLeft} from "lucide-react";
+import {ArrowLeft, Eraser, MessagesSquare} from "lucide-react";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {Link, useLocation, useParams} from "react-router";
 
 import {Badge} from "@/components/ui/badge";
-import {Button} from "@/components/ui/button";
+import {Button, buttonVariants} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
 import {cn} from "cn";
 import {useI18n} from "@/shared/i18n/I18nProvider";
 import {StatusCard} from "@/shared/ui/StatusCard";
+import {can} from "@/shared/lib/api/me";
+import {ChatPurgeDialog} from "@/widgets/chat-purge/ui/ChatPurgeDialog";
+import type {ChatHistoryLinkState} from "@/entities/chat/model";
 import {localeIntlTag} from "@/shared/i18n/messages";
 import {getApiErrorCode, getApiErrorMessage} from "@/shared/lib/api/errors";
 import type {AuditEntry} from "@/entities/audit/model";
@@ -45,6 +48,8 @@ function UserDetailView({userId}: {userId: number}) {
     const [user, setUser] = useState<UserState>({status: "loading"});
     const [feed, setFeed] = useState<Feed>(EMPTY_FEED);
     const [reloadKey, setReloadKey] = useState(0);
+    const [purging, setPurging] = useState(false);
+    const [purged, setPurged] = useState<string | null>(null);
     const sentinelRef = useRef<HTMLDivElement>(null);
     // Guards against the observer firing again before a page arrives.
     const loadingRef = useRef(false);
@@ -234,6 +239,33 @@ function UserDetailView({userId}: {userId: number}) {
                     )}
                 </div>
 
+                {can("chat.history") || can("chat.purge") ? (
+                    <div className="flex flex-wrap gap-2">
+                        {can("chat.history") ? (
+                            <Link
+                                to={`/chat-history?user=${profile.id}`}
+                                state={{userName: name || profile.email} satisfies ChatHistoryLinkState}
+                                // Through cn: it drops the base border-transparent the variant overrides.
+                                className={cn(buttonVariants({variant: "outline", size: "sm"}))}
+                            >
+                                <MessagesSquare aria-hidden />
+                                {t("userDetail.viewChats")}
+                            </Link>
+                        ) : null}
+                        {can("chat.purge") ? (
+                            <Button type="button" variant="outline" size="sm" onClick={() => setPurging(true)}>
+                                <Eraser aria-hidden />
+                                {t("chatPurge.open")}
+                            </Button>
+                        ) : null}
+                    </div>
+                ) : null}
+                {purged ? (
+                    <p role="status" className="text-sm text-muted-foreground">
+                        {purged}
+                    </p>
+                ) : null}
+
                 <dl className="grid grid-cols-2 gap-3 border-t pt-4 lg:grid-cols-3">
                     {stats.map((stat) => (
                         <div key={stat.label} className="space-y-0.5">
@@ -319,6 +351,13 @@ function UserDetailView({userId}: {userId: number}) {
                     ) : null}
                 </div>
             </section>
+
+            <ChatPurgeDialog
+                open={purging}
+                onOpenChange={setPurging}
+                user={{id: profile.id, name: name || profile.email}}
+                onPurged={(deleted) => setPurged(t("chatPurge.done", {count: deleted}))}
+            />
         </div>
     );
 }

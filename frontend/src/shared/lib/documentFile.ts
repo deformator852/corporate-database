@@ -9,6 +9,15 @@ const PREVIEW_TYPES: Record<string, string> = {
     csv: "text/plain;charset=utf-8",
 };
 
+/** A passage of a document as search stores it; `page` for PDFs. */
+export type DocumentChunk = {text: string; page: number | null};
+
+/** The passage `index` of a document (a chat source's `chunk`). */
+export async function getDocumentChunk(id: number, index: number): Promise<DocumentChunk> {
+    const {data} = await api.get<DocumentChunk>(`/documents/${id}/chunks/${index}`);
+    return data;
+}
+
 function extension(filename: string): string {
     return filename.split(".").pop()?.toLowerCase() ?? "";
 }
@@ -20,7 +29,7 @@ function extension(filename: string): string {
  * or popup blockers stop it. The preview blob is typed PDF or plain text only,
  * never HTML, so a file cannot run script in the app's origin.
  */
-export async function openDocumentFile(id: number, filename: string): Promise<void> {
+export async function openDocumentFile(id: number, filename: string, page?: number | null): Promise<void> {
     const previewType = PREVIEW_TYPES[extension(filename)];
     const tab = previewType ? window.open("about:blank", "_blank") : null;
     try {
@@ -28,7 +37,8 @@ export async function openDocumentFile(id: number, filename: string): Promise<vo
         const blob = previewType ? new Blob([data], {type: previewType}) : data;
         const url = URL.createObjectURL(blob);
         if (tab) {
-            tab.location.href = url;
+            // Browsers' PDF viewers open at #page=N.
+            tab.location.href = page != null && extension(filename) === "pdf" ? `${url}#page=${page}` : url;
         } else {
             const link = document.createElement("a");
             link.href = url;

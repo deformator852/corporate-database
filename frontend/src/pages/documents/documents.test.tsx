@@ -36,6 +36,62 @@ describe("Documents page", () => {
         expect(within(failed).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "15");
     });
 
+    it("loads the list again after the live connection was down", async () => {
+        const {server} = renderApp("/documents", sessionUser(WRITER), (s) => documents(s, [{...POLICY, status: "embedding", progress: 70}]));
+        await screen.findByText("Embedding");
+        const socket = await waitFor(() => FakeWebSocket.at("/api/v1/documents/ws"));
+        // Finished while the socket was down: its event never arrives.
+        documents(server, [POLICY]);
+
+        act(() => socket.close(4401));
+
+        expect(await screen.findByText("Completed")).toBeInTheDocument();
+    });
+
+    it("processes a failed document again", async () => {
+        const scan: Doc = {id: 2, name: "Scan", filename: "scan.pdf", status: "failed", progress: 15, error_message: "The document has no text."};
+        const {user, server} = renderApp("/documents", sessionUser(WRITER), (s) => {
+            documents(s, [scan, POLICY]);
+            s.on("POST", "/documents/:id/retry", () => {
+                documents(server, [POLICY, {...scan, status: "queued", progress: 0, error_message: null}]);
+                return {...scan, status: "queued", progress: 0, classification: "standard", error_message: null, created_at: "2026-09-30T10:00:00Z"};
+            });
+        });
+
+        await screen.findByText("Scan");
+        expect(within(row("Travel policy")).queryByRole("button", {name: /Process/})).toBeNull();
+        await user.click(screen.getByRole("button", {name: "Process Scan again"}));
+
+        await waitFor(() => expect(server.sent("POST", "/documents/2/retry")).toHaveLength(1));
+        expect(await screen.findByText("Queued")).toBeInTheDocument();
+        expect(screen.queryByText("The document has no text.")).not.toBeInTheDocument();
+    });
+
+    it("renames a document and changes its access level", async () => {
+        const {user, server} = renderApp("/documents", sessionUser([...WRITER, "documents.update", "documents.confidential"]), (s) => {
+            documents(s, [POLICY]);
+            s.on("PATCH", "/documents/:id", (request) => ({
+                ...POLICY,
+                ...(request.body as object),
+                status: "completed",
+                progress: 100,
+                error_message: null,
+                created_at: "2026-09-30T10:00:00Z",
+            }));
+        });
+
+        await user.click(await screen.findByRole("button", {name: "Edit Travel policy"}));
+        const dialog = await screen.findByRole("dialog", {name: "Edit document"});
+        await user.clear(within(dialog).getByLabelText("Name"));
+        await user.type(within(dialog).getByLabelText("Name"), "Trips");
+        await user.selectOptions(within(dialog).getByLabelText("Access"), "confidential");
+        await user.click(within(dialog).getByRole("button", {name: "Save changes"}));
+
+        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+        expect(server.sent("PATCH", "/documents/1")[0].body).toEqual({name: "Trips", classification: "confidential"});
+        expect(within(row("Trips")).getByText("Confidential")).toBeInTheDocument();
+    });
+
     it("uploads a file: the name comes from the file, access is limited by clearance", async () => {
         const {user, server} = renderApp("/documents", sessionUser([...WRITER, "documents.confidential"]), (s) => {
             documents(s, []);
