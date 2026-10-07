@@ -48,7 +48,7 @@ export function Account() {
         return null;
     }
     return (
-        <div className="stack stack--lg w-full max-w-xl">
+        <div className="stack stack--lg w-full">
             <div className="stack">
                 <h1>{t("account.title")}</h1>
                 <p className="text-muted-foreground">
