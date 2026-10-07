@@ -18,12 +18,19 @@ function chatSocketUrl(): string {
     return `${protocol}//${window.location.host}/api/v1/chat/ws`;
 }
 
+export type ChatHandlers = {
+    /** The question is saved in this chat; comes before any answer. */
+    onStarted?: (conversationId: number) => void;
+    /** A piece of the answer as it is written. */
+    onDelta?: (piece: string) => void;
+};
+
 export type ChatSocket = {
-    /** Resolves with the full answer; `onDelta` receives pieces as they arrive. */
+    /** Resolves with the full answer. */
     send: (
         messages: Pick<ChatMessage, "role" | "content">[],
         conversationId: number | null,
-        onDelta?: (piece: string) => void,
+        handlers?: ChatHandlers,
     ) => Promise<ChatReply>;
     cancel: () => void;
     close: () => void;
@@ -36,7 +43,7 @@ export function connectChatSocket(): ChatSocket {
     let pending: {
         resolve: (reply: ChatReply) => void;
         reject: (error: Error) => void;
-        onDelta?: (piece: string) => void;
+        handlers: ChatHandlers;
     } | null = null;
 
     const failPending = (message: string, code = "unavailable") => {
@@ -67,8 +74,12 @@ export function connectChatSocket(): ChatSocket {
             if (!isChatServerMessage(parsed) || pending == null) {
                 return;
             }
+            if (parsed.type === "started") {
+                pending.handlers.onStarted?.(parsed.conversation_id);
+                return;
+            }
             if (parsed.type === "delta") {
-                pending.onDelta?.(parsed.content);
+                pending.handlers.onDelta?.(parsed.content);
                 return;
             }
             finish(parsed);
@@ -89,7 +100,7 @@ export function connectChatSocket(): ChatSocket {
         });
     };
 
-    const finish = (message: Exclude<ChatServerMessage, {type: "delta"}>) => {
+    const finish = (message: Exclude<ChatServerMessage, {type: "delta" | "started"}>) => {
         if (pending == null) {
             return;
         }
@@ -106,6 +117,7 @@ export function connectChatSocket(): ChatSocket {
         current.resolve({
             content: message.content,
             conversationId: message.conversation_id,
+            messageId: message.message_id,
             sources: message.sources,
         });
     };
@@ -115,7 +127,7 @@ export function connectChatSocket(): ChatSocket {
     timer = window.setTimeout(open, 0);
 
     return {
-        send(messages, conversationId, onDelta) {
+        send(messages, conversationId, handlers = {}) {
             const body: ChatAskMessage = {
                 type: "ask",
                 messages: messages.slice(-CHAT_HISTORY),
@@ -129,7 +141,7 @@ export function connectChatSocket(): ChatSocket {
                 return Promise.reject(new ChatRequestError("invalid", FALLBACK));
             }
             return new Promise<ChatReply>((resolve, reject) => {
-                pending = {resolve, reject, onDelta};
+                pending = {resolve, reject, handlers};
                 void waitUntilOpen(target).then(
                     () => {
                         if (socket !== target || target.readyState !== WebSocket.OPEN) {

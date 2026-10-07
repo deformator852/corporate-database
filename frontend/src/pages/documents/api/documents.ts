@@ -4,14 +4,23 @@ import {
     normalizeDocumentItem,
     type DocumentListItem,
     type DocumentListPage,
+    NO_FILTERS,
+    type DocumentFilters,
 } from "@pages/documents/model/documents";
 
 export async function getDocumentsPage(
     page: number,
+    filters: DocumentFilters = NO_FILTERS,
     perPage = DOCUMENTS_PER_PAGE,
 ): Promise<DocumentListPage> {
     const {data} = await api.get<DocumentListPage>("/documents", {
-        params: {page, per_page: perPage},
+        params: {
+            page,
+            per_page: perPage,
+            q: filters.query || undefined,
+            status: filters.status || undefined,
+            classification: filters.classification || undefined,
+        },
     });
     return {
         ...data,

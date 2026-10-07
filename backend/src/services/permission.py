@@ -1,8 +1,9 @@
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from models.rbac.permission import Permission
+from services.text_search import contains
 
 
 class PermissionService:
@@ -10,7 +11,7 @@ class PermissionService:
         self.session = session
 
     async def list_permissions(self, page: int = 1, per_page: int = 20, q: str = "") -> tuple[list[Permission], int]:
-        filters = _permission_search_filters(q)
+        filters = contains(q, Permission.name, Permission.key)
         count_query = select(func.count()).select_from(Permission)
         list_query = select(Permission).options(selectinload(Permission.roles))
         if filters:
@@ -21,17 +22,3 @@ class PermissionService:
             list_query.order_by(Permission.name, Permission.key).offset((page - 1) * per_page).limit(per_page)
         )
         return list(permissions), total or 0
-
-
-def _permission_search_filters(q: str) -> list:
-    term = q.strip()
-    if not term:
-        return []
-    escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    pattern = f"%{escaped}%"
-    return [
-        or_(
-            Permission.name.ilike(pattern, escape="\\"),
-            Permission.key.ilike(pattern, escape="\\"),
-        )
-    ]

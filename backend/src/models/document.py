@@ -1,7 +1,7 @@
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, String, Text, false
+from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, LargeBinary, String, Text, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -54,6 +54,9 @@ class Document(TimestampMixin, Base):
     user: Mapped[User | None] = relationship()
     # Completed, but the owner has not been told yet: told in one notice
     # once none of their documents is waiting (services/notifications).
+    # Keyed digest of the uploaded bytes, to refuse the same file twice;
+    # without the key it tells nothing about the content.
+    content_digest: Mapped[bytes | None] = mapped_column(LargeBinary(16), index=True)
     ready_unannounced: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
     __table_args__ = (

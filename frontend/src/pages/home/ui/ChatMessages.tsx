@@ -1,10 +1,12 @@
-import {FileText} from "lucide-react";
-import {useEffect, useRef, useState} from "react";
+import {ThumbsDown, ThumbsUp} from "lucide-react";
+import {useEffect, useRef} from "react";
 
-import type {ChatMessage, ChatSource, ChatStatus} from "@pages/home/model/chat";
+import {Button} from "@/components/ui/button";
+import {SourceList} from "@/entities/chat/SourceList";
+import type {ChatMessage, ChatStatus} from "@pages/home/model/chat";
+import type {AnswerRating} from "@/entities/chat/model";
+import {cn} from "cn";
 import {useI18n} from "@/shared/i18n/I18nProvider";
-import {getApiErrorMessage} from "@/shared/lib/api/errors";
-import {openDocumentFile} from "@/shared/lib/documentFile";
 
 type ChatMessagesProps = {
     messages: ChatMessage[];
@@ -13,6 +15,7 @@ type ChatMessagesProps = {
     status: ChatStatus;
     error: string | null;
     onRetry: () => void;
+    onRate?: (message: ChatMessage, rating: AnswerRating | null) => void;
 };
 
 function bubbleClass(role: ChatMessage["role"]) {
@@ -28,6 +31,7 @@ export function ChatMessages({
     status,
     error,
     onRetry,
+    onRate,
 }: ChatMessagesProps) {
     const {t} = useI18n();
     const scrollerRef = useRef<HTMLDivElement>(null);
@@ -72,6 +76,9 @@ export function ChatMessages({
                     </p>
                     {message.role === "assistant" && message.sources?.length ? (
                         <SourceList sources={message.sources} />
+                    ) : null}
+                    {message.role === "assistant" && message.messageId != null && onRate ? (
+                        <RateAnswer rating={message.rating ?? null} onRate={(rating) => onRate(message, rating)} />
                     ) : null}
                 </div>
             ))}
@@ -128,37 +135,30 @@ export function ChatMessages({
 }
 
 /** Documents an answer was built from; each opens the original file. */
-function SourceList({sources}: {sources: ChatSource[]}) {
+function RateAnswer({rating, onRate}: {rating: AnswerRating | null; onRate: (rating: AnswerRating | null) => void}) {
     const {t} = useI18n();
-    const [error, setError] = useState<string | null>(null);
+    const options = [
+        {value: "up", label: t("chat.rating.good"), Icon: ThumbsUp},
+        {value: "down", label: t("chat.rating.bad"), Icon: ThumbsDown},
+    ] as const;
     return (
-        <div className="mr-auto flex max-w-[min(100%,48rem)] flex-col gap-1.5">
-            <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-xs text-muted-foreground">{t("chat.sources")}</span>
-                {sources.map((source) => (
-                    <button
-                        key={source.id}
-                        type="button"
-                        title={source.filename}
-                        aria-label={t("chat.openSource", {name: source.name})}
-                        onClick={() => {
-                            setError(null);
-                            void openDocumentFile(source.id, source.filename).catch((reason) =>
-                                setError(getApiErrorMessage(reason, t("documents.openError"))),
-                            );
-                        }}
-                        className="inline-flex max-w-64 cursor-pointer items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs font-medium outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
-                    >
-                        <FileText className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                        <span className="truncate">{source.name}</span>
-                    </button>
-                ))}
-            </div>
-            {error ? (
-                <p role="alert" className="text-xs text-destructive">
-                    {error}
-                </p>
-            ) : null}
+        // The title tells, before the click, who sees a rated answer.
+        <div className="flex items-center gap-0.5" title={t("chat.rating.hint")}>
+            {options.map(({value, label, Icon}) => (
+                <Button
+                    key={value}
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={label}
+                    aria-pressed={rating === value}
+                    className={cn("text-muted-foreground", rating === value && "text-foreground")}
+                    onClick={() => onRate(rating === value ? null : value)}
+                >
+                    <Icon className={cn(rating === value && "fill-current")} aria-hidden />
+                </Button>
+            ))}
+            <span className="sr-only">{t("chat.rating.hint")}</span>
         </div>
     );
 }

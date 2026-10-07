@@ -38,6 +38,7 @@ describe("Assistant chat", () => {
                 type: "answer",
                 content: "The budget is 500 EUR.",
                 conversation_id: 7,
+                message_id: 12,
                 sources: [{id: 3, name: "Travel policy", filename: "policy.pdf"}],
             }),
         );
@@ -51,6 +52,40 @@ describe("Assistant chat", () => {
         await waitFor(() => expect(socket.sent).toHaveLength(2));
         expect(socket.sent[1]).toMatchObject({conversation_id: 7});
         expect((socket.sent[1] as {messages: unknown[]}).messages).toHaveLength(3);
+    });
+
+    it("continues the chat of a stopped first question", async () => {
+        const {user, socket} = await openChat();
+        await ask(user, "Summarize the handbook");
+        await waitFor(() => expect(socket.sent).toHaveLength(1));
+        act(() => socket.receive({type: "started", conversation_id: 9}));
+        act(() => socket.receive({type: "delta", content: "The handbook covers"}));
+        await user.click(await screen.findByRole("button", {name: "Stop generating"}));
+        act(() => socket.receive({type: "cancelled"}));
+        await screen.findByRole("button", {name: "Send"});
+
+        await ask(user, "And remote work?");
+        await waitFor(() => expect(socket.sent.filter((m) => (m as {type: string}).type === "ask")).toHaveLength(2));
+        expect(socket.sent.at(-1)).toMatchObject({conversation_id: 9});
+    });
+
+    it("rates an answer and takes the rating back", async () => {
+        const {user, socket, server} = await openChat((s) => s.on("PUT", "/chat/conversations/:id/messages/:mid/rating"));
+        await ask(user, "What is the travel budget?");
+        await waitFor(() => expect(socket.sent).toHaveLength(1));
+        act(() =>
+            socket.receive({type: "answer", content: "The budget is 500 EUR.", conversation_id: 7, message_id: 12, sources: []}),
+        );
+        const bad = await screen.findByRole("button", {name: "Bad answer"});
+
+        await user.click(bad);
+        expect(bad).toHaveAttribute("aria-pressed", "true");
+        await user.click(bad);
+
+        await waitFor(() => expect(server.sent("PUT", "/chat/conversations/7/messages/12/rating")).toHaveLength(2));
+        const sent = server.sent("PUT", "/chat/conversations/7/messages/12/rating").map((r) => r.body);
+        expect(sent).toEqual([{rating: "down"}, {rating: null}]);
+        expect(bad).toHaveAttribute("aria-pressed", "false");
     });
 
     it("keeps what was written when the user stops the answer", async () => {

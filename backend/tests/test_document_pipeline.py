@@ -181,6 +181,50 @@ def test_a_line_many_documents_share_is_found(client, make_user, infra):
     assert run(shared(ids[-1], texts[-1])) == frozenset({notice})  # now in enough documents
 
 
+def test_the_document_list_is_searched_and_filtered(client, make_user, infra):
+    _, email, password = make_user([*WRITER, "documents.confidential"])
+    login(client, email, password)
+    travel = upload(client, "Travel policy", POLICY.encode(), "travel.txt").json()["id"]
+    upload(client, "Board minutes", b"Minutes of the board.", "board_2026.txt", "confidential")
+    upload(client, "Leave rules", b"Leave is 26 days.", "leave.txt")
+    process(travel)
+
+    def names(**params: str) -> list[str]:
+        items = client.get("/api/v1/documents", params=params).json()["items"]
+        return sorted(item["name"] for item in items)
+
+    assert names(q="POLICY") == ["Travel policy"]
+    assert names(q="board_2026") == ["Board minutes"]  # the file name; "_" is literal
+    assert names(q="100%") == []
+    assert names(status="completed") == ["Travel policy"]
+    assert names(status="processing") == ["Board minutes", "Leave rules"]
+    assert names(classification="confidential") == ["Board minutes"]
+    assert names(q="rules", status="processing") == ["Leave rules"]
+
+
+def test_the_same_file_is_not_uploaded_twice(client, make_user, infra):
+    _, email, password = make_user(WRITER)
+    login(client, email, password)
+    assert upload(client, "Travel policy", POLICY.encode(), "policy.txt").status_code == 201
+
+    again = upload(client, "Policy copy", POLICY.encode(), "copy.txt")
+
+    assert again.status_code == 409
+    assert again.json()["message"] == 'This file is already uploaded as "Travel policy".'
+
+
+def test_a_hidden_copy_is_not_revealed(client, make_user, infra):
+    _, email, password = make_user([*WRITER, "documents.secret"])
+    login(client, email, password)
+    assert upload(client, "Board minutes", b"Minutes of the board.", "board.txt", "secret").status_code == 201
+    client.post("/api/v1/auth/logout", headers=csrf(client))
+    _, email, password = make_user(WRITER)
+    login(client, email, password)
+
+    # The same file exists, but at a level this user cannot see.
+    assert upload(client, "Minutes", b"Minutes of the board.", "minutes.txt").status_code == 201
+
+
 def test_search_results_keep_table_values_that_cleanup_rules_drop(client, make_user, infra):
     _, email, password = make_user(WRITER)
     login(client, email, password)
@@ -234,7 +278,7 @@ def test_an_answer_is_saved_when_the_client_leaves(client, make_user, infra):
 
     with client.websocket_connect("/api/v1/chat/ws", headers=_ws(client)) as chat:
         chat.send_json(_ask("What is the travel budget?"))
-        assert chat.receive_json()["type"] == "delta"  # answering has begun
+        assert _next(chat)["type"] == "delta"  # answering has begun
     # The tab is closed; the answer is still written and saved.
 
     messages: list[dict] = []
@@ -249,6 +293,86 @@ def test_an_answer_is_saved_when_the_client_leaves(client, make_user, infra):
         ("user", "What is the travel budget?"),
         ("assistant", "The travel budget is 500 EUR."),
     ]
+
+
+def test_the_chat_is_known_before_the_answer_and_the_answer_by_its_id(client, make_user, infra):
+    _, email, password = make_user(WRITER)
+    login(client, email, password)
+    process(upload(client, "Travel policy", POLICY.encode(), "policy.txt").json()["id"])
+
+    with client.websocket_connect("/api/v1/chat/ws", headers=_ws(client)) as chat:
+        chat.send_json(_ask("What is the travel budget?"))
+        started = chat.receive_json()
+        _, answer = _collect(chat)
+
+    assert started == {"type": "started", "conversation_id": answer["conversation_id"]}
+    saved = client.get(f"/api/v1/chat/conversations/{answer['conversation_id']}").json()["messages"]
+    assert saved[1]["id"] == answer["message_id"]
+
+
+def test_a_stopped_answer_keeps_what_was_written(client, make_user, infra):
+    import time
+
+    _, email, password = make_user(WRITER)
+    login(client, email, password)
+    process(upload(client, "Travel policy", POLICY.encode(), "policy.txt").json()["id"])
+    infra.llm.delay = 0.05
+
+    with client.websocket_connect("/api/v1/chat/ws", headers=_ws(client)) as chat:
+        chat.send_json(_ask("What is the travel budget?"))
+        conversation_id = chat.receive_json()["conversation_id"]
+        first = chat.receive_json()["content"]
+        chat.send_json({"type": "cancel"})
+        while chat.receive_json()["type"] != "cancelled":
+            pass
+
+    messages: list[dict] = []
+    for _ in range(40):
+        messages = client.get(f"/api/v1/chat/conversations/{conversation_id}").json()["messages"]
+        if len(messages) == 2:
+            break
+        time.sleep(0.05)
+    assert [m["role"] for m in messages] == ["user", "assistant"]
+    assert messages[1]["content"].startswith(first.strip())
+    assert messages[1]["content"] != "The travel budget is 500 EUR."  # cut short
+
+
+def test_rated_answers_reach_those_who_review_them(client, make_user, infra):
+    _, email, password = make_user(WRITER)
+    login(client, email, password)
+    process(upload(client, "Travel policy", POLICY.encode(), "policy.txt").json()["id"])
+    with client.websocket_connect("/api/v1/chat/ws", headers=_ws(client)) as chat:
+        chat.send_json(_ask("What is the travel budget?"))
+        _, answer = _collect(chat)
+    conversation, message = answer["conversation_id"], answer["message_id"]
+    rating_url = f"/api/v1/chat/conversations/{conversation}/messages/{message}/rating"
+
+    assert client.put(rating_url, headers=csrf(client), json={"rating": "down"}).status_code == 204
+    saved = client.get(f"/api/v1/chat/conversations/{conversation}").json()["messages"]
+    assert [m["rating"] for m in saved] == [None, "down"]
+    question = saved[0]["id"]
+    question_url = f"/api/v1/chat/conversations/{conversation}/messages/{question}/rating"
+    assert client.put(question_url, headers=csrf(client), json={"rating": "up"}).status_code == 404
+    assert client.get("/api/v1/chat/feedback").status_code == 403
+    client.post("/api/v1/auth/logout", headers=csrf(client))
+
+    _, reviewer_email, reviewer_password = make_user(["chat.feedback"])
+    login(client, reviewer_email, reviewer_password)
+    item = client.get("/api/v1/chat/feedback", params={"rating": "down"}).json()["items"][0]
+    assert (item["question"], item["answer"], item["user"]["email"]) == (
+        "What is the travel budget?",
+        "The travel budget is 500 EUR.",
+        email,
+    )
+    assert client.put(rating_url, headers=csrf(client), json={"rating": "up"}).status_code == 404  # not theirs
+    client.post("/api/v1/auth/logout", headers=csrf(client))
+
+    login(client, email, password)
+    assert client.put(rating_url, headers=csrf(client), json={"rating": None}).status_code == 204
+    client.post("/api/v1/auth/logout", headers=csrf(client))
+    login(client, reviewer_email, reviewer_password)
+    listed = client.get("/api/v1/chat/feedback", params={"rating": "down"}).json()["items"]
+    assert message not in [i["message_id"] for i in listed]
 
 
 def test_chat_can_reproduce_a_document_named_in_the_question(client, make_user, infra):
@@ -324,7 +448,7 @@ def test_chat_reports_a_missing_model(client, make_user, infra):
 
     with client.websocket_connect("/api/v1/chat/ws", headers=_ws(client)) as chat:
         chat.send_json(_ask("What is the travel budget?"))
-        reply = chat.receive_json()
+        reply = _next(chat)
 
     assert reply == {"type": "error", "code": "unavailable", "message": "The chat model is not available."}
 
@@ -441,10 +565,18 @@ def _ask(question: str) -> dict:
     return {"type": "ask", "messages": [{"role": "user", "content": question}], "conversation_id": None}
 
 
+def _next(chat) -> dict:
+    """The next message after `started`, which comes first for every question."""
+    message = chat.receive_json()
+    return chat.receive_json() if message["type"] == "started" else message
+
+
 def _collect(chat) -> tuple[list[str], dict]:
     deltas: list[str] = []
     while True:
         message = chat.receive_json()
+        if message["type"] == "started":
+            continue
         if message["type"] == "delta":
             deltas.append(message["content"])
             continue

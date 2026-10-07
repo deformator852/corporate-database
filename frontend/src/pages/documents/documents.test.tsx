@@ -88,7 +88,7 @@ describe("Documents page", () => {
         act(() => socket.receive(event("parsing", 15)));  // late, out-of-order event
         expect(screen.getByText("Embedding")).toBeInTheDocument();
         act(() => socket.receive(event("completed", 100)));
-        expect(await screen.findByText("Completed")).toBeInTheDocument();
+        expect(await within(screen.getByRole("table")).findByText("Completed")).toBeInTheDocument();
     });
 
     it("opens a PDF in a new tab", async () => {
@@ -138,6 +138,30 @@ describe("Documents page", () => {
         await screen.findByText("Travel policy");
         expect(screen.queryByLabelText("File")).not.toBeInTheDocument();
         expect(screen.queryByRole("button", {name: "Delete Travel policy?"})).not.toBeInTheDocument();
+    });
+});
+
+describe("Document filters", () => {
+    it("searches and filters on the server and offers to clear an empty result", async () => {
+        const {user, server} = renderApp("/documents", sessionUser(WRITER), (s) => {
+            s.on("GET", "/documents", (req) =>
+                req.params.q || req.params.status
+                    ? {items: [], page: 1, per_page: 20, total: 0, pages: 0}
+                    : {items: [{...POLICY, status: "completed", progress: 100, classification: "standard", error_message: null, created_at: "2026-09-30T10:00:00Z"}], page: 1, per_page: 20, total: 1, pages: 1},
+            );
+        });
+        await screen.findByText("Travel policy");
+
+        await user.type(screen.getByRole("searchbox", {name: "Search by name or file"}), "budget");
+        await user.selectOptions(screen.getByRole("combobox", {name: "Filter by status"}), "failed");
+
+        expect(await screen.findByText("No documents match these filters")).toBeInTheDocument();
+        await waitFor(() =>
+            expect(server.sent("GET", "/documents").at(-1)?.params).toMatchObject({q: "budget", status: "failed"}),
+        );
+        await user.click(screen.getByRole("button", {name: "Clear filters"}));
+        expect(await screen.findByText("Travel policy")).toBeInTheDocument();
+        expect(screen.getByRole("searchbox", {name: "Search by name or file"})).toHaveValue("");
     });
 });
 

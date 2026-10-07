@@ -1,4 +1,4 @@
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -11,6 +11,7 @@ from schemas.key import key_from_name
 from schemas.role import RoleCreateSchema, RoleWriteSchema
 from services.documents.access import user_permission_keys
 from services.grant import ensure_can_grant, ensure_can_manage, role_keys
+from services.text_search import contains
 
 
 class RoleService:
@@ -18,7 +19,7 @@ class RoleService:
         self.session = session
 
     async def list_roles(self, page: int = 1, per_page: int = 20, q: str = "") -> tuple[list[Role], int]:
-        filters = _role_search_filters(q)
+        filters = contains(q, Role.name, Role.key)
         count_query = select(func.count()).select_from(Role)
         list_query = select(Role).options(selectinload(Role.permissions))
         if filters:
@@ -120,17 +121,3 @@ class RoleService:
                 status_code=409,
             ) from exc
         await self.session.refresh(role, attribute_names=["permissions"])
-
-
-def _role_search_filters(q: str) -> list:
-    term = q.strip()
-    if not term:
-        return []
-    escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    pattern = f"%{escaped}%"
-    return [
-        or_(
-            Role.name.ilike(pattern, escape="\\"),
-            Role.key.ilike(pattern, escape="\\"),
-        )
-    ]

@@ -62,17 +62,17 @@ class ChatHistoryService:
         role: str,
         content: str,
         sources: list[dict[str, Any]] | None = None,
-    ) -> None:
-        self.session.add(
-            ChatMessageRecord(
-                conversation_id=conversation.id,
-                role=role,
-                content=content,
-                sources=sources or [],
-            )
+    ) -> ChatMessageRecord:
+        message = ChatMessageRecord(
+            conversation_id=conversation.id,
+            role=role,
+            content=content,
+            sources=sources or [],
         )
+        self.session.add(message)
         conversation.updated_at = datetime.now(UTC)
         await self.session.flush()
+        return message
 
     async def delete(self, user_id: int, conversation_id: int) -> None:
         conversation = await self.get(user_id, conversation_id)

@@ -135,10 +135,23 @@ def make_user():
     return lambda permissions=(), admin=False: run(create(list(permissions), admin))
 
 
+async def _clear_documents() -> None:
+    from sqlalchemy import text
+
+    from database import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as session:
+        await session.execute(text("DELETE FROM documents"))
+        await session.commit()
+
+
 @pytest.fixture
 def infra(monkeypatch):
     """Fakes for MinIO, Qdrant, embeddings, Ollama, RabbitMQ and Celery
-    (tests/fakes.py), wired in where the app creates its clients."""
+    (tests/fakes.py), wired in where the app creates its clients. Every test
+    gets fresh fakes, so documents of earlier tests are cleared too: their
+    files and vectors are gone (and they would look like duplicates)."""
+    run(_clear_documents())
     import aio_pika
     from fakes import (
         FakeBroker,

@@ -52,6 +52,14 @@ DOCUMENT_PERMISSIONS = (
     ),
 )
 
+CHAT_PERMISSIONS = (
+    (
+        "chat.feedback",
+        "View answer ratings",
+        "See answers users rated, with their questions, to find where the assistant goes wrong",
+    ),
+)
+
 AUDIT_PERMISSIONS = (
     (
         "audit.list",
@@ -73,6 +81,7 @@ ALL_PERMISSIONS = (
     + ROLE_PERMISSIONS
     + PERMISSION_PERMISSIONS
     + DOCUMENT_PERMISSIONS
+    + CHAT_PERMISSIONS
     + AUDIT_PERMISSIONS
     + SYSTEM_PERMISSIONS
     + tuple(permission for plugin in plugins() for permission in getattr(plugin, "PERMISSIONS", ()))

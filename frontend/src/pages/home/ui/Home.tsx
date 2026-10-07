@@ -132,6 +132,7 @@ function Home() {
                     status={chat.status}
                     error={chat.error}
                     onRetry={chat.retry}
+                    onRate={(message, rating) => void chat.rate(message, rating)}
                 />
                 <ChatComposer
                     value={chat.draft}

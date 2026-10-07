@@ -11,6 +11,23 @@ export const MAX_DOCUMENT_BYTES = 32 * 1024 * 1024;
 export const MAX_UPLOAD_FILES = 50;
 export const DOCUMENTS_PER_PAGE = 20;
 
+/** "processing": queued or any processing step. */
+export const DOCUMENT_STATUS_FILTERS = ["processing", "completed", "failed"] as const;
+export type DocumentStatusFilter = (typeof DOCUMENT_STATUS_FILTERS)[number];
+
+/** What the list shows; empty values filter nothing. */
+export type DocumentFilters = {
+    query: string;
+    status: DocumentStatusFilter | "";
+    classification: DocumentClassification | "";
+};
+
+export const NO_FILTERS: DocumentFilters = {query: "", status: "", classification: ""};
+
+export function isFiltered(filters: DocumentFilters): boolean {
+    return Boolean(filters.query || filters.status || filters.classification);
+}
+
 export const DOCUMENT_EXTENSIONS = [
     ".pdf",
     ".docx",

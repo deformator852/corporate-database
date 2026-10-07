@@ -1,5 +1,6 @@
 import {api} from "@/shared/lib/api/client";
 import type {ChatConversation, ChatConversationItem} from "@pages/home/model/chat";
+import type {AnswerRating} from "@/entities/chat/model";
 
 type ConversationPage = {
     items: ChatConversationItem[];
@@ -20,4 +21,9 @@ export async function getConversation(id: number): Promise<ChatConversation> {
 
 export async function deleteConversation(id: number): Promise<void> {
     await api.delete(`/chat/conversations/${id}`);
+}
+
+/** null takes the rating back. */
+export async function rateAnswer(conversationId: number, messageId: number, rating: AnswerRating | null): Promise<void> {
+    await api.put(`/chat/conversations/${conversationId}/messages/${messageId}/rating`, {rating});
 }

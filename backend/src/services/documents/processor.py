@@ -141,9 +141,9 @@ class DocumentProcessor:
             await self._drop_index(document.id)
             if exc.status_code >= 500:
                 raise
-            document.error_message = t(exc.message)
+            document.error_message = t(exc.message, **exc.params)
             await self._set(document, DocumentStatus.FAILED, document.progress)
-            await self._notify(document, NotificationType.DOCUMENT_PROCESS_FAILED, t(exc.message))
+            await self._notify(document, NotificationType.DOCUMENT_PROCESS_FAILED, t(exc.message, **exc.params))
             await self._announce_ready(document)
         except Exception:
             await self._drop_index(document.id)

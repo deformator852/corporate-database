@@ -150,7 +150,7 @@ async def validation_error_handler(_request: Request, exc: RequestValidationErro
 
 @app.exception_handler(AppError)
 async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
-    body = ErrorSchema(code=exc.code, message=t(exc.message))
+    body = ErrorSchema(code=exc.code, message=t(exc.message, **exc.params))
     return JSONResponse(status_code=exc.status_code, content=body.model_dump())
 
 

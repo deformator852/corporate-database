@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Literal, Protocol
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from encryption import keyed_digest
 from exceptions import AppError
 from i18n import t
 from models.document import DONE_STATUSES, Document, DocumentStatus
@@ -21,6 +23,7 @@ from services.documents.upload_check import check_upload
 from services.notifications.notification import NotificationService
 from services.search.rag import Rag
 from services.storage import ObjectStorage
+from services.text_search import contains
 
 ALLOWED_SUFFIXES = frozenset(
     {
@@ -39,6 +42,8 @@ ALLOWED_SUFFIXES = frozenset(
 )
 DOC_SUFFIX = ".doc"
 MAX_BYTES = 32 * 1024 * 1024
+# Queued and every processing step count as "processing".
+type DocumentStatusFilter = Literal["processing", "completed", "failed"]
 # Documents of one user queued or in processing at once. The single worker
 # takes them in turn, so a huge batch would hold up everyone else's uploads.
 MAX_WAITING_DOCUMENTS = 100
@@ -55,6 +60,26 @@ CONTENT_TYPES = {
     ".md": "text/markdown",
     ".mdx": "text/markdown",
 }
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentFilter:
+    """What the documents list shows; empty fields filter nothing."""
+
+    # Part of the name or the file name.
+    query: str = ""
+    status: DocumentStatusFilter | None = None
+    classification: str | None = None
+
+    def conditions(self) -> list[ColumnElement[bool]]:
+        found = contains(self.query, Document.name, Document.filename)
+        if self.status == "processing":
+            found.append(Document.status.not_in(DONE_STATUSES))
+        elif self.status is not None:
+            found.append(Document.status == self.status)
+        if self.classification is not None:
+            found.append(Document.classification == self.classification)
+        return found
 
 
 class DocumentJobQueue(Protocol):
@@ -79,13 +104,17 @@ class DocumentService:
         self.storage = storage
         self.queue = queue or CeleryDocumentQueue()
 
-    async def list_documents(self, user_id: int, page: int = 1, per_page: int = 20) -> tuple[list[Document], int]:
-        allowed = await self._allowed(user_id)
-        visible = Document.classification.in_(allowed)
-        total = await self.session.scalar(select(func.count()).select_from(Document).where(visible))
+    async def list_documents(
+        self, user_id: int, page: int = 1, per_page: int = 20, filters: DocumentFilter | None = None
+    ) -> tuple[list[Document], int]:
+        conditions = [
+            Document.classification.in_(await self._allowed(user_id)),
+            *(filters or DocumentFilter()).conditions(),
+        ]
+        total = await self.session.scalar(select(func.count()).select_from(Document).where(*conditions))
         documents = await self.session.scalars(
             select(Document)
-            .where(visible)
+            .where(*conditions)
             .order_by(Document.created_at.desc(), Document.id.desc())
             .offset((page - 1) * per_page)
             .limit(per_page)
@@ -130,6 +159,8 @@ class DocumentService:
                 raise AppError("invalid", "The file is empty.", status_code=400)
             if len(content) > MAX_BYTES:
                 raise AppError("invalid", "The file is too large.", status_code=400)
+            digest = keyed_digest(b"file:" + content)
+            await self._refuse_duplicate(digest, allowed)
             converted = suffix == DOC_SUFFIX
             filename = Path(original_name).name
             if converted:
@@ -153,6 +184,7 @@ class DocumentService:
                 progress=0,
                 object_key=object_key,
                 classification=classification,
+                content_digest=digest,
                 user_id=user_id,
             )
             self.session.add(document)
@@ -217,6 +249,17 @@ class DocumentService:
             raise AppError("not_found", "Document not found", status_code=404)
         content = await asyncio.to_thread(self.storage.get, document.object_key)
         return document, content
+
+    async def _refuse_duplicate(self, digest: bytes, allowed: tuple[str, ...]) -> None:
+        """The same file twice only clutters search. Checked among documents
+        the user may see: naming a hidden one would reveal that it exists."""
+        name = await self.session.scalar(
+            select(Document.name)
+            .where(Document.content_digest == digest, Document.classification.in_(allowed))
+            .limit(1)
+        )
+        if name is not None:
+            raise AppError("conflict", 'This file is already uploaded as "{name}".', status_code=409, name=name)
 
     async def _allowed(self, user_id: int) -> tuple[str, ...]:
         return await classifications_for_user(self.session, user_id)

@@ -1,14 +1,9 @@
 import {useCallback, useEffect, useRef, useState} from "react";
 
 import {connectChatSocket, type ChatSocket} from "@pages/home/api/chat";
-import {deleteConversation, getConversation, listConversations} from "@pages/home/api/history";
-import {
-    ChatCancelledError,
-    ChatRequestError,
-    type ChatConversationItem,
-    type ChatMessage,
-    type ChatStatus,
-} from "@pages/home/model/chat";
+import {deleteConversation, getConversation, listConversations, rateAnswer} from "@pages/home/api/history";
+import {ChatCancelledError, ChatRequestError, type ChatConversationItem, type ChatMessage, type ChatStatus} from "@pages/home/model/chat";
+import {type AnswerRating} from "@/entities/chat/model";
 import {useI18n} from "@/shared/i18n/I18nProvider";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
 
@@ -68,21 +63,23 @@ export function useChat() {
         setStatus("pending");
         setError(null);
         let partial = "";
-        const appendAnswer = (content: string, sources: ChatMessage["sources"] = []) =>
-            setMessages((current) => [
-                ...current,
-                {id: nextId(), role: "assistant", content, sources},
-            ]);
+        const appendAnswer = (content: string, sources: ChatMessage["sources"] = [], messageId?: number) =>
+            setMessages((current) => [...current, {id: nextId(), role: "assistant", content, sources, messageId}]);
         try {
             const reply = await socket.send(
                 history.map(({role, content}) => ({role, content})),
                 conversationId,
-                (piece) => {
-                    partial += piece;
-                    setStreaming(partial);
+                {
+                    // Known before the answer, so a stopped first question
+                    // still continues in its chat.
+                    onStarted: setConversationId,
+                    onDelta: (piece) => {
+                        partial += piece;
+                        setStreaming(partial);
+                    },
                 },
             );
-            appendAnswer(reply.content, reply.sources);
+            appendAnswer(reply.content, reply.sources, reply.messageId);
             setConversationId(reply.conversationId);
             reloadHistory();
             setStatus("idle");
@@ -92,6 +89,8 @@ export function useChat() {
                 if (partial.trim()) {
                     appendAnswer(partial.trim());
                 }
+                // The server saved the question and what was written.
+                reloadHistory();
                 setStatus("idle");
                 setError(null);
                 return;
@@ -149,6 +148,8 @@ export function useChat() {
                     role: message.role,
                     content: message.content,
                     sources: message.sources,
+                    messageId: message.id,
+                    rating: message.rating,
                 })),
             );
             setConversationId(conversation.id);
@@ -179,6 +180,22 @@ export function useChat() {
         void send(messages);
     }
 
+    /** Shown at once; put back if the server refuses it. */
+    async function rate(message: ChatMessage, rating: AnswerRating | null) {
+        if (conversationId == null || message.messageId == null) {
+            return;
+        }
+        const setRating = (value: AnswerRating | null | undefined) =>
+            setMessages((current) => current.map((item) => (item.id === message.id ? {...item, rating: value} : item)));
+        setRating(rating);
+        try {
+            await rateAnswer(conversationId, message.messageId, rating);
+        } catch (reason) {
+            setRating(message.rating);
+            setError(getApiErrorMessage(reason, t("chat.rating.error")));
+        }
+    }
+
     return {
         messages,
         draft,
@@ -195,5 +212,6 @@ export function useChat() {
         startNewChat,
         openConversation,
         removeConversation,
+        rate,
     };
 }

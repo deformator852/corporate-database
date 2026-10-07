@@ -55,6 +55,7 @@ _ES = {
     "Processing took too long.": "El procesamiento tardó demasiado.",
     '"{name}" is ready.': "«{name}» está listo.",
     "{count} documents are ready.": "{count} documentos están listos.",
+    'This file is already uploaded as "{name}".': "Este archivo ya está subido como «{name}».",
     "Too many of your documents are waiting to be processed. Upload more when some are ready.": "Demasiados documentos suyos esperan su procesamiento. Suba más cuando algunos estén listos.",
     'Could not process "{name}".': "No se pudo procesar «{name}».",
     # Search and assistant
@@ -119,6 +120,7 @@ _FR = {
     "Processing took too long.": "Le traitement a pris trop de temps.",
     '"{name}" is ready.': "« {name} » est prêt.",
     "{count} documents are ready.": "{count} documents sont prêts.",
+    'This file is already uploaded as "{name}".': "Ce fichier est déjà téléversé sous « {name} ».",
     "Too many of your documents are waiting to be processed. Upload more when some are ready.": "Trop de vos documents attendent leur traitement. Téléversez-en d’autres quand certains seront prêts.",
     'Could not process "{name}".': "Impossible de traiter « {name} ».",
     # Search and assistant

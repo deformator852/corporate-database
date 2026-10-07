@@ -33,6 +33,9 @@ type DocumentListProps = {
     onRetry: () => void;
     onPageChange: (page: number) => void;
     onDelete?: (document: DocumentListItem) => void;
+    /** Empty because of the filters, not because there are no documents. */
+    filtered?: boolean;
+    onClearFilters?: () => void;
 };
 
 export function DocumentList({
@@ -45,6 +48,8 @@ export function DocumentList({
     onRetry,
     onPageChange,
     onDelete,
+    filtered = false,
+    onClearFilters,
 }: DocumentListProps) {
     const {t} = useI18n();
     const items = data?.items ?? [];
@@ -60,7 +65,15 @@ export function DocumentList({
 
     if (status === "ready" && total === 0) {
         return (
-            <StatusCard title={t("documents.emptyTitle")} detail={t("documents.emptyDescription")} />
+            filtered ? (
+                <StatusCard title={t("documents.filter.noMatch")}>
+                    <Button type="button" variant="outline" onClick={onClearFilters}>
+                        {t("documents.filter.clear")}
+                    </Button>
+                </StatusCard>
+            ) : (
+                <StatusCard title={t("documents.emptyTitle")} detail={t("documents.emptyDescription")} />
+            )
         );
     }
 

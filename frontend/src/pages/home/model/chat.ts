@@ -1,23 +1,25 @@
+import type {AnswerRating, ChatSource} from "@/entities/chat/model";
+
 type ChatRole = "user" | "assistant";
 
 /** A document an answer was built from. */
-export type ChatSource = {
-    id: number;
-    name: string;
-    filename: string;
-};
 
 export type ChatMessage = {
     id: string;
     role: ChatRole;
     content: string;
     sources?: ChatSource[];
+    /** Saved on the server under this id (answers can then be rated). */
+    messageId?: number;
+    rating?: AnswerRating | null;
 };
 
 /** A finished answer: the text, the saved chat it belongs to, its sources. */
 export type ChatReply = {
     content: string;
     conversationId: number;
+    /** The saved answer; ratings refer to it. */
+    messageId: number;
     sources: ChatSource[];
 };
 
@@ -36,6 +38,7 @@ export type ChatConversation = {
         content: string;
         sources: ChatSource[];
         created_at: string;
+        rating: AnswerRating | null;
     }[];
 };
 
@@ -69,8 +72,9 @@ export type ChatCancelMessage = {
 };
 
 export type ChatServerMessage =
+    | {type: "started"; conversation_id: number}
     | {type: "delta"; content: string}
-    | {type: "answer"; content: string; conversation_id: number; sources: ChatSource[]}
+    | {type: "answer"; content: string; conversation_id: number; message_id: number; sources: ChatSource[]}
     | {type: "cancelled"}
     | {type: "error"; code: string; message: string};
 
@@ -91,14 +95,18 @@ export function isChatServerMessage(value: unknown): value is ChatServerMessage 
         code?: unknown;
         message?: unknown;
     };
+    if (payload.type === "started") {
+        return typeof (payload as {conversation_id?: unknown}).conversation_id === "number";
+    }
     if (payload.type === "delta") {
         return typeof payload.content === "string";
     }
     if (payload.type === "answer") {
-        const answer = payload as {conversation_id?: unknown; sources?: unknown};
+        const answer = payload as {conversation_id?: unknown; message_id?: unknown; sources?: unknown};
         return (
             typeof payload.content === "string" &&
             typeof answer.conversation_id === "number" &&
+            typeof answer.message_id === "number" &&
             Array.isArray(answer.sources)
         );
     }

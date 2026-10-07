@@ -1,5 +1,5 @@
-import {useEffect, useMemo, useState} from "react";
-import {Link, useLocation, useSearchParams} from "react-router";
+import {useMemo} from "react";
+import {Link, useLocation} from "react-router";
 
 import {Card} from "@/components/ui/card";
 import {Input} from "@/components/ui/input";
@@ -12,7 +12,10 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import {cn} from "cn";
+import {NativeSelect} from "@/components/ui/native-select";
 import {useI18n} from "@/shared/i18n/I18nProvider";
+import {useDebouncedSearch} from "@/shared/lib/hooks/useDebouncedSearch";
+import {useUrlParams} from "@/shared/lib/hooks/useUrlParams";
 import {usePageParam} from "@/shared/lib/hooks/usePageParam";
 import {useRequest} from "@/shared/lib/hooks/useRequest";
 import {ListPagination} from "@/shared/ui/ListPagination";
@@ -24,15 +27,14 @@ import {AUDIT_ACTIONS, auditActionKey} from "@/entities/audit/model";
 import {actionLabel, describe} from "@/entities/audit/format";
 import type {UserDetailLinkState} from "@/entities/user/model";
 
-const SEARCH_DEBOUNCE_MS = 300;
 
 export function AuditLog() {
     const {t, locale} = useI18n();
-    const [searchParams, setSearchParams] = useSearchParams();
+    const [searchParams, updateParams] = useUrlParams();
     const [page] = usePageParam();
     const q = searchParams.get("q") ?? "";
     const action = searchParams.get("action") ?? "";
-    const [draft, setDraft] = useState(q);
+    const [draft, setDraft] = useDebouncedSearch(q, (next) => updateParams({q: next, page: "1"}));
 
     const timeFormat = useMemo(
         () =>
@@ -43,33 +45,6 @@ export function AuditLog() {
         [locale],
     );
 
-    const updateParams = (changes: Record<string, string>) => {
-        setSearchParams((current) => {
-            const params = new URLSearchParams(current);
-            for (const [name, value] of Object.entries(changes)) {
-                if (!value || (name === "page" && value === "1")) {
-                    params.delete(name);
-                } else {
-                    params.set(name, value);
-                }
-            }
-            return params;
-        });
-    };
-
-    useEffect(() => {
-        const next = draft.trim();
-        if (next === q) {
-            return;
-        }
-        const timer = window.setTimeout(
-            () => updateParams({q: next, page: "1"}),
-            SEARCH_DEBOUNCE_MS,
-        );
-        return () => window.clearTimeout(timer);
-        // updateParams only wraps the stable setSearchParams.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [draft, q]);
 
     const {status, data, error, reload} = useRequest(
         `${page}:${q}:${action}`,
@@ -107,16 +82,11 @@ export function AuditLog() {
                     <label htmlFor="audit-action" className="text-sm font-medium">
                         {t("audit.filterAction")}
                     </label>
-                    <select
+                    <NativeSelect
                         id="audit-action"
+                        className="w-full"
                         value={action}
-                        onChange={(event) =>
-                            updateParams({action: event.target.value, page: "1"})
-                        }
-                        className={cn(
-                            "h-8 w-full min-w-0 cursor-pointer rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none transition-colors md:text-sm",
-                            "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
-                        )}
+                        onChange={(event) => updateParams({action: event.target.value, page: "1"})}
                     >
                         <option value="">{t("audit.allActions")}</option>
                         {AUDIT_ACTIONS.map((option) => (
@@ -124,7 +94,7 @@ export function AuditLog() {
                                 {t(auditActionKey(option))}
                             </option>
                         ))}
-                    </select>
+                    </NativeSelect>
                 </div>
             </div>
 

@@ -11,6 +11,7 @@ import {Documents} from "@pages/documents/ui/Documents";
 import {AuditLog} from "@pages/audit/ui/AuditLog";
 import {UserDetail} from "@pages/users/detail/ui/UserDetail";
 import {SystemStatusPage} from "@pages/system/ui/SystemStatusPage";
+import {RatedAnswers} from "@pages/feedback/ui/RatedAnswers";
 import {extensions, mergeByKey} from "./extensions";
 
 /** `handle.can`: the permission a page needs. Without it the layout shows
@@ -55,6 +56,11 @@ const pageRoutes: RouteObject[] = [
         path: "system",
         Component: SystemStatusPage,
         handle: {can: "system.view"} satisfies RouteHandle,
+    },
+    {
+        path: "feedback",
+        Component: RatedAnswers,
+        handle: {can: "chat.feedback"} satisfies RouteHandle,
     },
 ];
 

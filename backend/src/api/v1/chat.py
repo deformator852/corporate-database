@@ -14,12 +14,13 @@ from fastapi import (
 )
 from pydantic import Field, TypeAdapter, ValidationError
 
-from api.deps import get_chat_history_service, get_current_user
+from api.deps import get_chat_history_service, get_current_user, get_feedback_service, require_permission
 from api.ws import RECHECK_SECONDS, seconds_left, still_allowed
 from exceptions import AppError
 from i18n import t
 from models.user import User
 from schemas.chat import (
+    RATING_VALUES,
     ChatAnswerSchema,
     ChatAskSchema,
     ChatCancelledSchema,
@@ -27,11 +28,16 @@ from schemas.chat import (
     ChatConversationListSchema,
     ChatConversationSchema,
     ChatDeltaSchema,
+    ChatFeedbackListSchema,
+    ChatRatingSchema,
     ChatSocketErrorSchema,
     ChatSourceSchema,
+    ChatStartedSchema,
+    Rating,
 )
 from schemas.error import error_responses, validation_message
 from security import get_ws_payload
+from services.chat.feedback import FeedbackService
 from services.chat.generator import OllamaGenerator
 from services.chat.history import ChatHistoryService
 from services.chat.limit import finish_chat_request, start_chat_request
@@ -90,6 +96,39 @@ async def delete_conversation(
 ) -> Response:
     await history.delete(user.id, conversation_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put(
+    "/conversations/{conversation_id}/messages/{message_id}/rating",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=error_responses(401, 404),
+)
+async def rate_answer(
+    conversation_id: int,
+    message_id: int,
+    payload: ChatRatingSchema,
+    user: User = Depends(get_current_user),
+    feedback: FeedbackService = Depends(get_feedback_service),
+) -> Response:
+    rating = RATING_VALUES[payload.rating] if payload.rating else None
+    await feedback.rate(user.id, conversation_id, message_id, rating)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/feedback",
+    response_model=ChatFeedbackListSchema,
+    responses=error_responses(401, 403),
+)
+async def list_feedback(
+    rating: Rating = "down",
+    page: Annotated[int, Query(ge=1)] = 1,
+    per_page: Annotated[int, Query(ge=1, le=100)] = 20,
+    _user: User = Depends(require_permission("chat.feedback")),
+    feedback: FeedbackService = Depends(get_feedback_service),
+) -> ChatFeedbackListSchema:
+    items, total = await feedback.rated(RATING_VALUES[rating], page, per_page)
+    return ChatFeedbackListSchema.from_page(items, page=page, per_page=per_page, total=total)
 
 
 IncomingMessage = TypeAdapter(Annotated[ChatAskSchema | ChatCancelSchema, Field(discriminator="type")])
@@ -232,7 +271,7 @@ async def _on_client_message(
         request_id = await start_chat_request(user_id)
     except AppError as exc:
         await websocket.send_json(
-            ChatSocketErrorSchema(type="error", code=exc.code, message=t(exc.message)).model_dump()
+            ChatSocketErrorSchema(type="error", code=exc.code, message=t(exc.message, **exc.params)).model_dump()
         )
         return None
     return asyncio.create_task(_answer(request_id, _generate(websocket, user_id, incoming, ip, embedder, generator)))
@@ -257,16 +296,22 @@ async def _generate(
 ) -> ChatAnswerSchema:
     client_gone = False
 
-    async def send_delta(piece: str) -> None:
+    async def send(message: dict[str, object]) -> None:
         # After the client left, the answer is still written and saved.
         nonlocal client_gone
         if client_gone:
             return
         try:
-            await websocket.send_json(ChatDeltaSchema(type="delta", content=piece).model_dump())
+            await websocket.send_json(message)
         except Exception:  # noqa: BLE001 - the server and test client raise
             # different errors on a closed socket; any of them means gone.
             client_gone = True
+
+    async def send_delta(piece: str) -> None:
+        await send(ChatDeltaSchema(type="delta", content=piece).model_dump())
+
+    async def send_started(conversation_id: int) -> None:
+        await send(ChatStartedSchema(type="started", conversation_id=conversation_id).model_dump())
 
     turn = await answer_question(
         user_id,
@@ -276,11 +321,13 @@ async def _generate(
         embedder=embedder,
         generator=generator,
         on_delta=send_delta,
+        on_started=send_started,
     )
     return ChatAnswerSchema(
         type="answer",
         content=turn.content,
         conversation_id=turn.conversation_id,
+        message_id=turn.message_id,
         sources=[ChatSourceSchema(id=d.document_id, name=d.name, filename=d.filename) for d in turn.sources],
     )
 
@@ -295,7 +342,7 @@ async def _finish_reply(websocket: WebSocket, reply: asyncio.Task[ChatAnswerSche
             ChatSocketErrorSchema(
                 type="error",
                 code=exc.code,
-                message=t(exc.message),
+                message=t(exc.message, **exc.params),
             ).model_dump()
         )
         return

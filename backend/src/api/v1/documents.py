@@ -20,7 +20,7 @@ from api.deps import (
 from api.ws import hold
 from database import AsyncSessionLocal
 from models.audit import AuditAction
-from models.document import Document
+from models.document import Document, DocumentClassification
 from models.user import User
 from schemas.document import (
     DocumentListItemSchema,
@@ -32,7 +32,7 @@ from schemas.error import error_responses
 from security import get_ws_payload
 from services.audit import AuditService
 from services.documents.access import event_classifications
-from services.documents.document import DocumentService
+from services.documents.document import DocumentFilter, DocumentService, DocumentStatusFilter
 from services.documents.hub import hub
 
 router = APIRouter(
@@ -49,10 +49,14 @@ router = APIRouter(
 async def list_documents(
     page: Annotated[int, Query(ge=1)] = 1,
     per_page: Annotated[int, Query(ge=1, le=100)] = 20,
+    q: Annotated[str, Query(max_length=100)] = "",
+    status: DocumentStatusFilter | None = None,
+    classification: DocumentClassification | None = None,
     user: User = Depends(require_permission("documents.list")),
     service: DocumentService = Depends(get_document_service),
 ) -> DocumentListResponseSchema:
-    documents, total = await service.list_documents(user.id, page=page, per_page=per_page)
+    filters = DocumentFilter(q, status, classification.value if classification else None)
+    documents, total = await service.list_documents(user.id, page=page, per_page=per_page, filters=filters)
     return DocumentListResponseSchema.from_page(
         documents,
         page=page,

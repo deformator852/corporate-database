@@ -1,10 +1,10 @@
 import {zodResolver} from "@hookform/resolvers/zod";
-import {cn} from "cn";
 import {CircleAlert, FileUp} from "lucide-react";
 import {useMemo, useRef, useState, type DragEvent} from "react";
 import {useForm, useWatch} from "react-hook-form";
 
 import {Button} from "@/components/ui/button";
+import {NativeSelect} from "@/components/ui/native-select";
 import {Field, FieldError, FieldGroup, FieldLabel} from "@/components/ui/field";
 import {Input} from "@/components/ui/input";
 import {useI18n} from "@/shared/i18n/I18nProvider";
@@ -207,8 +207,9 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
                     <FieldLabel htmlFor="document-classification">
                         {t("common.access")}
                     </FieldLabel>
-                    <select
+                    <NativeSelect
                         id="document-classification"
+                        className="w-full"
                         disabled={isSubmitting}
                         aria-invalid={!!errors.classification || undefined}
                         aria-describedby={
@@ -216,13 +217,6 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
                                 ? "document-classification-error"
                                 : undefined
                         }
-                        className={cn(
-                            "h-8 w-full min-w-0 cursor-pointer rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none transition-colors md:text-sm",
-                            "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
-                            "disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50",
-                            "aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20",
-                            "dark:bg-input/30 dark:disabled:bg-input/80",
-                        )}
                         {...classificationRegister}
                     >
                         {classifications.map((value) => (
@@ -230,7 +224,7 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
                                 {t(documentClassificationKey(value))}
                             </option>
                         ))}
-                    </select>
+                    </NativeSelect>
                     <FieldError
                         id="document-classification-error"
                         errors={[errors.classification]}
