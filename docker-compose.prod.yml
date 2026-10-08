@@ -5,7 +5,8 @@ name: corpus
 #   internal  - every service; no route to the internet (internal: true)
 #   edge      - only the HTTPS proxy, the one published port
 #   egress    - only the `models` job (profile "setup"), run on purpose to
-#               download AI models; nothing else can reach the internet.
+#               download AI models, and vault-tunnel (KEY_STORE=vault), which
+#               forwards to Vault alone; nothing else can reach out.
 
 # Each container gets only the variables it needs (never the whole .env): a
 # compromised proxy or database container must not see the encryption key,
@@ -39,9 +40,19 @@ x-worker-env: &worker-env
   MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?is empty; run uv run setup in backend/}
   MINIO_BUCKET: ${MINIO_BUCKET:-}
   MINIO_REGION: ${MINIO_REGION:-}
-  DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:?is empty; run uv run setup in backend/}
-  # Set only while rotating the key (maintenance.rotate_key).
+  # KEY_STORE=env: the key below (and the previous one while rotating).
+  # KEY_STORE=vault: read from HashiCorp Vault through vault-tunnel instead
+  # (backend/src/key_store.py); the two key variables are then empty.
+  KEY_STORE: ${KEY_STORE:-env}
+  DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:-}
   DATA_ENCRYPTION_KEY_PREVIOUS: ${DATA_ENCRYPTION_KEY_PREVIOUS:-}
+  VAULT_ADDR: ${VAULT_ADDR:-}
+  VAULT_ROLE_ID: ${VAULT_ROLE_ID:-}
+  VAULT_SECRET_ID: ${VAULT_SECRET_ID:-}
+  VAULT_KV_MOUNT: ${VAULT_KV_MOUNT:-}
+  VAULT_KV_PATH: ${VAULT_KV_PATH:-}
+  VAULT_CACERT: ${VAULT_CACERT:+/etc/corpus-vault/ca.pem}
+  VAULT_CONNECT: ${VAULT_ADDR:+vault-tunnel:8200}
   LLM_HOST: http://ollama:11434
   LLM_MODEL: ${LLM_MODEL:?is empty; run uv run setup in backend/}
   LLM_NUM_CTX: ${LLM_NUM_CTX:-}
@@ -54,6 +65,8 @@ x-app: &app
   restart: unless-stopped
   volumes:
     - hf_models:/models/hf
+    # CA of Vault's certificate, copied here by `uv run setup` (not a secret).
+    - ./deploy/vault:/etc/corpus-vault:ro
   networks: [internal]
 
 services:
@@ -226,6 +239,7 @@ services:
       rabbitmq: {condition: service_healthy}
       minio-init: {condition: service_completed_successfully}
       ollama: {condition: service_healthy}
+      vault-tunnel: {condition: service_started, required: false}
 
   worker:
     <<: *app
@@ -236,6 +250,17 @@ services:
       migrate: {condition: service_completed_successfully}
       rabbitmq: {condition: service_healthy}
       minio-init: {condition: service_completed_successfully}
+      vault-tunnel: {condition: service_started, required: false}
+
+  # KEY_STORE=vault only (profile "vault", set by deploy.sh): the one way
+  # from the internal network to Vault, and only to Vault. Plain TCP: TLS
+  # runs from the backend to Vault itself, checked against Vault's name.
+  vault-tunnel:
+    image: alpine/socat:1.8.0.3
+    restart: unless-stopped
+    profiles: [vault]
+    command: ["TCP-LISTEN:8200,fork,reuseaddr", "TCP:${VAULT_UPSTREAM:-vault:8200}"]
+    networks: [internal, egress]
 
   proxy:
     image: corpus-proxy:latest

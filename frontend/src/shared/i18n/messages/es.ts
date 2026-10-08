@@ -255,6 +255,7 @@ export const es: Record<MessageKey, string> = {
     "errors.fallback": "Algo salió mal. Inténtelo de nuevo.",
 
     "auth.signOut": "Cerrar sesión",
+    "reindex.banner": "La búsqueda se está actualizando ({{percent}}% hecho). Hasta que termine, las respuestas pueden omitir algunos documentos.",
     "account.title": "Mi cuenta",
     "account.passwordTitle": "Contraseña",
     "account.passwordHint": "Tras el cambio se cierra su sesión en todas partes, también en este dispositivo. Inicie sesión de nuevo con la nueva contraseña.",

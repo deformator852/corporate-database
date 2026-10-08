@@ -255,6 +255,7 @@ export const fr: Record<MessageKey, string> = {
     "errors.fallback": "Une erreur s’est produite. Réessayez.",
 
     "auth.signOut": "Se déconnecter",
+    "reindex.banner": "La recherche est en cours de mise à jour ({{percent}} % effectué). D’ici la fin, les réponses peuvent omettre certains documents.",
     "account.title": "Mon compte",
     "account.passwordTitle": "Mot de passe",
     "account.passwordHint": "Après le changement, vous êtes déconnecté partout, y compris sur cet appareil. Reconnectez-vous avec le nouveau mot de passe.",

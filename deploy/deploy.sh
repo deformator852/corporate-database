@@ -13,6 +13,9 @@
 #   deploy/deploy.sh restore BACKUP         Replace all data with a backup.
 #   deploy/deploy.sh rotate-key             Re-encrypt the data with a new key.
 #                                           First run: uv run setup key rotate
+#   deploy/deploy.sh switch-model MODEL     Use another embedding model: every
+#                                           document is embedded again. Needs
+#                                           the internet to download MODEL.
 #   deploy/deploy.sh down                   Stop Corpus. The data is kept.
 #   deploy/deploy.sh logs [SERVICE]         Follow the logs.
 set -euo pipefail
@@ -20,8 +23,20 @@ cd "$(dirname "$0")/.."
 
 ENV_FILE=${CORPUS_ENV_FILE:-backend/.env}
 [[ -f $ENV_FILE ]] || { echo "Missing $ENV_FILE: run 'uv run setup' in backend/ first." >&2; exit 1; }
-compose() { docker compose --env-file "$ENV_FILE" -f docker-compose.prod.yml "$@"; }
-language=$(grep -E '^APP_LANGUAGE=' "$ENV_FILE" | cut -d= -f2 || true)
+setting() { grep -E "^$1=" "$ENV_FILE" | tail -1 | cut -d= -f2- | sed -e 's/^["'\'']//' -e 's/["'\'']$//' || true; }
+key_store=$(setting KEY_STORE)
+profiles=()
+if [[ $key_store == vault ]]; then
+  # The encryption key comes from Vault: start vault-tunnel, aimed at VAULT_ADDR's host:port.
+  vault_addr=$(setting VAULT_ADDR)
+  upstream=${vault_addr#*://}
+  upstream=${upstream%%/*}
+  [[ $upstream == *:* ]] || upstream+=$([[ $vault_addr == https:* ]] && echo :443 || echo :80)
+  export VAULT_UPSTREAM=$upstream
+  profiles=(--profile vault)
+fi
+compose() { docker compose --env-file "$ENV_FILE" -f docker-compose.prod.yml ${profiles[@]+"${profiles[@]}"} "$@"; }
+language=$(setting APP_LANGUAGE)
 project=${COMPOSE_PROJECT_NAME:-corpus}
 # Data volumes in a backup. Models (hf_models, ollama_data) are downloaded
 # again with `models`.
@@ -52,15 +67,33 @@ case "${1:-up}" in
   up) compose up -d --remove-orphans ;;
   admin) shift; compose run --rm --no-deps backend python -m maintenance.create_admin "$@" ;;
   rotate-key)
-    grep -qE '^DATA_ENCRYPTION_KEY_PREVIOUS=.+' "$ENV_FILE" || {
+    # With Vault the keys are there, not in .env; rotate_key checks them itself.
+    [[ $key_store == vault ]] || grep -qE '^DATA_ENCRYPTION_KEY_PREVIOUS=.+' "$ENV_FILE" || {
       echo "No rotation started: run 'uv run setup key rotate' in backend/ first." >&2; exit 1; }
     # Nothing may write with a key while the data is re-encrypted.
     compose stop backend worker
     compose up -d postgres qdrant minio
     compose run --rm --no-deps backend python -m maintenance.rotate_key
-    sed -i '/^DATA_ENCRYPTION_KEY_PREVIOUS=/d' "$ENV_FILE"
-    compose up -d --remove-orphans
-    echo "Rotation finished; the old key is no longer used."
+    if [[ $key_store == vault ]]; then
+      compose up -d --remove-orphans
+      echo "Data re-encrypted. Remove the old key from Vault: cd backend && uv run setup key finish"
+    else
+      sed -i '/^DATA_ENCRYPTION_KEY_PREVIOUS=/d' "$ENV_FILE"
+      compose up -d --remove-orphans
+      echo "Rotation finished; the old key is no longer used."
+    fi
+    ;;
+  switch-model)
+    model=${2:?usage: deploy/deploy.sh switch-model MODEL}
+    # Downloaded first: nothing changes if the name is wrong or the download fails.
+    compose --profile setup run --rm -e EMBEDDING_MODEL="$model" models
+    # Nothing may search or index with the old model while the index is rebuilt.
+    compose stop backend worker
+    trap restart_app EXIT
+    compose run --rm --no-deps -e EMBEDDING_MODEL="$model" backend python -m maintenance.switch_embedding "$model"
+    sed -i "s/^EMBEDDING_MODEL=.*/EMBEDDING_MODEL=$model/" "$ENV_FILE"
+    echo "Switched to $model. Documents are embedded again in the background;"
+    echo "the Documents page shows the progress, and search finds each one once it is done."
     ;;
   backup)
     dir=${2:-backups}/corpus-$(date +%Y%m%d-%H%M%S)
@@ -109,5 +142,5 @@ case "${1:-up}" in
     ;;
   down) compose down ;;
   logs) shift; compose logs -f "$@" ;;
-  *) sed -n '2,17p' "$0"; exit 1 ;;
+  *) sed -n '2,20p' "$0"; exit 1 ;;
 esac

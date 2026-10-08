@@ -1,10 +1,8 @@
-"""Loads extension packages: customizations from custom/<name>/ and the
-paid features from advanced/<name>/.
+"""Loads extension packages: customizations from custom/<name>/.
 
 Upstream never ships files under custom/, so pulling updates does not conflict
-with them (see documentations/customization/). advanced/ is not in the core
-repository: the advanced edition puts its packages there when it is installed.
-Without it the core runs as is. Core code never imports from either folder.
+with them (see documentations/customization/). Core code never imports from
+it.
 
 A package may define any of:
     CORE_API     the extension API version it was written for; a package
@@ -14,11 +12,8 @@ A package may define any of:
     PERMISSIONS  tuple of (key, name, description), seeded with the core ones.
     setup(app)   called with the FastAPI app (dependency_overrides, middleware).
 Importing the package registers its SQLAlchemy models with Alembic.
-<folder>/<name>/tasks.py, if present, is loaded by the Celery worker, and
-<folder>/migrations/ holds the folder's Alembic migrations.
-
-custom/ packages come first: a customer's router is mounted before an
-advanced one and so replaces it too.
+custom/<name>/tasks.py, if present, is loaded by the Celery worker, and
+custom/migrations/ holds the Alembic migrations of custom packages.
 """
 
 import importlib
@@ -33,22 +28,16 @@ CORE_API = 1
 
 SRC_DIR = Path(__file__).resolve().parent
 CUSTOM_DIR = SRC_DIR / "custom"
-ADVANCED_DIR = SRC_DIR / "advanced"
-_FOLDERS = (CUSTOM_DIR, ADVANCED_DIR)
 
 logger = logging.getLogger(__name__)
 
 
-def _names(folder: Path) -> list[str]:
+def _packages() -> list[str]:
     return sorted(
-        info.name
-        for info in pkgutil.iter_modules([str(folder)])
+        f"{CUSTOM_DIR.name}.{info.name}"
+        for info in pkgutil.iter_modules([str(CUSTOM_DIR)])
         if info.ispkg and not info.name.startswith("_") and info.name != "migrations"
     )
-
-
-def _packages() -> list[str]:
-    return [f"{folder.name}.{name}" for folder in _FOLDERS for name in _names(folder)]
 
 
 @cache

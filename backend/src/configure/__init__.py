@@ -1,13 +1,14 @@
 from setup.app import run
 from setup.steps.chat import ChatStep
 from setup.steps.chunking import ChunkingStep
+from setup.steps.key_store import KeyStoreStep
 from setup.steps.llm import LlmStep
 
 
 def main() -> None:
     try:
         run(
-            [LlmStep(), ChatStep(), ChunkingStep()],
+            [LlmStep(), ChatStep(), ChunkingStep(), KeyStoreStep()],
             "Configure complete.",
             footer=(
                 "Restart to apply: production `deploy/deploy.sh up`; development: "

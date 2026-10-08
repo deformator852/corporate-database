@@ -91,7 +91,9 @@ docker compose -f docker-compose.prod.yml exec proxy \
 
 * `backend/.env` holds every secret, including `DATA_ENCRYPTION_KEY`. Without
   that key, documents and chats cannot be read. Store a copy outside the
-  server, separately from backups of the data.
+  server, separately from backups of the data. To keep the key off the server's
+  disk, keep it in HashiCorp Vault. See
+  [Keeping the key in HashiCorp Vault](#keeping-the-key-in-hashicorp-vault).
 * `cd backend && uv run setup key` prints the key's fingerprint. Add `--show`
   to print the key itself.
 * Corpus remembers the fingerprint of the key that encrypted the data and does
@@ -240,6 +242,32 @@ unattended boot is possible with a key file (`cryptsetup luksAddKey`) or a TPM
 (`systemd-cryptenroll --tpm2-device=auto`). A key kept on the same machine
 protects only a removed disk, not the running server.
 
+## Changing the embedding model
+
+The embedding model turns documents and questions into vectors for search.
+Vectors of two models cannot be compared, so another model means every
+document is embedded again. Corpus does not start if `EMBEDDING_MODEL` in
+`backend/.env` is not the model the documents are indexed with.
+
+1. Choose a model from the table in `uv run configure` (embedding model step)
+   or from `EMBEDDING_MODELS` in `backend/src/settings.py`.
+2. Switch to it. This downloads the model (the server needs the internet for
+   this step), rebuilds the search index and starts Corpus again:
+
+   ```sh
+   deploy/deploy.sh switch-model MODEL
+   ```
+
+While the documents are embedded again, the **Documents** page shows their
+progress, and search finds each document once it is done. Documents, their
+files and chats are not changed. A large library can take hours on a server
+without a GPU.
+
+If the command stops midway, run it again: it continues where it stopped.
+
+To rebuild the index with the same model, for example after changing the
+chunk size with `uv run configure`, run the command with the current model.
+
 ## Rotating the encryption key
 
 Rotate the key when it may have leaked, or when your policy requires it.
@@ -259,9 +287,72 @@ Rotate the key when it may have leaked, or when your policy requires it.
    deploy/deploy.sh rotate-key
    ```
 
+3. With the key in Vault, remove the old key from Vault yourself; the command
+   asks for a Vault token that may write the secret:
+
+   ```sh
+   cd backend && uv run setup key finish && cd ..
+   ```
+
 If `rotate-key` stops halfway, fix the cause and run it again. It continues
 where it stopped. Until it finishes, keep the old key: part of the data is
 still encrypted with it.
+
+## Keeping the key in HashiCorp Vault
+
+By default `DATA_ENCRYPTION_KEY` is in `backend/.env`, so a copy of the
+server's disk includes it. With HashiCorp Vault, `.env` holds only the
+credentials of a Vault AppRole. Corpus reads the key from Vault when it starts
+and keeps it in memory only. A copy of the disk is then no use outside the
+company network, and you can revoke the AppRole, bind it to the server's
+address and see every read in Vault's audit log.
+
+You need a Vault server with a KV version 2 secrets engine (mounted at
+`secret` by default), reachable from the Corpus server. A hardware security
+module (HSM) protects Vault's own master key; Corpus needs no HSM setup of its
+own.
+
+1. In Vault, create a read-only policy and an AppRole for Corpus. Replace
+   SERVER-IP with the address of the Corpus server:
+
+   ```sh
+   vault auth enable approle
+   vault policy write corpus-read - <<'EOF'
+   path "secret/data/corpus" { capabilities = ["read"] }
+   EOF
+   vault write auth/approle/role/corpus token_policies=corpus-read \
+     secret_id_bound_cidrs=SERVER-IP/32 token_bound_cidrs=SERVER-IP/32
+   vault read -field=role_id auth/approle/role/corpus/role-id
+   vault write -f -field=secret_id auth/approle/role/corpus/secret-id
+   ```
+
+2. Run the key storage step and choose **HashiCorp Vault**:
+
+   ```sh
+   cd backend && uv run configure && cd ..
+   ```
+
+   It asks for the Vault address, the role_id and secret_id from step 1, the
+   mount and path (`secret`, `corpus`), and the CA file of Vault's certificate
+   if a company CA signed it. It then asks once for a Vault token that may
+   write `secret/data/corpus`, writes the key there, checks that the AppRole
+   can read it, and removes the key from `.env`. The token is not saved.
+
+3. Apply it:
+
+   ```sh
+   deploy/deploy.sh up
+   ```
+
+   The containers have no route out of the server, so `deploy.sh` starts a
+   `vault-tunnel` container that forwards only to the Vault address. TLS runs
+   from Corpus to Vault and is checked against Vault's name.
+
+To move the key back into `.env`, run `uv run configure` and choose the `.env`
+file. The key stays in Vault until you delete it there.
+
+If Vault cannot be reached when Corpus starts, the backend and the worker do
+not start; `deploy/deploy.sh logs backend` shows why.
 
 ## Restoring a backup
 

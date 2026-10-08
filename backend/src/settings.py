@@ -80,15 +80,20 @@ def language() -> str:
     return value
 
 
-def embedding_model() -> EmbeddingSpec:
-    spec = EMBEDDING_MODELS.get(_require("EMBEDDING_MODEL"))
-    if spec is None:
+def embedding_model_key() -> str:
+    """EMBEDDING_MODEL, one of EMBEDDING_MODELS."""
+    key = _require("EMBEDDING_MODEL")
+    if key not in EMBEDDING_MODELS:
         raise AppError(
             "misconfigured",
             "Unknown embedding model.",
             status_code=500,
         )
-    return spec
+    return key
+
+
+def embedding_model() -> EmbeddingSpec:
+    return EMBEDDING_MODELS[embedding_model_key()]
 
 
 def qdrant_api_key() -> str:

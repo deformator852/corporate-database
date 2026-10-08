@@ -56,6 +56,80 @@ def test_rotation_reencrypts_files_texts_and_search_chunks(client, make_user, in
         encryption.reset_keys()
 
 
+def test_switching_the_embedding_model_embeds_every_document_again(client, make_user, infra, monkeypatch):
+    import pytest
+
+    from database import AsyncSessionLocal
+    from exceptions import AppError
+    from maintenance.switch_embedding import switch
+    from services.search import embedding
+    from services.search.index_model import save_index_model, stored_index_model, verify_index_model
+
+    old_model = os.environ["EMBEDDING_MODEL"]
+    monkeypatch.setenv("EMBEDDING_MODEL", old_model)  # restored after the test; switch() sets it
+    _, email, password = make_user(["documents.list", "documents.create"])
+    login(client, email, password)
+    document_id = upload(client, "Payroll", b"Salaries are paid on the 25th.", "payroll.txt").json()["id"]
+    process(document_id)
+    notices = len(client.get("/api/v1/notifications").json()["items"])
+
+    async def index_model() -> str | None:
+        async with AsyncSessionLocal() as session:
+            return await stored_index_model(session)
+
+    async def verify() -> None:
+        async with AsyncSessionLocal() as session:
+            await verify_index_model(session)
+
+    def points() -> int:
+        if not run(infra.qdrant.collection_exists("documents")):
+            return 0
+        return run(infra.qdrant.count("documents")).count
+
+    def status() -> str:
+        return client.get("/api/v1/documents").json()["items"][0]["status"]
+
+    try:
+        # A model that is not on disk changes nothing.
+        class Missing:
+            def __init__(self, model_id: str) -> None:
+                raise OSError("not downloaded")
+
+        fake = embedding.SentenceTransformer
+        monkeypatch.setattr(embedding, "SentenceTransformer", Missing)
+        with pytest.raises(AppError, match="Download it first"):
+            run(switch("bge-small-en", lambda _: None))
+        assert (points() > 0, status(), run(index_model())) == (True, "completed", old_model)
+        monkeypatch.setattr(embedding, "SentenceTransformer", fake)
+        monkeypatch.setenv("EMBEDDING_MODEL", old_model)
+
+        report: list[str] = []
+        assert run(switch("bge-small-en", report.append)) >= 1
+
+        assert points() == 0 and status() == "queued"
+        assert run(index_model()) == "bge-small-en"
+        run(verify())  # EMBEDDING_MODEL now names the index's model
+        assert client.get("/api/v1/system/reindex").json() == {"active": True, "percent": 0}  # every user's banner
+        process(document_id)  # what the worker does when it starts
+        assert points() > 0 and status() == "completed"
+        assert client.get("/api/v1/system/reindex").json() == {"active": False, "percent": 100}
+        # Ready before: no "is ready" notice for it again.
+        assert len(client.get("/api/v1/notifications").json()["items"]) == notices
+
+        monkeypatch.setenv("EMBEDDING_MODEL", old_model)  # .env edited by hand
+        with pytest.raises(AppError, match="switch-model"):
+            run(verify())
+        with pytest.raises(AppError, match="Unknown embedding model"):
+            run(switch("no-such-model", lambda _: None))
+    finally:
+
+        async def restore() -> None:
+            async with AsyncSessionLocal() as session:
+                await save_index_model(session, old_model)
+
+        run(restore())
+
+
 def test_rotation_refuses_keys_that_do_not_belong_to_the_data(infra, monkeypatch):
     import encryption
     from database import AsyncSessionLocal

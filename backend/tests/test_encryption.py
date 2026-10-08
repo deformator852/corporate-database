@@ -112,6 +112,48 @@ def test_rotation_reads_both_keys_and_writes_the_new_one(keys):
     assert decrypt_text(fresh, "c") == "after"
 
 
+def test_the_key_can_come_from_vault_and_never_from_env(monkeypatch):
+    from fakes import FakeVault
+
+    import key_store
+    from encryption import key_fingerprint
+
+    fake = FakeVault()
+    key = "key-held-in-vault-" + "v" * 32
+    fake.secrets["corpus"] = {"DATA_ENCRYPTION_KEY": key}
+
+    class Bound(key_store.VaultClient):
+        def __init__(self, config, transport=None):
+            super().__init__(config, fake.transport())
+
+    monkeypatch.setattr(key_store, "VaultClient", Bound)
+    monkeypatch.setenv("KEY_STORE", "vault")
+    monkeypatch.setenv("VAULT_ADDR", "https://vault.test:8200")
+    monkeypatch.setenv("VAULT_ROLE_ID", "corpus-role")
+    monkeypatch.setenv("VAULT_SECRET_ID", "corpus-secret")
+    monkeypatch.setenv("VAULT_CONNECT", "vault-tunnel:8200")  # as in production
+    monkeypatch.setenv("DATA_ENCRYPTION_KEY", "an-env-key-that-must-be-ignored-" + "e" * 16)
+    try:
+        encryption.reset_keys()
+        assert current_fingerprint() == key_fingerprint(key)
+        assert decrypt_text(encrypt_text("salary list")) == "salary list"
+        # Through the tunnel, but to Vault: its Host header and TLS name.
+        assert fake.last.url.host == "vault-tunnel"
+        assert fake.last.headers["host"] == "vault.test:8200"
+        assert fake.last.extensions["sni_hostname"] == "vault.test"
+        assert [path for _, path, _ in fake.requests] == ["auth/approle/login", "secret/data/corpus"]  # once
+
+        monkeypatch.setenv("VAULT_SECRET_ID", "revoked")
+        encryption.reset_keys()
+        with pytest.raises(AppError, match="invalid role"):
+            current_fingerprint()
+    finally:
+        monkeypatch.setenv("KEY_STORE", "env")
+        monkeypatch.delenv("DATA_ENCRYPTION_KEY")
+        monkeypatch.undo()
+        encryption.reset_keys()  # back to the test key from the environment
+
+
 def test_fingerprint_does_not_reveal_the_key():
     fingerprint = current_fingerprint()
     assert len(fingerprint) == 19 and OLD_KEY not in fingerprint

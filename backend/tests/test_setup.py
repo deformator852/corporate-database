@@ -20,6 +20,7 @@ MODULES = (
     "setup.steps.embedding",
     "setup.steps.chunking",
     "setup.steps.chat",
+    "setup.steps.key_store",
 )
 
 
@@ -136,6 +137,96 @@ def test_key_command_shows_rotates_and_refuses_a_second_rotation(env, answers, c
         key_command(["unknown"])
 
 
+@pytest.fixture
+def vault(monkeypatch):
+    """A fake Vault behind every VaultClient setup and the app create."""
+    from fakes import FakeVault
+
+    import key_store
+    import setup.key
+    import setup.steps.key_store as step_module
+
+    fake = FakeVault()
+
+    class Bound(key_store.VaultClient):
+        def __init__(self, config, transport=None):
+            super().__init__(config, transport or fake.transport())
+
+    for module in (key_store, setup.key, step_module):
+        monkeypatch.setattr(module, "VaultClient", Bound)
+    return fake
+
+
+# Answers to the Vault questions: CA file, address, role_id, secret_id, mount, path.
+VAULT_ANSWERS = ["", "https://vault.test:8200", "corpus-role", "corpus-secret", None, None]
+
+
+def test_the_key_moves_into_vault_rotates_there_and_moves_back(env, answers, vault):
+    from encryption import key_fingerprint
+    from setup.key import main as key_command
+    from setup.steps.credentials import SecretsStep
+    from setup.steps.key_store import KeyStoreStep
+
+    key = "original-key-" + "o" * 32
+    env.write_text(f"DATA_ENCRYPTION_KEY={key}\n")
+    answers.extend([2, *VAULT_ANSWERS, "admin-token"])
+
+    KeyStoreStep().run(_console())
+
+    assert vault.secrets["corpus"] == {"DATA_ENCRYPTION_KEY": key}
+    values = _values(env)
+    assert "DATA_ENCRYPTION_KEY" not in values  # a copy of the disk holds no key
+    assert (values["KEY_STORE"], values["VAULT_ADDR"], values["VAULT_KV_PATH"]) == (
+        "vault",
+        "https://vault.test:8200",
+        "corpus",
+    )
+    console = _console()
+    SecretsStep().run(console)  # must not make a second key in .env
+    assert "DATA_ENCRYPTION_KEY" not in _values(env)
+
+    answers.extend(["admin-token", "saved"])
+    key_command(["rotate"])
+    rotated = vault.secrets["corpus"]
+    assert rotated["DATA_ENCRYPTION_KEY_PREVIOUS"] == key and rotated["DATA_ENCRYPTION_KEY"] != key
+    answers.append("admin-token")
+    key_command(["finish"])
+    assert vault.secrets["corpus"] == {"DATA_ENCRYPTION_KEY": rotated["DATA_ENCRYPTION_KEY"]}
+    assert all(token in {"app-token", "admin-token", None} for _, _, token in vault.requests)
+
+    answers.append(1)
+    console = _console()
+    KeyStoreStep().run(console)
+    values = _values(env)
+    assert values["DATA_ENCRYPTION_KEY"] == rotated["DATA_ENCRYPTION_KEY"] and values["KEY_STORE"] == "env"
+    assert not any(name.startswith("VAULT_") for name in values)  # the AppRole secret goes too
+    assert key_fingerprint(rotated["DATA_ENCRYPTION_KEY"]) in console.export_text()
+
+
+@pytest.mark.parametrize(
+    ("stored", "answers_after", "reason"),
+    [
+        ({"DATA_ENCRYPTION_KEY": "someone-elses-key-" + "x" * 32}, [], "another key"),
+        (None, ["", "https://vault.test:8200", "corpus-role", "wrong-secret", None, None], "invalid role"),
+    ],
+)
+def test_nothing_changes_when_vault_cannot_take_the_key(env, answers, vault, stored, answers_after, reason):
+    from setup.steps.key_store import KeyStoreStep
+
+    if stored:
+        vault.secrets["corpus"] = stored
+    before = "DATA_ENCRYPTION_KEY=" + "k" * 40 + "\n"
+    env.write_text(before)
+    answers.extend([2, *(answers_after or VAULT_ANSWERS)])
+    console = _console()
+
+    KeyStoreStep().run(console)
+
+    output = console.export_text()
+    assert "Nothing changed" in output and reason in output
+    assert env.read_text() == before and vault.secrets.get("corpus") == stored
+
+
 def test_key_command_needs_a_key(env):
     from setup.key import main as key_command
 
@@ -238,7 +329,7 @@ def test_setup_and_configure_run_their_steps(env, answers, monkeypatch, capsys):
     ran: list[list[str]] = []
     monkeypatch.setattr(configure, "run", lambda steps, *a, **k: ran.append([s.title for s in steps]))
     configure.main()
-    assert ran == [["LLM model", "Chat capacity", "Chunk size"]]
+    assert ran == [["LLM model", "Chat capacity", "Chunk size", "Encryption key storage"]]
 
     env.write_text("DATA_ENCRYPTION_KEY=" + "k" * 40 + "\n")
     monkeypatch.setattr(sys, "argv", ["setup", "key"])

@@ -1,6 +1,7 @@
 """Encryption at rest for document content.
 
-AES-256-GCM with DATA_ENCRYPTION_KEY from .env (`uv run setup` generates it).
+AES-256-GCM with DATA_ENCRYPTION_KEY (`uv run setup` generates it), from .env
+or HashiCorp Vault (key_store.py).
 Encrypted: files in MinIO, document text in Postgres (`EncryptedText`), chunk
 text in the Qdrant payload, chat messages. Not encrypted: document names (the
 chat matches them in SQL) and vectors (search needs them) - keep the Qdrant
@@ -31,6 +32,7 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from sqlalchemy import Text
 from sqlalchemy.types import TypeDecorator
 
+import key_store
 from exceptions import AppError
 
 _TEXT_V2 = "enc:v2:"
@@ -57,7 +59,8 @@ def key_fingerprint(secret: str) -> str:
 
 
 def _secret(name: str) -> str:
-    return (os.getenv(name) or "").strip()
+    """From .env or HashiCorp Vault, as KEY_STORE says (key_store.py)."""
+    return key_store.secret(name)
 
 
 @cache
@@ -87,7 +90,8 @@ def _previous() -> _Key | None:
 
 
 def reset_keys() -> None:
-    """Re-reads the keys from the environment (tests, rotation)."""
+    """Re-reads the keys from their store (tests, rotation)."""
+    key_store.forget()
     _current.cache_clear()
     _previous.cache_clear()
 

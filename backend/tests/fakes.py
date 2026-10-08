@@ -216,6 +216,51 @@ async def _processed():
     yield
 
 
+class FakeVault:
+    """HashiCorp Vault's HTTP API as Corpus uses it: AppRole login and one KV
+    v2 mount. `requests` records (method, path, token) of each call."""
+
+    def __init__(self, role_id: str = "corpus-role", secret_id: str = "corpus-secret", mount: str = "secret") -> None:
+        self.role_id, self.secret_id, self.mount = role_id, secret_id, mount
+        self.secrets: dict[str, dict[str, str]] = {}
+        # Tokens: the AppRole may read, the admin may also write.
+        self.readers = {"app-token"}
+        self.writers = {"admin-token"}
+        self.requests: list[tuple[str, str, str | None]] = []
+
+    def transport(self):
+        import httpx
+
+        return httpx.MockTransport(self._handle)
+
+    def _handle(self, request):
+        import httpx
+
+        path = request.url.path.removeprefix("/v1/")
+        token = request.headers.get("X-Vault-Token")
+        self.requests.append((request.method, path, token))
+        self.last = request
+        if path == "auth/approle/login":
+            body = json.loads(request.content)
+            if (body.get("role_id"), body.get("secret_id")) != (self.role_id, self.secret_id):
+                return httpx.Response(400, json={"errors": ["invalid role or secret ID"]})
+            return httpx.Response(200, json={"auth": {"client_token": "app-token"}})
+        prefix = f"{self.mount}/data/"
+        if not path.startswith(prefix):
+            return httpx.Response(404, json={"errors": []})
+        name = path.removeprefix(prefix)
+        if request.method == "GET":
+            if token not in self.readers | self.writers:
+                return httpx.Response(403, json={"errors": ["permission denied"]})
+            if name not in self.secrets:
+                return httpx.Response(404, json={"errors": []})
+            return httpx.Response(200, json={"data": {"data": self.secrets[name]}})
+        if token not in self.writers:
+            return httpx.Response(403, json={"errors": ["permission denied"]})
+        self.secrets[name] = json.loads(request.content)["data"]
+        return httpx.Response(200, json={"data": {"version": 1}})
+
+
 class RecordingQueue:
     """Celery stand-in: remembers which documents were queued."""
 

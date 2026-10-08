@@ -16,6 +16,15 @@ def random_secret(nbytes: int = 32) -> str:
             return token
 
 
+def remove_env(path: Path, key: str) -> None:
+    """Drops `key` from the file; other lines and comments stay."""
+    if not path.exists():
+        return
+    prefix = f"{key}="
+    lines = [line for line in path.read_text().splitlines() if not line.strip().startswith(prefix)]
+    path.write_text("\n".join(lines) + "\n")
+
+
 def upsert_env(path: Path, key: str, value: str) -> None:
     if not value or any(ch.isspace() for ch in value):
         raise ValueError(f"{key} must be a single token.")

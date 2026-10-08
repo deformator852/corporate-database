@@ -4,8 +4,18 @@ from .chat import ChatStep
 from .chunking import ChunkingStep
 from .credentials import SecretsStep
 from .embedding import EmbeddingStep
+from .key_store import KeyStoreStep
 from .language import LanguageStep
 from .llm import LlmStep
 from .storage import StorageStep
 
-SETUP_STEPS = [SecretsStep(), StorageStep(), LanguageStep(), LlmStep(), ChatStep(), EmbeddingStep(), ChunkingStep()]
+SETUP_STEPS = [
+    SecretsStep(),
+    KeyStoreStep(),
+    StorageStep(),
+    LanguageStep(),
+    LlmStep(),
+    ChatStep(),
+    EmbeddingStep(),
+    ChunkingStep(),
+]

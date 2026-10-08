@@ -2,7 +2,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from ..env import ENV_PATH, env_value, random_secret, upsert_env
-from ..key import confirm_backup
+from ..key import confirm_backup, in_vault
 
 # key → minimum length; shorter values (e.g. "password") are replaced.
 _SECRETS = {
@@ -32,6 +32,8 @@ class SecretsStep:
                 upsert_env(ENV_PATH, key, default)
                 written.append(key)
         for key, min_length in _SECRETS.items():
+            if key == "DATA_ENCRYPTION_KEY" and in_vault():
+                continue  # kept in Vault: a key here would be a second, wrong one
             if len(env_value(ENV_PATH, key) or "") < min_length:
                 upsert_env(ENV_PATH, key, random_secret())
                 written.append(key)

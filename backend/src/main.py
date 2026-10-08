@@ -26,6 +26,7 @@ from services.encryption_key import verify_encryption_key
 from services.notifications.events import consume_notification_events
 from services.notifications.hub import dispatch_notification
 from services.search.embedding import get_embedding_model
+from services.search.index_model import verify_index_model
 from settings import chat_retention_days
 
 logger = logging.getLogger(__name__)
@@ -66,9 +67,11 @@ async def purge_old_chats() -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    # Fail fast: with the wrong key, new data would be unreadable later.
+    # Fail fast: with the wrong key, new data would be unreadable later; with
+    # another embedding model, search would compare unrelated vectors.
     async with AsyncSessionLocal() as session:
         await verify_encryption_key(session)
+        await verify_index_model(session)
     await close_open_chat_requests()
     warm_up_task = asyncio.create_task(warm_up())
     purge_task = asyncio.create_task(purge_old_chats())

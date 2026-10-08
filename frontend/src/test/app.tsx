@@ -34,6 +34,7 @@ export function renderApp(
     server.on("POST", "/auth/refresh", user ? {} : signedOut);
     server.on("GET", "/notifications", {items: [], page: 1, per_page: 20, total: 0, pages: 0, unread_count: 0});
     server.on("GET", "/chat/conversations", {items: [], page: 1, per_page: 30, total: 0, pages: 0});
+    server.on("GET", "/system/reindex", {active: false, percent: 100});
     script(server);
     const router = createMemoryRouter(routes, {initialEntries: [path]});
     const view = render(

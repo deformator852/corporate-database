@@ -1,10 +1,7 @@
-// Loads extensions: the paid features from src/advanced/<name>/index.ts(x),
-// then customizations from src/custom/<name>/index.ts(x), so a customer can
-// replace an advanced page, link, string or theme too.
+// Loads extensions: customizations from src/custom/<name>/index.ts(x).
 // Upstream never ships files under src/custom/, so pulling updates does not
-// conflict with them (see documentations/customization/). src/advanced/ is
-// not in the core repository: the advanced edition puts its modules there.
-// Core code never imports from either folder.
+// conflict with them (see documentations/customization/). Core code never
+// imports from it.
 import type {RouteObject} from "react-router";
 
 import type {MessageOverrides} from "@/shared/i18n/messages";
@@ -29,7 +26,6 @@ export type Extension = {
     defaultTheme?: string;
 };
 
-const advanced = import.meta.glob<Extension>("./advanced/*/index.{ts,tsx}", {eager: true, import: "default"});
 const custom = import.meta.glob<Extension>("./custom/*/index.{ts,tsx}", {eager: true, import: "default"});
 
 function loaded(modules: Record<string, Extension>): Extension[] {
@@ -45,7 +41,7 @@ function loaded(modules: Record<string, Extension>): Extension[] {
         .map((path) => modules[path]);
 }
 
-export const extensions: Extension[] = [...loaded(advanced), ...loaded(custom)];
+export const extensions: Extension[] = loaded(custom);
 
 /** Core items with extension items appended; an extension item replaces the
  * core one with the same key, and a later extension replaces an earlier one. */

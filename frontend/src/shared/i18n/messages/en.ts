@@ -278,6 +278,7 @@ export const en = {
     "errors.fallback": "Something went wrong. Try again.",
 
     "auth.signOut": "Sign out",
+    "reindex.banner": "Search is being updated ({{percent}}% done). Until it finishes, answers may leave out some documents.",
     "account.title": "My account",
     "account.passwordTitle": "Password",
     "account.passwordHint": "After the change you are signed out everywhere, on this device too. Sign in again with the new password.",

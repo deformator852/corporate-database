@@ -12,6 +12,7 @@ import type {SessionUser} from "@/shared/auth/types";
 import {useI18n} from "@/shared/i18n/I18nProvider";
 import {ThemeSwitcher} from "@/theme/ThemeSwitcher";
 import {NotificationBell} from "@/widgets/notifications/ui/NotificationBell";
+import {ReindexBanner} from "@/widgets/reindex-banner/ui/ReindexBanner";
 import {MobileNav, Sidebar} from "@/widgets/sidebar/ui/Sidebar";
 
 export default function AppLayout() {
@@ -53,6 +54,7 @@ export default function AppLayout() {
             <div className="app-layout__body">
                 <Sidebar />
                 <main className="app-main app-layout__main">
+                    <ReindexBanner />
                     <div
                         className={
                             pane

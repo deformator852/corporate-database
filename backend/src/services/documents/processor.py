@@ -132,7 +132,8 @@ class DocumentProcessor:
                 indexed=searchable,
             )
             document.error_message = None
-            document.ready_unannounced = True
+            document.ready_unannounced = not document.reindexing
+            document.reindexing = False
             await self._set(document, DocumentStatus.COMPLETED, 100)
             await self._announce_ready(document)
         except AppError as exc:
@@ -142,6 +143,8 @@ class DocumentProcessor:
             if exc.status_code >= 500:
                 raise
             document.error_message = t(exc.message, **exc.params)
+            # No longer searchable: the owner hears of it, and of a later retry.
+            document.reindexing = False
             await self._set(document, DocumentStatus.FAILED, document.progress)
             await self._notify(document, NotificationType.DOCUMENT_PROCESS_FAILED, t(exc.message, **exc.params))
             await self._announce_ready(document)

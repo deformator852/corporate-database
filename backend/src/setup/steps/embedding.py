@@ -183,10 +183,11 @@ class EmbeddingStep:
         if points:
             _lock(
                 console,
-                "The embedding model cannot be changed while Qdrant "
-                f"collection '{_COLLECTION}' has {points} point(s). "
-                "Delete those documents first if you need a different "
-                "model.",
+                "The embedding model cannot be changed here while Qdrant "
+                f"collection '{_COLLECTION}' has {points} point(s): every "
+                "document must be embedded again. Use "
+                "deploy/deploy.sh switch-model MODEL (development: "
+                "cd src && uv run python -m maintenance.switch_embedding MODEL).",
                 current,
             )
             return
