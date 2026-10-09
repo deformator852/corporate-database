@@ -193,6 +193,7 @@ def infra(monkeypatch):
         monkeypatch.setattr(module, "AsyncClient", stack.llm.client)
     monkeypatch.setattr(aio_pika, "connect_robust", stack.broker.connect_robust)
     monkeypatch.setattr(CeleryDocumentQueue, "enqueue", lambda self, i: stack.queue.enqueue(i))
+    monkeypatch.setattr(CeleryDocumentQueue, "start_rechunk", lambda self: stack.queue.start_rechunk())
     return stack
 
 

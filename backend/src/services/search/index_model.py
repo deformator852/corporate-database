@@ -19,7 +19,8 @@ from models.system_state import SystemState
 from settings import embedding_model_key
 
 INDEX_MODEL = "embedding_model"
-# Documents the last switch queued, for its progress.
+# Documents the last rebuild marked (a model switch or a re-chunk), for its
+# progress.
 REINDEX_TOTAL = "reindex_total"
 
 
@@ -36,14 +37,23 @@ async def stored_index_model(session: AsyncSession) -> str | None:
 
 async def save_index_model(session: AsyncSession, key: str, *, queued: int = 0) -> None:
     """Records `key` as the index's model, and how many documents it queued."""
-    for name, value in ((INDEX_MODEL, key), (REINDEX_TOTAL, str(queued))):
-        statement = insert(SystemState).values(name=name, value=value)
-        await session.execute(statement.on_conflict_do_update(index_elements=[SystemState.name], set_={"value": value}))
+    await _save(session, INDEX_MODEL, key)
+    await save_reindex_total(session, queued)
+
+
+async def save_reindex_total(session: AsyncSession, queued: int) -> None:
+    """How many documents a rebuild marked, for its progress."""
+    await _save(session, REINDEX_TOTAL, str(queued))
+
+
+async def _save(session: AsyncSession, name: str, value: str) -> None:
+    statement = insert(SystemState).values(name=name, value=value)
+    await session.execute(statement.on_conflict_do_update(index_elements=[SystemState.name], set_={"value": value}))
     await session.commit()
 
 
 async def reindex_progress(session: AsyncSession) -> ReindexProgress:
-    """How far the worker is with the documents the last switch queued."""
+    """How far the worker is with the documents the last rebuild marked."""
     left = await session.scalar(select(func.count()).select_from(Document).where(Document.reindexing.is_(True))) or 0
     if not left:
         return ReindexProgress(active=False, percent=100)

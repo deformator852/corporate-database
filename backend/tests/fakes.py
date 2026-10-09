@@ -266,9 +266,13 @@ class RecordingQueue:
 
     def __init__(self) -> None:
         self.ids: list[int] = []
+        self.rechunks = 0
         self.fail = False
 
     def enqueue(self, document_id: int) -> None:
         if self.fail:
             raise ConnectionError("broker down")
         self.ids.append(document_id)
+
+    def start_rechunk(self) -> None:
+        self.rechunks += 1

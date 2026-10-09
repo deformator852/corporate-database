@@ -142,6 +142,16 @@ the assistant's answers in it. The choice is saved on the account.
 To go back to one language, run `uv run configure` again, answer no, and
 rebuild. The header then shows no language button.
 
+## Re-chunking documents after a chunk size change
+
+A new chunk size or overlap (`uv run configure`) applies to documents
+uploaded afterwards. Documents processed before keep their chunks and keep
+working. To cut them again with the new size, open **System**: it shows how
+many documents use another size. Select **Re-chunk documents** (permission
+`system.rechunk`). The worker cuts them one at a time, between new uploads,
+from the text saved at processing time. They stay searchable meanwhile, and
+the progress shows in the banner. The action is recorded in the audit log.
+
 ## Configuring the chat capacity
 
 The chat shares one AI model between all users. Two settings control how it

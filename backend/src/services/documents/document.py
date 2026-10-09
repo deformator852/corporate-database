@@ -108,12 +108,20 @@ class DocumentFilter:
 class DocumentJobQueue(Protocol):
     def enqueue(self, document_id: int) -> None: ...
 
+    def start_rechunk(self) -> None: ...
+
 
 class CeleryDocumentQueue:
     def enqueue(self, document_id: int) -> None:
         from tasks.document import process_document
 
         process_document.delay(document_id)
+
+    def start_rechunk(self) -> None:
+        """The worker re-chunks the marked documents, one at a time."""
+        from tasks.document import rechunk_next
+
+        rechunk_next.delay()
 
 
 async def _read_upload(data: DocumentUploadSchema) -> bytes:

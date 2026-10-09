@@ -21,6 +21,7 @@ from qdrant_client.http.models import (
     PayloadField,
     PayloadSchemaType,
     PointStruct,
+    Range,
     ScoredPoint,
     SparseVectorParams,
     VectorParams,
@@ -190,6 +191,22 @@ class Rag:
                 payload={"name": name, "classification": classification},
                 points=_document_filter(document_id),
                 wait=True,
+            ),
+            missing=None,
+        )
+
+    async def delete_chunks_from(self, document_id: int, first_index: int) -> None:
+        """The document's chunks from `first_index` on: left over when it is
+        cut into fewer chunks than before."""
+        await self._if_indexed(
+            lambda: self.client.delete(
+                collection_name=COLLECTION_NAME,
+                points_selector=Filter(
+                    must=[
+                        FieldCondition(key="document_id", match=MatchValue(value=document_id)),
+                        FieldCondition(key="chunk_index", range=Range(gte=first_index)),
+                    ]
+                ),
             ),
             missing=None,
         )

@@ -17,7 +17,8 @@ def main() -> None:
                 "languages); development: restart the backend, the worker and the "
                 "frontend dev server (and Ollama for simultaneous "
                 "answers: docker compose --env-file backend/.env -f docker-compose.local.yml up -d ollama). "
-                "The new chunk size applies to documents uploaded afterwards."
+                "The new chunk size applies to documents uploaded afterwards; re-chunk the "
+                "others on the System page, or keep them as they are."
             ),
         )
     except KeyboardInterrupt:

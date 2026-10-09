@@ -99,11 +99,14 @@ def test_worker_start_requeues_unfinished_documents(client, make_user, infra, mo
 
     document_id = _queued(client, make_user)
     queued: list[int] = []
+    rechunks: list[None] = []
     monkeypatch.setattr(task_module.process_document, "delay", queued.append)
+    monkeypatch.setattr(task_module.rechunk_next, "delay", lambda: rechunks.append(None))
 
     task_module.requeue_unfinished_documents()
 
     assert document_id in queued
+    assert rechunks == [None]  # a re-chunk cut short by the restart goes on
 
 
 def test_worker_refuses_another_encryption_key(monkeypatch):
@@ -119,3 +122,25 @@ def test_worker_refuses_another_encryption_key(monkeypatch):
     finally:
         monkeypatch.undo()
         encryption.reset_keys()
+
+
+def test_re_chunking_goes_on_after_a_failure_and_stops_when_done(monkeypatch):
+    import tasks.document as task_module
+
+    marked = [None, 7]  # one document, then none
+
+    async def claim():
+        return marked.pop()
+
+    async def broken(_document_id):
+        raise RuntimeError("Qdrant went away")
+
+    queued: list[None] = []
+    monkeypatch.setattr(task_module, "claim_rechunk", claim)
+    monkeypatch.setattr(task_module, "rechunk_document_job", broken)
+    monkeypatch.setattr(task_module.rechunk_next, "delay", lambda: queued.append(None))
+
+    task_module.rechunk_next()  # fails on 7: logged, the next one is queued
+    assert queued == [None]
+    task_module.rechunk_next()  # nothing left: the chain ends
+    assert queued == [None]

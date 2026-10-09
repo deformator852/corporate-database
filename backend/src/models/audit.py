@@ -31,6 +31,7 @@ class AuditAction(StrEnum):
     CHAT_ANSWER = "chat.answer"
     CHAT_VIEW = "chat.view"
     CHAT_PURGE = "chat.purge"
+    SYSTEM_RECHUNK = "system.rechunk"
 
 
 class AuditLog(Base):

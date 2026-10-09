@@ -223,5 +223,6 @@ class ChunkingStep:
         upsert_env(ENV_PATH, "CHUNK_OVERLAP", str(overlap))
         console.print(
             f"Wrote CHUNK_SIZE={size}, CHUNK_OVERLAP={overlap} to {ENV_PATH}. "
-            "Applies to documents uploaded from now on."
+            "Applies to documents uploaded from now on; after the restart, re-chunk the "
+            "others on the System page (Re-chunk documents), or keep them as they are."
         )

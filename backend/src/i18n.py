@@ -87,6 +87,7 @@ _ES = {
     "The last message must be from the user.": "El último mensaje debe ser del usuario.",
     "Conversation not found": "Conversación no encontrada",
     "This language is not available.": "Este idioma no está disponible.",
+    "The search index is already being rebuilt.": "El índice de búsqueda ya se está reconstruyendo.",
     "Notification not found": "Notificación no encontrada",
 }
 
@@ -162,6 +163,7 @@ _FR = {
     "The last message must be from the user.": "Le dernier message doit venir de l’utilisateur.",
     "Conversation not found": "Conversation introuvable",
     "This language is not available.": "Cette langue n’est pas disponible.",
+    "The search index is already being rebuilt.": "L’index de recherche est déjà en cours de reconstruction.",
     "Notification not found": "Notification introuvable",
 }
 

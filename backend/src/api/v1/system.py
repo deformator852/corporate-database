@@ -3,12 +3,17 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Query, WebSocket
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.deps import require_permission
+from api.deps import get_audit_service, require_permission
 from api.ws import hold
 from database import get_db
+from models.audit import AuditAction
+from models.user import User
 from schemas.error import error_responses
 from schemas.error_log import ErrorLevel, ErrorLogListSchema, ErrorSource
 from security import get_ws_payload
+from services.audit import AuditService
+from services.documents.document import CeleryDocumentQueue
+from services.documents.rechunk import mark_outdated
 from services.error_log import ErrorLogService
 from services.search.reindex_hub import reindex_hub
 from services.system import system_status
@@ -55,3 +60,23 @@ async def list_errors(
 )
 async def get_system_status(session: AsyncSession = Depends(get_db, scope="function")) -> dict[str, Any]:
     return await system_status(session)
+
+
+@router.post(
+    "/rechunk",
+    responses=error_responses(401, 403, 409),
+)
+async def rechunk_documents(
+    user: User = Depends(require_permission("system.rechunk")),
+    session: AsyncSession = Depends(get_db, scope="function"),
+    audit: AuditService = Depends(get_audit_service),
+) -> dict[str, int]:
+    """Re-chunks the documents cut with another chunk size or overlap; they
+    stay searchable meanwhile. Returns how many were marked."""
+    marked = await mark_outdated(session)
+    audit.record(AuditAction.SYSTEM_RECHUNK, actor=user, details={"documents": marked})
+    await session.commit()
+    if marked:
+        CeleryDocumentQueue().start_rechunk()
+        await reindex_hub.refresh()
+    return {"documents": marked}

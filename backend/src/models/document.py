@@ -58,9 +58,15 @@ class Document(TimestampMixin, Base):
     # Completed, but the owner has not been told yet: told in one notice
     # once none of their documents is waiting (services/notifications).
     ready_unannounced: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
-    # Queued again for another embedding model (uv run switch-embedding-model):
-    # it was ready before, so becoming ready again is not news to the owner.
+    # Its index is being rebuilt. For another embedding model (uv run
+    # switch-embedding-model) it is queued again, and being ready again is not
+    # news to the owner; to re-chunk it (System page) it stays completed and
+    # searchable meanwhile (processor.rechunk).
     reindexing: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    # CHUNK_SIZE / CHUNK_OVERLAP its chunks were cut with: after a change in
+    # `uv run configure`, the ones cut otherwise can be re-chunked (System page).
+    chunk_size: Mapped[int | None] = mapped_column(Integer)
+    chunk_overlap: Mapped[int | None] = mapped_column(Integer)
 
     __table_args__ = (
         CheckConstraint("length(name) BETWEEN 1 AND 200"),

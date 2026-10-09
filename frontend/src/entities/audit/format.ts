@@ -53,6 +53,9 @@ export function describe(t: TranslateFn, entry: AuditEntry): string {
         );
         parts.push(t("audit.details.deletedChats", {count: details.deleted}));
     }
+    if (typeof details.documents === "number") {
+        parts.push(t("audit.details.documentCount", {count: details.documents}));
+    }
     if (Array.isArray(details.documents)) {
         const documents = details.documents as {name?: unknown; classification?: unknown}[];
         parts.push(

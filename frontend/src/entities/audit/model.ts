@@ -25,6 +25,7 @@ export const AUDIT_ACTIONS = [
     "chat.answer",
     "chat.view",
     "chat.purge",
+    "system.rechunk",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

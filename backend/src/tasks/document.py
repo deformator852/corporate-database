@@ -11,9 +11,11 @@ from celery.signals import worker_ready
 # instead of failing inside a task, where the job would be lost.
 from exceptions import AppError
 from services.documents.processor import (
+    claim_rechunk,
     drop_incomplete_document_job,
     fail_document_job,
     process_document_job,
+    rechunk_document_job,
     unfinished_document_ids,
 )
 from worker import celery
@@ -54,6 +56,27 @@ def process_document(self, document_id: int) -> None:
         _retry_or(self, exc, lambda: fail_document_job(document_id, "Could not process the document."))
 
 
+@celery.task(
+    name="documents.rechunk_next",
+    acks_late=True,
+    soft_time_limit=PROCESS_SOFT_TIME_LIMIT,
+    time_limit=PROCESS_TIME_LIMIT,
+)
+def rechunk_next() -> None:
+    """Re-chunks one document marked for it, then queues itself again. One
+    at a time, behind the queue: an upload made meanwhile waits for one
+    document, not for the whole library."""
+    document_id = asyncio.run(claim_rechunk())
+    if document_id is None:
+        return
+    try:
+        asyncio.run(rechunk_document_job(document_id))
+    except Exception:
+        # The old chunks stay; the document is offered for re-chunking again.
+        logger.exception("Could not re-chunk document %s", document_id)
+    rechunk_next.delay()
+
+
 def _retry_or(task: Task, exc: Exception, give_up: Callable[[], Coroutine[Any, Any, None]]) -> None:
     """Retries with backoff, or runs `give_up` once the retries are used.
     Counted here: past max_retries Celery re-raises `exc` itself instead of
@@ -79,3 +102,5 @@ def requeue_unfinished_documents(**_kwargs: object) -> None:
         process_document.delay(document_id)
     if ids:
         logger.warning("Re-queued %s unfinished document(s): %s", len(ids), ids)
+    # A re-chunk cut short by the restart goes on; with none left it stops.
+    rechunk_next.delay()

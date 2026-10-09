@@ -5,7 +5,7 @@ from itertools import pairwise
 from pathlib import Path
 
 from chonkie import RecursiveChunker
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import AsyncSessionLocal, engine
@@ -133,6 +133,7 @@ class DocumentProcessor:
                 indexed=searchable,
             )
             document.error_message = None
+            document.chunk_size, document.chunk_overlap = chunk_size(), chunk_overlap()
             document.ready_unannounced = not document.reindexing
             document.reindexing = False
             await self._set(document, DocumentStatus.COMPLETED, 100)
@@ -153,6 +154,41 @@ class DocumentProcessor:
             await self._drop_index(document.id)
             raise
 
+    async def rechunk(self, document_id: int) -> None:
+        """Cuts a completed document again with the current CHUNK_SIZE and
+        CHUNK_OVERLAP, from its saved text. It stays completed and searchable
+        meanwhile: the new chunks replace the old ones of the same number,
+        then the ones past the new count go. A failure leaves the old
+        chunks, and the document is offered for re-chunking again."""
+        document = await self._require(document_id)
+        if document is None or document.status != DocumentStatus.COMPLETED:
+            return  # deleted, or queued again (a model switch) meanwhile
+        saved = await self.session.get(DocumentText, document.id)
+        if saved is None:
+            return
+        chunks, starts = _split_text(self.chunker, saved.text, chunk_overlap())
+        if not chunks:
+            return
+        searchable = await self._searchable(document, saved.text, chunks, starts)
+        vectors = await self._embed(document, searchable, report=False)
+        await self.rag.upsert_chunks(
+            document_id=document.id,
+            name=document.name,
+            filename=document.filename,
+            classification=document.classification,
+            chunks=chunks,
+            starts=starts,
+            vectors=vectors,
+            indexed=searchable,
+        )
+        await self.rag.delete_chunks_from(document.id, len(chunks))
+        document.chunk_size, document.chunk_overlap = chunk_size(), chunk_overlap()
+        await self.session.commit()
+        try:
+            await self.events.publish(document)  # moves the rebuild's progress
+        except Exception:
+            pass
+
     async def _parse(self, document: Document) -> str:
         """The document's text, saved for the chat, which reads it instead of
         parsing the file again for every question."""
@@ -172,16 +208,19 @@ class DocumentProcessor:
             boilerplate = await shared_lines(self.session, document.id, text)
         return embedding_texts(text, chunks, starts, suffix, clean=clean, boilerplate=boilerplate)
 
-    async def _embed(self, document: Document, texts: list[str]) -> list[list[float]]:
-        """Vectors of `texts`, in batches, reporting progress from 30 to 95%."""
-        await self._set(document, DocumentStatus.EMBEDDING, 30)
+    async def _embed(self, document: Document, texts: list[str], *, report: bool = True) -> list[list[float]]:
+        """Vectors of `texts`, in batches; `report`: as the document's
+        progress, from 30 to 95%."""
+        if report:
+            await self._set(document, DocumentStatus.EMBEDDING, 30)
         vectors: list[list[float]] = []
         for start in range(0, len(texts), EMBED_BATCH_SIZE):
             vectors.extend(
                 await asyncio.to_thread(self.embedder.embed_passages, texts[start : start + EMBED_BATCH_SIZE])
             )
-            done = min(start + EMBED_BATCH_SIZE, len(texts))
-            await self._set(document, DocumentStatus.EMBEDDING, 30 + int(65 * done / len(texts)))
+            if report:
+                done = min(start + EMBED_BATCH_SIZE, len(texts))
+                await self._set(document, DocumentStatus.EMBEDDING, 30 + int(65 * done / len(texts)))
         return vectors
 
     async def _drop_index(self, document_id: int) -> None:
@@ -294,6 +333,32 @@ async def unfinished_document_ids() -> list[int]:
             return list(ids)
     finally:
         await engine.dispose()
+
+
+async def claim_rechunk() -> int | None:
+    """The next document marked for re-chunking, unmarked as it is taken:
+    whatever happens to it, the work moves on and never repeats it."""
+    try:
+        async with AsyncSessionLocal() as session:
+            marked = (
+                select(Document.id)
+                .where(Document.reindexing.is_(True), Document.status == DocumentStatus.COMPLETED)
+                .order_by(Document.id)
+                .limit(1)
+                .with_for_update(skip_locked=True)
+                .scalar_subquery()
+            )
+            claimed = await session.scalar(
+                update(Document).where(Document.id == marked).values(reindexing=False).returning(Document.id)
+            )
+            await session.commit()
+            return claimed
+    finally:
+        await engine.dispose()
+
+
+async def rechunk_document_job(document_id: int) -> None:
+    await _with_processor(lambda processor: processor.rechunk(document_id))
 
 
 async def process_document_job(document_id: int) -> None:

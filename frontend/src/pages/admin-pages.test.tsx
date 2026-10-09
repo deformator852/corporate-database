@@ -117,6 +117,37 @@ describe("System status", () => {
         await waitFor(() => expect(server.sent("GET", "/system/status")).toHaveLength(2));
     });
 
+    it("offers to re-chunk documents cut with another size", async () => {
+        const {user, server} = renderApp("/system", sessionUser(["system.view", "system.rechunk"]), (s) => {
+            s.on("GET", "/system/status", {
+                services: [],
+                documents: {completed: 3},
+                config: {language: "en", llm_model: "llama3.1:8b", llm_context: 16384, embedding_model: "e5", chunk_size: 400, chunk_overlap: 80, text_cleanup: "rules"},
+                outdated_chunks: 3,
+            });
+            s.on("POST", "/system/rechunk", {documents: 3});
+        });
+
+        await user.click(await screen.findByRole("button", {name: "Re-chunk documents"}));
+        await user.click(screen.getByRole("button", {name: "Re-chunk"}));
+
+        expect(await screen.findByText("Re-chunking 3 document(s). Progress shows in the banner at the top.")).toBeInTheDocument();
+        expect(server.sent("POST", "/system/rechunk")).toHaveLength(1);
+    });
+
+    it("shows outdated documents without the button to those who may not re-chunk", async () => {
+        renderApp("/system", sessionUser(["system.view"]), (s) =>
+            s.on("GET", "/system/status", {
+                services: [],
+                documents: {},
+                config: {language: "en", llm_model: "m", llm_context: 1, embedding_model: "e", chunk_size: 400, chunk_overlap: 80, text_cleanup: "rules"},
+                outdated_chunks: 2,
+            }),
+        );
+        expect(await screen.findByText(/2 document\(s\) were cut into chunks of another size/)).toBeInTheDocument();
+        expect(screen.queryByRole("button", {name: "Re-chunk documents"})).not.toBeInTheDocument();
+    });
+
     it("explains when the status cannot be loaded", async () => {
         renderApp("/system", sessionUser(["system.view"]), (s) => s.on("GET", "/system/status", apiError(403, "Insufficient permissions", "forbidden")));
         expect(await screen.findByText("Insufficient permissions")).toBeInTheDocument();

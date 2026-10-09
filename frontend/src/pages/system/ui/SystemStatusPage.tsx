@@ -24,6 +24,7 @@ import type {MessageKey} from "@/shared/i18n/messages";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
 import type {DocumentStatus} from "@/entities/document/model";
 import {getSystemStatus} from "@pages/system/api/system";
+import {RechunkNotice} from "@pages/system/ui/RechunkNotice";
 import {SYSTEM_REFRESH_MS, type ServiceStatus, type SystemStatus} from "@pages/system/model/system";
 
 const SERVICE_ICONS: Record<string, LucideIcon> = {
@@ -146,6 +147,13 @@ export function SystemStatusPage() {
                             })}
                         </div>
                     </section>
+
+                    <RechunkNotice
+                        outdated={data.outdated_chunks}
+                        size={data.config.chunk_size}
+                        overlap={data.config.chunk_overlap}
+                        onStarted={load}
+                    />
 
                     <div className="grid gap-4 lg:grid-cols-2">
                         <section aria-labelledby="documents-heading" className="stack">

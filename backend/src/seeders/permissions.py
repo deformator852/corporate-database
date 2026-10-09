@@ -90,6 +90,11 @@ SYSTEM_PERMISSIONS = (
         "View error log",
         "See the warnings and errors of the backend and the worker, with their tracebacks",
     ),
+    (
+        "system.rechunk",
+        "Re-chunk documents",
+        "Cut documents processed before a chunk size change again, with the current size",
+    ),
 )
 
 ALL_PERMISSIONS = (

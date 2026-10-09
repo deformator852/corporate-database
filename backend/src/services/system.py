@@ -16,6 +16,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.document import Document
+from services.documents.rechunk import outdated_count
 from services.search.embedding import get_embedding_model
 from services.search.rag import COLLECTION_NAME, Rag
 from services.storage import ObjectStorage
@@ -163,4 +164,6 @@ async def system_status(session: AsyncSession) -> dict[str, Any]:
             "chunk_overlap": chunk_overlap(),
             "text_cleanup": text_cleanup_mode(),
         },
+        # Completed documents cut with another chunk size or overlap.
+        "outdated_chunks": await outdated_count(session),
     }

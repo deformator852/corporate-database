@@ -18,6 +18,8 @@ export type SystemStatus = {
         chunk_overlap: number;
         text_cleanup: string;
     };
+    /** Completed documents cut with another chunk size or overlap. */
+    outdated_chunks: number;
 };
 
 export const SYSTEM_REFRESH_MS = 15_000;
