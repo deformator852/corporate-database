@@ -91,18 +91,18 @@ uv run configure        # AI model, chat limits, chunk size
 uv run setup key        # fingerprint of the encryption key
 ```
 
-To use another embedding model once documents exist, stop the backend and
-the worker, then run:
+To use another embedding model once documents exist:
 
 ```sh
-cd backend/src
-uv run python -m maintenance.switch_embedding MODEL   # for example bge-m3
+cd backend
+uv run switch-embedding-model MODEL   # for example bge-m3; without MODEL it lists them
 ```
 
-It writes `EMBEDDING_MODEL` to `.env` and queues every document; start the
-backend and the worker again and the worker embeds them with the new model.
-Run it with the current model to rebuild the index, for example after
-changing the chunk size.
+It stops the backend and the worker running from this folder, rebuilds the
+search index, writes `EMBEDDING_MODEL` to `.env` and queues every document.
+Start the backend and the worker again and the worker embeds them with the
+new model. Run it with the current model to rebuild the index, for example
+after changing the chunk size.
 
 To deploy to a server, see
 [Deploying Corpus on a company server](../documentations/deployment.md).

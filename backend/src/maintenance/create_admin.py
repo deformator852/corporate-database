@@ -17,6 +17,7 @@ from database import AsyncSessionLocal, engine
 from models.rbac.constants import ADMIN_ROLE_KEY
 from models.rbac.role import Role
 from models.user import User
+from schemas.email import normalize_email
 from services.password import hash_password
 
 
@@ -47,9 +48,13 @@ async def create_admin(email: str, first_name: str, last_name: str) -> str:
 
 
 def main() -> None:
-    if len(sys.argv) < 2 or "@" not in sys.argv[1]:
+    if len(sys.argv) < 2:
         raise SystemExit(__doc__)
-    email = sys.argv[1].strip().lower()
+    try:
+        # As sign-in checks it: an address it refuses could never sign in.
+        email = normalize_email(sys.argv[1].strip())
+    except ValueError as exc:
+        raise SystemExit(f"Invalid email: {exc}") from None
     first = sys.argv[2] if len(sys.argv) > 2 else "Admin"
     last = sys.argv[3] if len(sys.argv) > 3 else "Admin"
     password = asyncio.run(create_admin(email, first, last))

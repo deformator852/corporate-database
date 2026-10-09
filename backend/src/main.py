@@ -15,19 +15,22 @@ from api.v1.router import api_router
 from database import AsyncSessionLocal
 from exceptions import AppError
 from extensions import plugins
-from i18n import t
+from i18n import t, use_language
 from schemas.error import ErrorSchema, validation_message
+from services import error_log
 from services.chat.generator import OllamaGenerator
 from services.chat.history import ChatHistoryService
 from services.chat.limit import close_open_chat_requests, purge_chat_requests
 from services.documents.events import consume_document_events
 from services.documents.hub import hub
 from services.encryption_key import verify_encryption_key
+from services.error_log import ErrorLogService
 from services.notifications.events import consume_notification_events
 from services.notifications.hub import dispatch_notification
 from services.search.embedding import get_embedding_model
 from services.search.index_model import verify_index_model
-from settings import chat_retention_days
+from services.search.reindex_hub import reindex_hub
+from settings import chat_retention_days, error_log_retention_days
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +52,9 @@ _PURGE_EVERY_SECONDS = 6 * 3600
 
 
 async def purge_old_chats() -> None:
-    """Every 6 hours: deletes saved chats idle longer than CHAT_RETENTION_DAYS
-    and chat limit records older than a day."""
+    """Every 6 hours: deletes saved chats idle longer than CHAT_RETENTION_DAYS,
+    chat limit records older than a day and error log entries older than
+    ERROR_LOG_RETENTION_DAYS."""
     while True:
         try:
             days = chat_retention_days()
@@ -60,13 +64,24 @@ async def purge_old_chats() -> None:
                 if removed:
                     logger.info("Deleted %s chat(s) older than %s days", removed, days)
             await purge_chat_requests()
+            if error_days := error_log_retention_days():
+                async with AsyncSessionLocal() as session:
+                    await ErrorLogService(session).purge_older_than(error_days)
         except Exception:
             logger.warning("Chat retention cleanup failed", exc_info=True)
         await asyncio.sleep(_PURGE_EVERY_SECONDS)
 
 
+async def on_document_event(payload: dict) -> None:
+    """A document moved on: the documents lists, and the model switch banner."""
+    await hub.broadcast(payload)
+    await reindex_hub.refresh()
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # First: a failed start is worth an entry too.
+    error_log.install("backend")
     # Fail fast: with the wrong key, new data would be unreadable later; with
     # another embedding model, search would compare unrelated vectors.
     async with AsyncSessionLocal() as session:
@@ -75,7 +90,7 @@ async def lifespan(_app: FastAPI):
     await close_open_chat_requests()
     warm_up_task = asyncio.create_task(warm_up())
     purge_task = asyncio.create_task(purge_old_chats())
-    document_task = asyncio.create_task(consume_document_events(hub.broadcast))
+    document_task = asyncio.create_task(consume_document_events(on_document_event))
     notification_task = asyncio.create_task(consume_notification_events(dispatch_notification))
     try:
         yield
@@ -109,6 +124,15 @@ _SECURITY_HEADERS = {
     "Cross-Origin-Resource-Policy": "same-origin",
     "Cache-Control": "no-store",
 }
+
+
+@app.middleware("http")
+async def request_language(request: Request, call_next):
+    """The client's interface language (sent as Accept-Language); a signed-in
+    user's saved choice replaces it (`get_current_user`)."""
+    first = request.headers.get("accept-language", "").split(",")[0].split(";")[0]
+    use_language(first.split("-")[0].strip().lower() or None)
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -155,6 +179,17 @@ async def validation_error_handler(_request: Request, exc: RequestValidationErro
 async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
     body = ErrorSchema(code=exc.code, message=t(exc.message, **exc.params))
     return JSONResponse(status_code=exc.status_code, content=body.model_dump())
+
+
+# A bug: the error log gets the traceback, the client the common error shape.
+@app.exception_handler(Exception)
+async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    # The path, not the query string: it may hold search text.
+    logger.error("Unhandled error on %s %s", request.method, request.url.path, exc_info=exc)
+    # Starlette re-raises it for the server, and uvicorn logs it again.
+    setattr(exc, error_log.LOGGED, True)
+    body = ErrorSchema(code="internal", message=t("Something went wrong. Try again."))
+    return JSONResponse(status_code=500, content=body.model_dump())
 
 
 @app.get("/health")

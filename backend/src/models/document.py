@@ -58,7 +58,7 @@ class Document(TimestampMixin, Base):
     # Completed, but the owner has not been told yet: told in one notice
     # once none of their documents is waiting (services/notifications).
     ready_unannounced: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
-    # Queued again for another embedding model (maintenance/switch_embedding):
+    # Queued again for another embedding model (uv run switch-embedding-model):
     # it was ready before, so becoming ready again is not news to the owner.
     reindexing: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 

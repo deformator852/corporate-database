@@ -57,25 +57,25 @@ read without the key.
    deploy/deploy.sh build
    ```
 
-5. Download the AI models. This is the only step that needs the internet.
-
-   ```sh
-   deploy/deploy.sh models
-   ```
-
-6. Start Corpus. Database migrations run automatically.
+5. Start Corpus. Database migrations run automatically. The first start
+   downloads the AI models named in `backend/.env` (the embedding model and
+   the LLM, several GB, side by side). This is the only step that needs the
+   internet; later starts find the models on disk and skip it.
 
    ```sh
    deploy/deploy.sh up
    ```
 
-7. Create the first administrator. The command prints the password once.
+   The Corpus containers themselves never get internet access: only the
+   download jobs do, and only while they run.
+
+6. Create the first administrator. The command prints the password once.
 
    ```sh
    deploy/deploy.sh admin ADMIN-EMAIL
    ```
 
-8. Open `https://corpus.company.local` and sign in. Click your name at the
+7. Open `https://corpus.company.local` and sign in. Click your name at the
    top to open **My account**, and change the password. On the
    **System status** page, check that every component shows **Running**.
 
@@ -113,11 +113,34 @@ docker compose -f docker-compose.prod.yml exec proxy \
    deploy/deploy.sh build && deploy/deploy.sh up
    ```
 
-2. If you changed the AI models with `uv run configure`, download them again:
+2. If you changed the AI models with `uv run configure`, `deploy/deploy.sh up`
+   downloads the new ones before it starts Corpus. To fetch newer versions
+   of models already on disk, run `deploy/deploy.sh models`.
+
+## Using several languages
+
+Corpus can serve documents and users in several languages: English, Spanish
+and French. Each user picks the interface language in the header (the
+**Language** button), and reads the interface, error messages, notices and
+the assistant's answers in it. The choice is saved on the account.
+
+1. In `backend/`, run `uv run configure`. Answer yes to **Multilingual**,
+   enter the numbers of the languages (for example `1,2,3`), then choose the
+   default language. Users who have not chosen see the default one.
+2. Search must match a question with documents in any of these languages, so
+   the embedding model must be multilingual: `multilingual-e5-small`,
+   `multilingual-e5-base` or `bge-m3`. If the current model is for one
+   language (`bge-*-en`, `solon-*`), switch it as described in
+   [Changing the embedding model](#changing-the-embedding-model).
+3. Rebuild and restart. The interface is built with its languages, so a
+   change needs a new build:
 
    ```sh
-   deploy/deploy.sh models
+   deploy/deploy.sh build && deploy/deploy.sh up
    ```
+
+To go back to one language, run `uv run configure` again, answer no, and
+rebuild. The header then shows no language button.
 
 ## Configuring the chat capacity
 
@@ -143,6 +166,19 @@ Every user gets one answer at a time, whatever the settings.
    ```sh
    deploy/deploy.sh up
    ```
+
+## Viewing errors
+
+Corpus keeps every warning and error of the backend and the worker, with its
+traceback, encrypted in the database. To see them, open **Error log** in the
+sidebar; you need the `system.errors` permission (View error log), which the
+administrator role has. Filter by level (warning, error, critical) and by
+source (server or worker).
+
+Entries are deleted after 30 days. To change that, set
+`ERROR_LOG_RETENTION_DAYS` in `backend/.env` (`0` keeps them forever) and run
+`deploy/deploy.sh up`. The containers' console logs (`docker compose logs`)
+still show everything, including messages below warning level.
 
 ## Managing chat history
 
@@ -249,13 +285,20 @@ Vectors of two models cannot be compared, so another model means every
 document is embedded again. Corpus does not start if `EMBEDDING_MODEL` in
 `backend/.env` is not the model the documents are indexed with.
 
-1. Choose a model from the table in `uv run configure` (embedding model step)
-   or from `EMBEDDING_MODELS` in `backend/src/settings.py`.
-2. Switch to it. This downloads the model (the server needs the internet for
-   this step), rebuilds the search index and starts Corpus again:
+1. Choose a model from the table in [Where the models come from](#where-the-models-come-from).
+   Running the command without a model also lists them:
 
    ```sh
-   deploy/deploy.sh switch-model MODEL
+   cd backend && uv run switch-embedding-model
+   ```
+
+2. Switch to it. The command downloads the model (the server needs the
+   internet for this step), stops the backend and the worker, rebuilds the
+   search index, writes `EMBEDDING_MODEL` to `backend/.env` and starts the
+   backend and the worker again:
+
+   ```sh
+   cd backend && uv run switch-embedding-model MODEL
    ```
 
 While the documents are embedded again, the **Documents** page shows their
@@ -267,6 +310,41 @@ If the command stops midway, run it again: it continues where it stopped.
 
 To rebuild the index with the same model, for example after changing the
 chunk size with `uv run configure`, run the command with the current model.
+
+### Where the models come from
+
+The embedding models are open models published on the Hugging Face Hub
+(huggingface.co). Corpus knows the ones below; `EMBEDDING_MODEL` takes the
+name in the first column.
+
+| Name | Hugging Face model | Documents in | Vector size |
+|---|---|---|---|
+| `multilingual-e5-small` | `intfloat/multilingual-e5-small` | Many languages | 384 |
+| `multilingual-e5-base` | `intfloat/multilingual-e5-base` | Many languages | 768 |
+| `multilingual-e5-large` | `intfloat/multilingual-e5-large` | Many languages | 1024 |
+| `bge-m3` | `BAAI/bge-m3` | Many languages | 1024 |
+| `bge-small-en` | `BAAI/bge-small-en-v1.5` | English | 384 |
+| `bge-base-en` | `BAAI/bge-base-en-v1.5` | English | 768 |
+| `bge-large-en` | `BAAI/bge-large-en-v1.5` | English | 1024 |
+| `solon-base` | `OrdalieTech/Solon-embeddings-base-0.1` | French | 768 |
+| `solon-large` | `OrdalieTech/Solon-embeddings-large-0.1` | French | 1024 |
+
+Larger models usually find more relevant documents and need more memory and
+time to embed. `multilingual-e5-large` has no calibrated relevance threshold
+yet, so search with it keeps every hit, relevant or not.
+
+Where the files go:
+
+* **Production.** Only the `models` job downloads them, into the `hf_models`
+  Docker volume (`/models/hf` in the containers). It is the one container with
+  internet access, and runs only when you ask: `deploy/deploy.sh models`, or
+  `uv run switch-embedding-model`. The backend and the worker read the model
+  from that volume and never go online (`HF_HUB_OFFLINE=1`).
+* **Development.** The model is downloaded on first use into the Hugging Face
+  cache of your user, `~/.cache/huggingface` (or `HF_HOME` if you set it).
+
+A server without internet access can copy the volume's contents from another
+machine that downloaded the same model.
 
 ## Rotating the encryption key
 

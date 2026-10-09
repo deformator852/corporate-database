@@ -28,21 +28,6 @@ from services.search.rag import Rag
 from services.storage import ObjectStorage
 from services.text_search import contains
 
-ALLOWED_SUFFIXES = frozenset(
-    {
-        ".pdf",
-        ".docx",
-        ".doc",
-        ".txt",
-        ".odt",
-        ".xlsx",
-        ".csv",
-        ".xml",
-        ".json",
-        ".md",
-        ".mdx",
-    }
-)
 DOC_SUFFIX = ".doc"
 MAX_BYTES = 32 * 1024 * 1024
 # Queued and every processing step count as "processing".
@@ -63,6 +48,9 @@ CONTENT_TYPES = {
     ".md": "text/markdown",
     ".mdx": "text/markdown",
 }
+# A new file type needs a content type here, a check (upload_check.py) and an
+# extractor (parser.py).
+ALLOWED_SUFFIXES = frozenset(CONTENT_TYPES)
 
 
 # Saved chat answers list their sources as [{id, name, filename}]; they show
@@ -128,6 +116,32 @@ class CeleryDocumentQueue:
         process_document.delay(document_id)
 
 
+async def _read_upload(data: DocumentUploadSchema) -> bytes:
+    content = await data.file.read(MAX_BYTES + 1)
+    if not content:
+        raise AppError("invalid", "The file is empty.", status_code=400)
+    if len(content) > MAX_BYTES:
+        raise AppError("invalid", "The file is too large.", status_code=400)
+    return content
+
+
+async def _stored_file(original_name: str, content: bytes) -> tuple[str, str, bytes]:
+    """Filename, suffix and content to store, after checking the content
+    matches the type. A .doc is stored as .docx: converted, or as is when it
+    is a .docx renamed to .doc (Word opens both)."""
+    filename = Path(original_name).name
+    suffix = Path(original_name).suffix.lower()
+    if suffix != DOC_SUFFIX:
+        check_upload(content, suffix)
+        return filename, suffix, content
+    docx_name = str(Path(filename).with_suffix(".docx"))
+    if content.startswith(b"PK\x03\x04"):
+        check_upload(content, ".docx")
+        return docx_name, ".docx", content
+    check_upload(content, DOC_SUFFIX)
+    return docx_name, ".docx", await convert_doc_to_docx(content)
+
+
 class DocumentService:
     def __init__(
         self,
@@ -162,75 +176,58 @@ class DocumentService:
         data: DocumentUploadSchema,
         user_id: int,
     ) -> tuple[Document, bool]:
-        original_name = (data.file.filename or "").strip()
-        suffix = Path(original_name).suffix.lower()
-        if not original_name or suffix not in ALLOWED_SUFFIXES:
-            raise AppError(
-                "invalid",
-                "This file type is not supported.",
-                status_code=400,
-            )
-
+        """The new document, queued, and whether a .doc was converted."""
         try:
+            original_name = (data.file.filename or "").strip()
+            if not original_name or Path(original_name).suffix.lower() not in ALLOWED_SUFFIXES:
+                raise AppError("invalid", "This file type is not supported.", status_code=400)
             classification = data.classification.value
             allowed = await self._allowed(user_id)
             if classification not in allowed:
                 raise AppError("forbidden", "Insufficient permissions", status_code=403)
             await self._ensure_queue_room(user_id)
-            content = await data.file.read(MAX_BYTES + 1)
-            if not content:
-                raise AppError("invalid", "The file is empty.", status_code=400)
-            if len(content) > MAX_BYTES:
-                raise AppError("invalid", "The file is too large.", status_code=400)
+            content = await _read_upload(data)
             digest = keyed_digest(b"file:" + content)
             await self._refuse_duplicate(digest, allowed)
-            converted = suffix == DOC_SUFFIX
-            filename = Path(original_name).name
-            if converted:
-                filename = str(Path(filename).with_suffix(".docx"))
-                if content.startswith(b"PK\x03\x04"):
-                    # A .docx renamed to .doc, which Word opens as is.
-                    suffix = ".docx"
-            check_upload(content, suffix)
-            if suffix == DOC_SUFFIX:
-                content = await convert_doc_to_docx(content)
-                suffix = ".docx"
-
-            content_type = CONTENT_TYPES.get(suffix, "application/octet-stream")
-            object_key = self.storage.make_key()
+            filename, suffix, content = await _stored_file(original_name, content)
             document = Document(
                 name=data.name,
                 filename=filename,
-                content_type=content_type,
+                content_type=CONTENT_TYPES[suffix],
                 size=len(content),
                 status=DocumentStatus.QUEUED,
                 progress=0,
-                object_key=object_key,
+                object_key=self.storage.make_key(),
                 classification=classification,
                 content_digest=digest,
                 user_id=user_id,
             )
-            self.session.add(document)
-            await self.session.commit()
-            await self.session.refresh(document)
-            try:
-                await asyncio.to_thread(
-                    self.storage.put,
-                    key=object_key,
-                    content=content,
-                    content_type=content_type,
-                )
-            except Exception:
-                await self._delete_row(document)
-                try:
-                    await asyncio.to_thread(self.storage.delete, object_key)
-                except AppError:
-                    pass
-                raise
+            await self._store(document, content)
             await self._enqueue(document)
-            return document, converted
+            return document, Path(original_name).suffix.lower() == DOC_SUFFIX
         finally:
             await data.file.close()
+
+    async def _store(self, document: Document, content: bytes) -> None:
+        """The row, then the file; a file that cannot be saved takes the row
+        with it."""
+        self.session.add(document)
+        await self.session.commit()
+        await self.session.refresh(document)
+        try:
+            await asyncio.to_thread(
+                self.storage.put,
+                key=document.object_key,
+                content=content,
+                content_type=document.content_type,
+            )
+        except Exception:
+            await self._delete_row(document)
+            try:
+                await asyncio.to_thread(self.storage.delete, document.object_key)
+            except AppError:
+                pass
+            raise
 
     async def retry_document(self, document_id: int, user_id: int) -> Document:
         """Queues a failed document again; its file is still stored."""

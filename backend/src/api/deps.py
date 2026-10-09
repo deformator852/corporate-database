@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from exceptions import AppError
+from i18n import use_language
 from models import Permission, Role
 from models.rbac import role_permissions, role_users
 from models.user import User
@@ -96,6 +97,8 @@ async def get_current_user(
     user = await session.get(User, user_id)
     if user is None or not user_session_valid(user, payload):
         raise AppError("unauthorized", "Not authenticated", status_code=401)
+    if user.language is not None:
+        use_language(user.language)
     return user
 
 

@@ -1,16 +1,8 @@
 import {useMemo} from "react";
 import {Link, useLocation} from "react-router";
 
-import {Card} from "@/components/ui/card";
 import {Input} from "@/components/ui/input";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
+import {TableCell, TableRow} from "@/components/ui/table";
 import {cn} from "cn";
 import {NativeSelect} from "@/components/ui/native-select";
 import {useI18n} from "@/shared/i18n/I18nProvider";
@@ -19,6 +11,8 @@ import {useUrlParams} from "@/shared/lib/hooks/useUrlParams";
 import {usePageParam} from "@/shared/lib/hooks/usePageParam";
 import {useRequest} from "@/shared/lib/hooks/useRequest";
 import {ListPagination} from "@/shared/ui/ListPagination";
+import {DataTable} from "@/shared/ui/DataTable";
+import {PageHeader} from "@/shared/ui/PageHeader";
 import {StatusCard} from "@/shared/ui/StatusCard";
 import {localeIntlTag} from "@/shared/i18n/messages";
 import {can} from "@/shared/lib/api/me";
@@ -60,10 +54,7 @@ export function AuditLog() {
 
     return (
         <div className="stack stack--lg w-full">
-            <div className="stack">
-                <h1 id="audit-heading">{t("audit.title")}</h1>
-                <p className="max-w-xl text-muted-foreground">{t("audit.subtitle")}</p>
-            </div>
+            <PageHeader id="audit-heading" title={t("audit.title")} subtitle={t("audit.subtitle")}/>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <div className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -104,77 +95,64 @@ export function AuditLog() {
                 <StatusCard title={t("audit.emptyTitle")} />
             ) : (
                 <div className="stack">
-                    <Card className="gap-0 py-0">
-                        <Table aria-labelledby="audit-heading">
-                            <TableHeader>
-                                <TableRow className="hover:bg-transparent">
-                                    <TableHead className="px-4">{t("audit.table.time")}</TableHead>
-                                    <TableHead>{t("audit.table.user")}</TableHead>
-                                    <TableHead>{t("audit.table.action")}</TableHead>
-                                    <TableHead>{t("audit.table.target")}</TableHead>
-                                    <TableHead>{t("audit.table.details")}</TableHead>
-                                    <TableHead className="px-4">{t("audit.table.ip")}</TableHead>
+                    <DataTable
+                        aria-labelledby="audit-heading"
+                        columns={[
+                            {label: t("audit.table.time"), className: "px-4"},
+                            {label: t("audit.table.user")},
+                            {label: t("audit.table.action")},
+                            {label: t("audit.table.target")},
+                            {label: t("audit.table.details")},
+                            {label: t("audit.table.ip"), className: "px-4"},
+                        ]}
+                        loading={status === "loading"}
+                        loadingText={t("audit.loading")}
+                    >
+                        {items.map((entry) => {
+                            const details = describe(t, entry);
+                            return (
+                                <TableRow key={entry.id}>
+                                    <TableCell className="px-4 whitespace-nowrap text-muted-foreground tabular-nums">
+                                        {timeFormat.format(new Date(entry.created_at))}
+                                    </TableCell>
+                                    <TableCell className="max-w-48 truncate">
+                                        {canOpenUser && entry.actor_id != null ? (
+                                            <Link
+                                                to={`/users/${entry.actor_id}`}
+                                                state={linkState}
+                                                className="font-medium underline-offset-4 hover:underline"
+                                                aria-label={t("userDetail.openAria", {
+                                                    name: entry.actor_email ?? "",
+                                                })}
+                                            >
+                                                {entry.actor_email}
+                                            </Link>
+                                        ) : (
+                                            entry.actor_email ?? t("common.noDataDash")
+                                        )}
+                                    </TableCell>
+                                    <TableCell
+                                        className={cn(
+                                            "whitespace-nowrap font-medium",
+                                            entry.action === "auth.login_failed" &&
+                                                "text-destructive",
+                                        )}
+                                    >
+                                        {actionLabel(t, entry.action)}
+                                    </TableCell>
+                                    <TableCell className="max-w-48 truncate">
+                                        {entry.target_label ?? t("common.noDataDash")}
+                                    </TableCell>
+                                    <TableCell className="min-w-48 whitespace-normal text-muted-foreground">
+                                        {details || t("common.noDataDash")}
+                                    </TableCell>
+                                    <TableCell className="px-4 whitespace-nowrap text-muted-foreground tabular-nums">
+                                        {entry.ip ?? t("common.noDataDash")}
+                                    </TableCell>
                                 </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {status === "loading" ? (
-                                    <TableRow className="hover:bg-transparent">
-                                        <TableCell
-                                            colSpan={6}
-                                            className="px-4 py-8 text-muted-foreground"
-                                        >
-                                            {t("audit.loading")}
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    items.map((entry) => {
-                                        const details = describe(t, entry);
-                                        return (
-                                            <TableRow key={entry.id}>
-                                                <TableCell className="px-4 whitespace-nowrap text-muted-foreground tabular-nums">
-                                                    {timeFormat.format(new Date(entry.created_at))}
-                                                </TableCell>
-                                                <TableCell className="max-w-48 truncate">
-                                                    {canOpenUser && entry.actor_id != null ? (
-                                                        <Link
-                                                            to={`/users/${entry.actor_id}`}
-                                                            state={linkState}
-                                                            className="font-medium underline-offset-4 hover:underline"
-                                                            aria-label={t("userDetail.openAria", {
-                                                                name: entry.actor_email ?? "",
-                                                            })}
-                                                        >
-                                                            {entry.actor_email}
-                                                        </Link>
-                                                    ) : (
-                                                        entry.actor_email ?? t("common.noDataDash")
-                                                    )}
-                                                </TableCell>
-                                                <TableCell
-                                                    className={cn(
-                                                        "whitespace-nowrap font-medium",
-                                                        entry.action === "auth.login_failed" &&
-                                                            "text-destructive",
-                                                    )}
-                                                >
-                                                    {actionLabel(t, entry.action)}
-                                                </TableCell>
-                                                <TableCell className="max-w-48 truncate">
-                                                    {entry.target_label ?? t("common.noDataDash")}
-                                                </TableCell>
-                                                <TableCell className="min-w-48 whitespace-normal text-muted-foreground">
-                                                    {details || t("common.noDataDash")}
-                                                </TableCell>
-                                                <TableCell className="px-4 whitespace-nowrap text-muted-foreground tabular-nums">
-                                                    {entry.ip ?? t("common.noDataDash")}
-                                                </TableCell>
-                                            </TableRow>
-                                        );
-                                    })
-                                )}
-                            </TableBody>
-                        </Table>
-                    </Card>
+                            );
+                        })}
+                    </DataTable>
 
                     {data ? (
                         <ListPagination

@@ -1,8 +1,9 @@
 import {useEffect, useEffectEvent, useState} from "react";
 
 import {useI18n} from "@/shared/i18n/I18nProvider";
+import {PageHeader} from "@/shared/ui/PageHeader";
 import {useDebouncedSearch} from "@/shared/lib/hooks/useDebouncedSearch";
-import {usePageParam} from "@/shared/lib/hooks/usePageParam";
+import {refreshAfterDelete, usePageParam} from "@/shared/lib/hooks/usePageParam";
 import {useRequest} from "@/shared/lib/hooks/useRequest";
 import {useUrlParams} from "@/shared/lib/hooks/useUrlParams";
 import {can} from "@/shared/lib/api/me";
@@ -86,12 +87,7 @@ export function Documents() {
 
     return (
         <div className="stack stack--lg w-full">
-            <div className="stack">
-                <h1 id="documents-heading">{t("documents.title")}</h1>
-                <p className="max-w-xl text-muted-foreground">
-                    {t("documents.subtitle")}
-                </p>
-            </div>
+            <PageHeader id="documents-heading" title={t("documents.title")} subtitle={t("documents.subtitle")} />
 
             {canCreate ? (
                 <div className="w-full rounded-xl bg-card p-4 ring-1 ring-foreground/10">
@@ -181,12 +177,7 @@ export function Documents() {
                         return;
                     }
                     await deleteDocument(deleting.id);
-                    const items = data?.items ?? [];
-                    if (items.length === 1 && page > 1) {
-                        goToPage(page - 1);
-                        return;
-                    }
-                    reload();
+                    refreshAfterDelete(page, data?.items.length ?? 0, goToPage, reload);
                 }}
             />
         </div>

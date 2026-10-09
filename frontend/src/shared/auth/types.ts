@@ -4,4 +4,6 @@ export type SessionUser = {
     last_name: string;
     email: string;
     permissions: string[];
+    /** Chosen in the header; null: the default language. */
+    language: string | null;
 };

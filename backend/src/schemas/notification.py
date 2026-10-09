@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from models.notification import Notification, NotificationType
 from schemas.model_config import MODEL_CONFIG, ORM_MODEL_CONFIG
+from schemas.page import PageSchema
 
 
 class NotificationSchema(BaseModel):
@@ -21,14 +22,8 @@ class NotificationSchema(BaseModel):
         return cls.model_validate(notification)
 
 
-class NotificationListResponseSchema(BaseModel):
-    model_config = MODEL_CONFIG
-
+class NotificationListResponseSchema(PageSchema):
     items: list[NotificationSchema]
-    page: int
-    per_page: int
-    total: int
-    pages: int
     unread_count: int
 
     @classmethod
@@ -41,13 +36,11 @@ class NotificationListResponseSchema(BaseModel):
         total: int,
         unread_count: int,
     ) -> Self:
-        pages = (total + per_page - 1) // per_page if per_page and total else 0
         return cls(
             items=[NotificationSchema.from_notification(item) for item in notifications],
             page=page,
             per_page=per_page,
             total=total,
-            pages=pages,
             unread_count=unread_count,
         )
 

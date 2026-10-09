@@ -2,200 +2,93 @@ import {useState} from "react";
 import {Pencil, Plus, Trash2} from "lucide-react";
 
 import {Button} from "@/components/ui/button";
-import {Card} from "@/components/ui/card";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
+import {TableCell, TableRow} from "@/components/ui/table";
+import {deleteRole, getRolesPage} from "@/entities/role/api";
+import type {RoleListItem} from "@/entities/role/model";
 import {useI18n} from "@/shared/i18n/I18nProvider";
-import {usePageParam} from "@/shared/lib/hooks/usePageParam";
-import {useRequest} from "@/shared/lib/hooks/useRequest";
-import {ListPagination} from "@/shared/ui/ListPagination";
-import {StatusCard} from "@/shared/ui/StatusCard";
 import {can} from "@/shared/lib/api/me";
-import {getRolesPage} from "@/entities/role/api";
-import {
-    type RoleListItem,
-} from "@/entities/role/model";
+import {refreshAfterDelete, usePageParam} from "@/shared/lib/hooks/usePageParam";
+import {useRequest} from "@/shared/lib/hooks/useRequest";
 import {ConfirmDialog} from "@/shared/ui/ConfirmDialog";
-import {deleteRole} from "@/entities/role/api";
+import {DataTable} from "@/shared/ui/DataTable";
+import {ListPagination} from "@/shared/ui/ListPagination";
+import {PageHeader} from "@/shared/ui/PageHeader";
+import {StatusCard} from "@/shared/ui/StatusCard";
 import {RoleFormDialog} from "@pages/roles/ui/RoleFormDialog";
+
+/** What the signed-in user may do to the roles in the list. */
+type RoleActions = {
+    canUpdate: boolean;
+    canDelete: boolean;
+    edit: (role: RoleListItem) => void;
+    remove: (role: RoleListItem) => void;
+};
 
 export function RolesList() {
     const {t} = useI18n();
     const [page, goToPage] = usePageParam();
-
     const canCreate = can("roles.create");
-    const canUpdate = can("roles.update");
-    const canDelete = can("roles.delete");
-    const showActions = canUpdate || canDelete;
     const [formOpen, setFormOpen] = useState(false);
     const [editingRole, setEditingRole] = useState<RoleListItem | null>(null);
     const [deletingRole, setDeletingRole] = useState<RoleListItem | null>(null);
 
     const {status, data, error, reload} = useRequest(String(page), () => getRolesPage(page), t("roles.loadError"));
     const items = data?.items ?? [];
-    const total = data?.total ?? 0;
 
-    const openCreate = () => {
-        setEditingRole(null);
-        setFormOpen(true);
-    };
-
-    const openEdit = (role: RoleListItem) => {
+    const openForm = (role: RoleListItem | null) => {
         setEditingRole(role);
         setFormOpen(true);
     };
-
-    const handleSaved = () => {
-        reload();
+    const actions: RoleActions = {
+        canUpdate: can("roles.update"),
+        canDelete: can("roles.delete"),
+        edit: openForm,
+        remove: setDeletingRole,
     };
+    const showActions = actions.canUpdate || actions.canDelete;
 
-    const handleDeleted = () => {
-        if (items.length === 1 && page > 1) {
-            goToPage(page - 1);
-            return;
-        }
-        reload();
-    };
+    const createButton = (className?: string) =>
+        canCreate ? (
+            <Button type="button" className={className} onClick={() => openForm(null)}>
+                <Plus aria-hidden/>
+                {t("roles.create")}
+            </Button>
+        ) : null;
 
     return (
         <div className="stack stack--lg w-full">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="stack">
-                    <h1 id="roles-heading">{t("roles.title")}</h1>
-                    <p className="max-w-xl text-muted-foreground">
-                        {t("roles.subtitle")}
-                    </p>
-                </div>
-                {canCreate ? (
-                    <Button type="button" className="self-start" onClick={openCreate}>
-                        <Plus aria-hidden/>
-                        {t("roles.create")}
-                    </Button>
-                ) : null}
-            </div>
+            <PageHeader id="roles-heading" title={t("roles.title")} subtitle={t("roles.subtitle")} action={createButton("self-start")}/>
 
             {status === "error" ? (
                 <StatusCard title={t("roles.loadErrorTitle")} detail={error} onRetry={reload} />
-            ) : status === "ready" && total === 0 ? (
+            ) : status === "ready" && data?.total === 0 ? (
                 <StatusCard title={t("roles.emptyTitle")} detail={t("roles.emptyDescription")}>
-                    {canCreate ? (
-                        <Button type="button" onClick={openCreate}>
-                            <Plus aria-hidden/>
-                            {t("roles.create")}
-                        </Button>
-                    ) : null}
+                    {createButton()}
                 </StatusCard>
             ) : (
                 <div className="stack">
-                    <Card className="gap-0 py-0">
-                        <Table aria-labelledby="roles-heading">
-                            <TableHeader>
-                                <TableRow className="hover:bg-transparent">
-                                    <TableHead className="px-4">{t("common.name")}</TableHead>
-                                    <TableHead>{t("common.key")}</TableHead>
-                                    <TableHead>{t("roles.table.permissions")}</TableHead>
-                                    {showActions ? (
-                                        <TableHead className="px-4 text-right">
-                                            {t("common.actions")}
-                                        </TableHead>
-                                    ) : null}
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {status === "loading" ? (
-                                    <TableRow className="hover:bg-transparent">
-                                        <TableCell
-                                            colSpan={showActions ? 4 : 3}
-                                            className="px-4 py-8 text-muted-foreground"
-                                        >
-                                            {t("roles.loading")}
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    items.map((role) => {
-                                        const permissionNames = role.permissions
-                                            .map((permission) => permission.name)
-                                            .join(", ");
-                                        return (
-                                            <TableRow key={role.key}>
-                                                <TableCell className="px-4 font-medium">
-                                                    {role.name}
-                                                </TableCell>
-                                                <TableCell className="text-muted-foreground">
-                                                    {role.key}
-                                                </TableCell>
-                                                <TableCell
-                                                    className="max-w-xs truncate"
-                                                    title={permissionNames || undefined}
-                                                >
-                                                    {permissionNames || t("common.noDataDash")}
-                                                </TableCell>
-                                                {showActions ? (
-                                                    <TableCell className="px-4">
-                                                        <div className="flex justify-end gap-1">
-                                                            {canUpdate ? (
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    aria-label={t("roles.editAria", {
-                                                                        name: role.name,
-                                                                    })}
-                                                                    onClick={() => openEdit(role)}
-                                                                >
-                                                                    <Pencil aria-hidden/>
-                                                                    {t("common.edit")}
-                                                                </Button>
-                                                            ) : null}
-                                                            {canDelete ? (
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="destructive"
-                                                                    size="sm"
-                                                                    aria-label={
-                                                                        role.protected
-                                                                            ? t("roles.cannotDeleteAdmin")
-                                                                            : t("roles.deleteAria", {
-                                                                                  name: role.name,
-                                                                              })
-                                                                    }
-                                                                    disabled={role.protected}
-                                                                    title={
-                                                                        role.protected
-                                                                            ? t("roles.cannotDeleteAdmin")
-                                                                            : undefined
-                                                                    }
-                                                                    onClick={() =>
-                                                                        setDeletingRole(role)
-                                                                    }
-                                                                >
-                                                                    <Trash2 aria-hidden/>
-                                                                    {t("common.delete")}
-                                                                </Button>
-                                                            ) : null}
-                                                        </div>
-                                                    </TableCell>
-                                                ) : null}
-                                            </TableRow>
-                                        );
-                                    })
-                                )}
-                            </TableBody>
-                        </Table>
-                    </Card>
+                    <DataTable
+                        aria-labelledby="roles-heading"
+                        columns={[
+                            {label: t("common.name"), className: "px-4"},
+                            {label: t("common.key")},
+                            {label: t("roles.table.permissions")},
+                            showActions && {label: t("common.actions"), className: "px-4 text-right"},
+                        ]}
+                        loading={status === "loading"}
+                        loadingText={t("roles.loading")}
+                    >
+                        {items.map((role) => (
+                            <RoleRow key={role.key} role={role} actions={showActions ? actions : null}/>
+                        ))}
+                    </DataTable>
 
                     {data ? (
                         <ListPagination
                             page={page}
                             pages={data.pages}
                             perPage={data.per_page}
-                            total={total}
+                            total={data.total}
                             shown={items.length}
                             onPageChange={goToPage}
                         />
@@ -208,7 +101,7 @@ export function RolesList() {
                 open={formOpen}
                 role={editingRole}
                 onOpenChange={setFormOpen}
-                onSaved={handleSaved}
+                onSaved={reload}
             />
             <ConfirmDialog
                 open={deletingRole != null}
@@ -225,10 +118,60 @@ export function RolesList() {
                 onConfirm={async () => {
                     if (deletingRole) {
                         await deleteRole(deletingRole.key);
-                        handleDeleted();
+                        refreshAfterDelete(page, items.length, goToPage, reload);
                     }
                 }}
             />
         </div>
+    );
+}
+
+function RoleRow({role, actions}: {role: RoleListItem; actions: RoleActions | null}) {
+    const {t} = useI18n();
+    const permissionNames = role.permissions.map((permission) => permission.name).join(", ");
+
+    return (
+        <TableRow>
+            <TableCell className="px-4 font-medium">{role.name}</TableCell>
+            <TableCell className="text-muted-foreground">{role.key}</TableCell>
+            <TableCell className="max-w-xs truncate" title={permissionNames || undefined}>
+                {permissionNames || t("common.noDataDash")}
+            </TableCell>
+            {actions ? (
+                <TableCell className="px-4">
+                    <div className="flex justify-end gap-1">
+                        {actions.canUpdate ? (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                aria-label={t("roles.editAria", {name: role.name})}
+                                onClick={() => actions.edit(role)}
+                            >
+                                <Pencil aria-hidden/>
+                                {t("common.edit")}
+                            </Button>
+                        ) : null}
+                        {actions.canDelete ? (
+                            <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                // The Admin role cannot be deleted; the label says why.
+                                aria-label={
+                                    role.protected ? t("roles.cannotDeleteAdmin") : t("roles.deleteAria", {name: role.name})
+                                }
+                                title={role.protected ? t("roles.cannotDeleteAdmin") : undefined}
+                                disabled={role.protected}
+                                onClick={() => actions.remove(role)}
+                            >
+                                <Trash2 aria-hidden/>
+                                {t("common.delete")}
+                            </Button>
+                        ) : null}
+                    </div>
+                </TableCell>
+            ) : null}
+        </TableRow>
     );
 }

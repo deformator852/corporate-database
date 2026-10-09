@@ -2,9 +2,10 @@
 # Production commands for Corpus. Run from any folder.
 #
 #   deploy/deploy.sh build                  Build the backend and proxy images.
-#   deploy/deploy.sh models                 Download the AI models. The only
-#                                           command that uses the internet.
+#   deploy/deploy.sh models                 Download (or update) the AI models.
 #   deploy/deploy.sh up                     Start Corpus, or apply an update.
+#                                           Downloads the models first when
+#                                           missing: the only internet use.
 #   deploy/deploy.sh admin EMAIL [FIRST LAST]
 #                                           Create an administrator.
 #   deploy/deploy.sh backup [BACKUP-DIR]    Make an encrypted backup of all
@@ -13,9 +14,6 @@
 #   deploy/deploy.sh restore BACKUP         Replace all data with a backup.
 #   deploy/deploy.sh rotate-key             Re-encrypt the data with a new key.
 #                                           First run: uv run setup key rotate
-#   deploy/deploy.sh switch-model MODEL     Use another embedding model: every
-#                                           document is embedded again. Needs
-#                                           the internet to download MODEL.
 #   deploy/deploy.sh down                   Stop Corpus. The data is kept.
 #   deploy/deploy.sh logs [SERVICE]         Follow the logs.
 set -euo pipefail
@@ -37,9 +35,10 @@ if [[ $key_store == vault ]]; then
 fi
 compose() { docker compose --env-file "$ENV_FILE" -f docker-compose.prod.yml ${profiles[@]+"${profiles[@]}"} "$@"; }
 language=$(setting APP_LANGUAGE)
+languages=$(setting APP_LANGUAGES)
 project=${COMPOSE_PROJECT_NAME:-corpus}
 # Data volumes in a backup. Models (hf_models, ollama_data) are downloaded
-# again with `models`.
+# again by `up` when missing.
 VOLUMES=(minio_data qdrant_data)
 
 # Encrypts/decrypts a stream with DATA_ENCRYPTION_KEY inside the backend
@@ -55,16 +54,47 @@ volume_in() {
 }
 restart_app() { compose up -d --remove-orphans >/dev/null 2>&1 || echo "Start failed: run deploy/deploy.sh up" >&2; }
 
+# The embedding model and the LLM named in .env, downloaded (in parallel) when
+# not on disk yet. The app containers have no internet: without the models
+# every document fails and the chat cannot answer. Checks need no internet.
+ensure_models() {
+  local downloads=() llm name tag
+  if ! compose --profile setup run --rm --no-deps models python -m maintenance.download_models --check >/dev/null 2>&1; then
+    echo "Downloading the embedding model $(setting EMBEDDING_MODEL)..."
+    compose --profile setup run --rm models &
+    downloads+=($!)
+  fi
+  # Ollama keeps a manifest per model: library/NAME/TAG (TAG defaults to latest).
+  llm=$(setting LLM_MODEL)
+  name=${llm%%:*}
+  tag=latest
+  [[ $llm == *:* ]] && tag=${llm#*:}
+  [[ $name == */* ]] || name=library/$name
+  if ! compose --profile setup run --rm --no-deps --entrypoint test models-llm \
+      -f "/root/.ollama/models/manifests/registry.ollama.ai/$name/$tag" >/dev/null 2>&1; then
+    echo "Downloading the LLM $llm..."
+    compose --profile setup run --rm models-llm &
+    downloads+=($!)
+  fi
+  local pid
+  for pid in ${downloads[@]+"${downloads[@]}"}; do
+    wait "$pid" || { echo "A model download failed: check the internet connection and run deploy/deploy.sh up again." >&2; exit 1; }
+  done
+}
+
 case "${1:-up}" in
   build)
     docker build -t corpus-backend:latest backend
-    docker build -t corpus-proxy:latest --build-arg "APP_LANGUAGE=${language:-en}" frontend
+    docker build -t corpus-proxy:latest --build-arg "APP_LANGUAGE=${language:-en}" --build-arg "APP_LANGUAGES=$languages" frontend
     ;;
   models)
     compose --profile setup run --rm models
     compose --profile setup run --rm models-llm
     ;;
-  up) compose up -d --remove-orphans ;;
+  up)
+    ensure_models
+    compose up -d --remove-orphans
+    ;;
   admin) shift; compose run --rm --no-deps backend python -m maintenance.create_admin "$@" ;;
   rotate-key)
     # With Vault the keys are there, not in .env; rotate_key checks them itself.
@@ -82,18 +112,6 @@ case "${1:-up}" in
       compose up -d --remove-orphans
       echo "Rotation finished; the old key is no longer used."
     fi
-    ;;
-  switch-model)
-    model=${2:?usage: deploy/deploy.sh switch-model MODEL}
-    # Downloaded first: nothing changes if the name is wrong or the download fails.
-    compose --profile setup run --rm -e EMBEDDING_MODEL="$model" models
-    # Nothing may search or index with the old model while the index is rebuilt.
-    compose stop backend worker
-    trap restart_app EXIT
-    compose run --rm --no-deps -e EMBEDDING_MODEL="$model" backend python -m maintenance.switch_embedding "$model"
-    sed -i "s/^EMBEDDING_MODEL=.*/EMBEDDING_MODEL=$model/" "$ENV_FILE"
-    echo "Switched to $model. Documents are embedded again in the background;"
-    echo "the Documents page shows the progress, and search finds each one once it is done."
     ;;
   backup)
     dir=${2:-backups}/corpus-$(date +%Y%m%d-%H%M%S)
@@ -142,5 +160,5 @@ case "${1:-up}" in
     ;;
   down) compose down ;;
   logs) shift; compose logs -f "$@" ;;
-  *) sed -n '2,20p' "$0"; exit 1 ;;
+  *) sed -n '2,18p' "$0"; exit 1 ;;
 esac

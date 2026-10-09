@@ -3,13 +3,15 @@ from fastapi import APIRouter, Depends, Request, Response
 
 from api.deps import get_audit_service, get_auth_service, get_current_user
 from exceptions import AppError
+from i18n import use_language
 from models.audit import AuditAction
 from models.user import User
-from schemas.auth import LoginSchema, PasswordChangeSchema, SessionUserSchema
+from schemas.auth import LanguageSchema, LoginSchema, PasswordChangeSchema, SessionUserSchema
 from schemas.error import error_responses
 from security import config, revoke_tokens, security, set_auth_cookies
 from services.audit import AuditService
 from services.auth import AuthService
+from settings import languages
 
 router = APIRouter(
     prefix="/auth",
@@ -104,3 +106,20 @@ async def me(
     if loaded is None:
         raise AppError("unauthorized", "Not authenticated", status_code=401)
     return SessionUserSchema.from_user(loaded)
+
+
+@router.put(
+    "/language",
+    status_code=204,
+    responses=error_responses(400, 401),
+)
+async def set_language(
+    payload: LanguageSchema,
+    user: User = Depends(get_current_user),
+) -> None:
+    """The user's own interface language: answers, errors and notices
+    follow it."""
+    if payload.language not in languages():
+        raise AppError("invalid", "This language is not available.", status_code=400)
+    user.language = payload.language
+    use_language(user.language)

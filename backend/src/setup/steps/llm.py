@@ -12,15 +12,14 @@ from rich.progress import (
     TimeRemainingColumn,
     TransferSpeedColumn,
 )
-from rich.prompt import IntPrompt, Prompt
+from rich.prompt import Prompt
 from rich.table import Table
 
 from settings import LANGUAGES
 
 from ..env import ENV_PATH, env_value, upsert_env
-from .language import current_language
-
-_GIB = 1024**3
+from ..prompts import GIB, ask_int, gib, warn_if_no_room
+from .language import current_languages
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,10 +35,10 @@ class LlmOption:
     kv_bytes_per_token: int
 
 
-_LLAMA = LlmOption("llama3.1:8b", "8B, strong in EN/ES/FR", int(4.9 * _GIB), "8 GB", "16 GB", 69_632)
-_GEMMA_4B = LlmOption("gemma3:4b", "4B, light, 140+ languages", int(3.3 * _GIB), "6 GB", "8 GB", 73_984)
-_GEMMA_12B = LlmOption("gemma3:12b", "12B, best quality, 140+ languages", int(8.1 * _GIB), "12 GB", "16 GB", 208_896)
-_QWEN = LlmOption("qwen3:8b", "8B, 119 languages", int(5.2 * _GIB), "8 GB", "16 GB", 78_336)
+_LLAMA = LlmOption("llama3.1:8b", "8B, strong in EN/ES/FR", int(4.9 * GIB), "8 GB", "16 GB", 69_632)
+_GEMMA_4B = LlmOption("gemma3:4b", "4B, light, 140+ languages", int(3.3 * GIB), "6 GB", "8 GB", 73_984)
+_GEMMA_12B = LlmOption("gemma3:12b", "12B, best quality, 140+ languages", int(8.1 * GIB), "12 GB", "16 GB", 208_896)
+_QWEN = LlmOption("qwen3:8b", "8B, 119 languages", int(5.2 * GIB), "8 GB", "16 GB", 78_336)
 
 # APP_LANGUAGE → models that answer well in that language.
 OPTIONS: dict[str, tuple[LlmOption, ...]] = {
@@ -49,11 +48,12 @@ OPTIONS: dict[str, tuple[LlmOption, ...]] = {
 }
 
 
+def options_for(languages: list[str]) -> tuple[LlmOption, ...]:
+    """Models that answer well in every one of `languages`."""
+    return tuple(option for option in OPTIONS[languages[0]] if all(option in OPTIONS[code] for code in languages))
+
+
 BY_TAG = {option.tag: option for option in (_LLAMA, _GEMMA_4B, _GEMMA_12B, _QWEN)}
-
-
-def _fmt_bytes(n: int) -> str:
-    return f"{n / _GIB:.1f} GB"
 
 
 def _host() -> str:
@@ -101,11 +101,11 @@ def _pull(console: Console, tag: str) -> None:
         console.print(f"Pull it later: ollama pull {tag}")
 
 
-def _choose(console: Console, installed: set[str], language: str) -> str:
-    options = OPTIONS[language]
+def _choose(console: Console, installed: set[str], languages: list[str]) -> str:
+    options = options_for(languages)
     current = env_value(ENV_PATH, "LLM_MODEL")
     free = shutil.disk_usage("/").free
-    table = Table(title=f"LLM models for {LANGUAGES[language]}")
+    table = Table(title="LLM models for " + ", ".join(LANGUAGES[code] for code in languages))
     table.add_column("#", justify="right")
     table.add_column("Model")
     table.add_column("Disk")
@@ -120,7 +120,7 @@ def _choose(console: Console, installed: set[str], language: str) -> str:
         table.add_row(
             str(index),
             option.tag,
-            _fmt_bytes(option.disk_bytes),
+            gib(option.disk_bytes),
             option.ram_min,
             option.ram_recommended,
             "yes" if option.tag in installed else "no",
@@ -142,28 +142,21 @@ def _choose(console: Console, installed: set[str], language: str) -> str:
     console.print(table)
     if current:
         console.print(f"Current LLM: [bold]{current}[/]")
-    console.print(f"Free disk: {_fmt_bytes(free)}")
+    console.print(f"Free disk: {gib(free)}")
     if current and current not in catalog:
         default = other
 
+    choice = ask_int(console, "Choice", default, 1, other)
+    if choice < other:
+        selected = options[choice - 1]
+        if selected.tag not in installed:
+            warn_if_no_room(console, selected.disk_bytes, free)
+        return selected.tag
     while True:
-        choice = IntPrompt.ask("Choice", default=default, console=console)
-        if 1 <= choice <= len(options):
-            selected = options[choice - 1]
-            if selected.disk_bytes * 11 // 10 > free and selected.tag not in installed:
-                console.print(
-                    f"[yellow]This model needs about "
-                    f"{_fmt_bytes(selected.disk_bytes)}; "
-                    f"only {_fmt_bytes(free)} is free.[/]"
-                )
-            return selected.tag
-        if choice == other:
-            tag = Prompt.ask("Ollama model tag", console=console).strip()
-            if tag and not any(ch.isspace() for ch in tag):
-                return tag
-            console.print("Enter a single Ollama tag, for example llama3.1:8b.")
-            continue
-        console.print(f"Enter a number from 1 to {other}.")
+        tag = Prompt.ask("Ollama model tag", console=console).strip()
+        if tag and not any(ch.isspace() for ch in tag):
+            return tag
+        console.print("Enter a single Ollama tag, for example llama3.1:8b.")
 
 
 class LlmStep:
@@ -183,7 +176,7 @@ class LlmStep:
             "A larger LLM usually gives better answers from the documents "
             "that search already found. It does not change retrieval ranking."
         )
-        tag = _choose(console, _installed(), current_language())
+        tag = _choose(console, _installed(), current_languages())
         _pull(console, tag)
         upsert_env(ENV_PATH, "LLM_MODEL", tag)
         console.print(f"Wrote LLM_MODEL={tag} to {ENV_PATH}")

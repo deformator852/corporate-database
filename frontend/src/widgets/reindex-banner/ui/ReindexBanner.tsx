@@ -2,41 +2,31 @@ import {RefreshCw} from "lucide-react";
 import {useEffect, useState} from "react";
 
 import {useI18n} from "@/shared/i18n/I18nProvider";
-import {getReindexProgress, type ReindexProgress} from "@/widgets/reindex-banner/api/reindex";
-
-// A switch starts rarely: checked now and then; while it runs, more often.
-const IDLE_MS = 60_000;
-const ACTIVE_MS = 15_000;
+import {connectSocket} from "@/shared/lib/ws";
+import {isReindexProgress, reindexSocketUrl, type ReindexProgress} from "@/widgets/reindex-banner/api/reindex";
 
 /** A strip over every page while documents are embedded again for a new
- * embedding model: until then answers may miss some documents. */
+ * embedding model: until then answers may miss some documents. The server
+ * pushes the progress as documents move on, and again after a reconnect. */
 export function ReindexBanner() {
     const {t} = useI18n();
     const [progress, setProgress] = useState<ReindexProgress | null>(null);
 
-    useEffect(() => {
-        let timer: number | undefined;
-        let stopped = false;
-        const check = (active: boolean) => {
-            timer = window.setTimeout(poll, active ? ACTIVE_MS : IDLE_MS);
-        };
-        const poll = () => {
-            void getReindexProgress()
-                .then((next) => {
-                    if (!stopped) {
-                        setProgress(next);
-                        check(next.active);
-                    }
-                })
-                // Not worth an error of its own: the next check tries again.
-                .catch(() => !stopped && check(false));
-        };
-        poll();
-        return () => {
-            stopped = true;
-            window.clearTimeout(timer);
-        };
-    }, []);
+    useEffect(
+        () =>
+            connectSocket(reindexSocketUrl(), (raw) => {
+                let payload: unknown;
+                try {
+                    payload = JSON.parse(raw);
+                } catch {
+                    return;
+                }
+                if (isReindexProgress(payload)) {
+                    setProgress(payload);
+                }
+            }),
+        [],
+    );
 
     if (!progress?.active) {
         return null;

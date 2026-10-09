@@ -1,5 +1,6 @@
 import {
     Activity,
+    Bug,
     FileText,
     House,
     KeyRound,
@@ -33,4 +34,5 @@ export const CORE_NAV: NavItem[] = [
     {to: "/feedback", labelKey: "nav.feedback", end: true, can: "chat.feedback", icon: MessageSquareWarning},
     {to: "/audit", labelKey: "nav.audit", end: true, can: "audit.list", icon: ScrollText},
     {to: "/system", labelKey: "nav.system", end: true, can: "system.view", icon: Activity},
+    {to: "/errors", labelKey: "nav.errorLog", end: true, can: "system.errors", icon: Bug},
 ];

@@ -123,6 +123,38 @@ describe("System status", () => {
     });
 });
 
+describe("Error log", () => {
+    const ERROR = {
+        id: 7, created_at: "2026-09-30T10:00:00Z", level: "error", source: "worker",
+        logger: "tasks.document", message: "Processing failed", traceback: "Traceback (most recent call last):\nValueError: bad page",
+    };
+
+    it("lists errors with their traceback and filters by level", async () => {
+        const {user, server} = renderApp("/errors", sessionUser(["system.errors"]), (s) =>
+            s.on("GET", "/system/errors", (req: ApiRequest) => {
+                const items = req.params.level === "warning" ? [] : [ERROR];
+                return {items, page: 1, per_page: 25, total: items.length, pages: 1};
+            }),
+        );
+
+        const entry = (await screen.findByText("Processing failed")).closest("li") as HTMLElement;
+        expect(within(entry).getByText("Worker")).toBeInTheDocument();
+        expect(within(entry).getByText("tasks.document")).toBeInTheDocument();
+        await user.click(within(entry).getByText("Traceback"));
+        expect(screen.getByText(/ValueError: bad page/)).toBeVisible();
+
+        await user.selectOptions(screen.getByRole("combobox", {name: "Level"}), "warning");
+        expect(await screen.findByText("No errors")).toBeInTheDocument();
+        expect(server.sent("GET", "/system/errors").at(-1)?.params.level).toBe("warning");
+    });
+
+    it("is hidden without its permission", async () => {
+        renderApp("/errors", sessionUser(["system.view"]));
+        expect(await screen.findByText(/not found/i)).toBeInTheDocument();
+        expect(screen.queryByRole("link", {name: "Error log"})).not.toBeInTheDocument();
+    });
+});
+
 describe("Notifications", () => {
     const NOTE = {id: 5, user_id: 1, type: "document.completed", message: '"Travel policy" is ready.', read: false, created_at: "2026-09-30T10:00:00Z"};
 

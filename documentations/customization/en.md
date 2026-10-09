@@ -308,7 +308,7 @@ cookies.
 A route with the same `path` replaces the core page, and `index: true`
 replaces Home. The core paths are `index` (Home), `documents`, `users`,
 `users/:userId`, `roles`, `permissions`, `feedback`, `chat-history`,
-`chat-history/:conversationId`, `account`, `audit` and `system`.
+`chat-history/:conversationId`, `account`, `audit`, `system` and `errors`.
 
 ```tsx
 routes: [{path: "users", Component: MyUsersPage}],
@@ -334,8 +334,10 @@ nav: [{to: "/documents", labelKey: "custom.nav.files", end: true, can: "document
 * You can override core keys, for example `"nav.documents": "Files"`.
 * The languages are `en`, `es` and `fr`. A missing key falls back to `en`,
   then to the key itself.
-* The interface uses the system language chosen in `uv run setup`
-  (`APP_LANGUAGE` in `backend/.env`).
+* The interface uses the languages chosen in `uv run setup` or
+  `uv run configure` (`APP_LANGUAGE`, the default, and `APP_LANGUAGES`, which
+  users switch between in the header, in `backend/.env`). Give your keys a
+  value for each of them.
 
 ## Adding themes
 

@@ -1,11 +1,11 @@
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import IntPrompt
 from rich.table import Table
 
 from settings import DEFAULT_CHAT_QUESTIONS, DEFAULT_LLM_PARALLEL, MAX_LLM_PARALLEL
 
 from ..env import ENV_PATH, env_value, upsert_env
+from ..prompts import ask_int
 from .llm import BY_TAG
 
 _GIB = 1024**3
@@ -35,14 +35,6 @@ def _int_env(key: str, default: int) -> int:
         return default
 
 
-def _ask(console: Console, label: str, default: int, low: int, high: int) -> int:
-    while True:
-        value = IntPrompt.ask(label, default=default, console=console)
-        if low <= value <= high:
-            return value
-        console.print(f"Enter a number from {low} to {high}.")
-
-
 class ChatStep:
     title = "Chat capacity"
 
@@ -53,7 +45,7 @@ class ChatStep:
         option = BY_TAG.get(model)
         per_answer = context * (option.kv_bytes_per_token if option else _UNKNOWN_KV_BYTES_PER_TOKEN)
 
-        questions = _ask(
+        questions = ask_int(
             console,
             "Questions per user per 10 minutes (0 = no limit)",
             _int_env("CHAT_QUESTIONS_PER_10_MIN", DEFAULT_CHAT_QUESTIONS),
@@ -67,7 +59,7 @@ class ChatStep:
         for count in (1, 2, 4, 8):
             table.add_row(str(count), f"up to {per_answer * count / _GIB:.1f} GB")
         console.print(table)
-        parallel = _ask(
+        parallel = ask_int(
             console,
             f"Simultaneous answers (1-{MAX_LLM_PARALLEL})",
             _int_env("LLM_PARALLEL", DEFAULT_LLM_PARALLEL),

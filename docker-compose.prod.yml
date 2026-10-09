@@ -25,6 +25,7 @@ x-db-env: &db-env
   QDRANT_PORT: "6333"
   QDRANT_API_KEY: ${QDRANT_API_KEY:?is empty; run uv run setup in backend/}
   APP_LANGUAGE: ${APP_LANGUAGE:-}
+  APP_LANGUAGES: ${APP_LANGUAGES:-}
   EMBEDDING_MODEL: ${EMBEDDING_MODEL:?is empty; run uv run setup in backend/}
 
 x-worker-env: &worker-env
@@ -232,6 +233,7 @@ services:
       <<: *worker-env
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?is empty; run uv run setup in backend/}
       CHAT_RETENTION_DAYS: ${CHAT_RETENTION_DAYS:-}
+      ERROR_LOG_RETENTION_DAYS: ${ERROR_LOG_RETENTION_DAYS:-}
       CHAT_QUESTIONS_PER_10_MIN: ${CHAT_QUESTIONS_PER_10_MIN:-}
       API_DOCS: "false"
     depends_on:

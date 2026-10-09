@@ -4,7 +4,9 @@ first administrator, model download, seeders."""
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from conftest import login, process, run, upload
@@ -97,7 +99,7 @@ def test_switching_the_embedding_model_embeds_every_document_again(client, make_
 
         fake = embedding.SentenceTransformer
         monkeypatch.setattr(embedding, "SentenceTransformer", Missing)
-        with pytest.raises(AppError, match="Download it first"):
+        with pytest.raises(AppError, match="that it is downloaded"):
             run(switch("bge-small-en", lambda _: None))
         assert (points() > 0, status(), run(index_model())) == (True, "completed", old_model)
         monkeypatch.setattr(embedding, "SentenceTransformer", fake)
@@ -109,15 +111,21 @@ def test_switching_the_embedding_model_embeds_every_document_again(client, make_
         assert points() == 0 and status() == "queued"
         assert run(index_model()) == "bge-small-en"
         run(verify())  # EMBEDDING_MODEL now names the index's model
-        assert client.get("/api/v1/system/reindex").json() == {"active": True, "percent": 0}  # every user's banner
-        process(document_id)  # what the worker does when it starts
+        headers = {"origin": "https://testserver", "cookie": f"my_token={client.cookies.get('my_token')}"}
+        with client.websocket_connect("/api/v1/system/reindex/ws", headers=headers) as banner:
+            assert banner.receive_json() == {"active": True, "percent": 0}  # every user's banner, at once
+            process(document_id)  # what the worker does when it starts
+            # Pushed as the document moves on, until the switch is over.
+            seen = [banner.receive_json()]
+            while seen[-1]["active"]:
+                seen.append(banner.receive_json())
+        assert seen[-1] == {"active": False, "percent": 100}
         assert points() > 0 and status() == "completed"
-        assert client.get("/api/v1/system/reindex").json() == {"active": False, "percent": 100}
         # Ready before: no "is ready" notice for it again.
         assert len(client.get("/api/v1/notifications").json()["items"]) == notices
 
         monkeypatch.setenv("EMBEDDING_MODEL", old_model)  # .env edited by hand
-        with pytest.raises(AppError, match="switch-model"):
+        with pytest.raises(AppError, match="switch-embedding-model"):
             run(verify())
         with pytest.raises(AppError, match="Unknown embedding model"):
             run(switch("no-such-model", lambda _: None))
@@ -128,6 +136,133 @@ def test_switching_the_embedding_model_embeds_every_document_again(client, make_
                 await save_index_model(session, old_model)
 
         run(restore())
+
+
+def _switch_embedding_model_command(monkeypatch, tmp_path, *, production: bool):
+    """switch_embedding_model with its .env in tmp_path and the running stack faked."""
+    import switch_embedding_model
+
+    env = tmp_path / ".env"
+    env.write_text("EMBEDDING_MODEL=multilingual-e5-small\n")
+    monkeypatch.setattr(switch_embedding_model, "ENV_PATH", env)
+    monkeypatch.setattr(switch_embedding_model, "production_running", lambda: production)
+    monkeypatch.setattr(sys, "argv", ["switch-embedding-model", "bge-small-en"])
+    return switch_embedding_model, env
+
+
+def test_switch_embedding_model_in_production_downloads_stops_rebuilds_and_starts(monkeypatch, tmp_path):
+    steps: list[tuple[str, ...]] = []
+    command, env = _switch_embedding_model_command(monkeypatch, tmp_path, production=True)
+    monkeypatch.setattr(command, "compose", lambda *args, **kwargs: steps.append(args) or "")
+
+    command.main()
+
+    assert [step[:4] for step in steps] == [
+        ("--profile", "setup", "run", "--rm"),  # download first: needs the internet
+        ("stop", "backend", "worker"),
+        ("run", "--rm", "--no-deps", "-e"),
+        ("up", "-d", "backend", "worker"),
+    ]
+    assert steps[0][-2:] == ("EMBEDDING_MODEL=bge-small-en", "models")
+    assert steps[2][-4:] == ("python", "-m", "maintenance.switch_embedding", "bge-small-en")
+    assert "EMBEDDING_MODEL=bge-small-en" in env.read_text()
+
+
+def test_compose_reads_env_from_the_file_not_from_what_was_loaded_earlier(monkeypatch, tmp_path):
+    import switch_embedding_model as command
+
+    env_file = tmp_path / ".env"
+    env_file.write_text("EMBEDDING_MODEL=multilingual-e5-base\nDB_USER=corporate\n")
+    monkeypatch.setattr(command, "ENV_PATH", env_file)
+    # Loaded at start, before the switch wrote the new model to the file.
+    monkeypatch.setenv("EMBEDDING_MODEL", "bge-base-en")
+    seen: dict[str, str] = {}
+    monkeypatch.setattr(command.subprocess, "run", lambda *a, env, **k: seen.update(env) or SimpleNamespace(stdout=""))
+
+    command.compose("up", "-d", "backend", "worker")
+
+    # Compose prefers the environment to --env-file: the stale value must not reach it.
+    assert "EMBEDDING_MODEL" not in seen and "DB_USER" not in seen
+    assert seen["PATH"] == os.environ["PATH"]
+
+
+def test_switch_embedding_model_starts_the_old_model_again_when_the_rebuild_fails(monkeypatch, tmp_path):
+    steps: list[tuple[str, ...]] = []
+    command, env = _switch_embedding_model_command(monkeypatch, tmp_path, production=True)
+
+    def compose(*args, **kwargs):
+        steps.append(args)
+        if args[0] == "run" and "backend" in args:
+            raise subprocess.CalledProcessError(1, ["docker", "compose", *args])
+        return ""
+
+    monkeypatch.setattr(command, "compose", compose)
+    with pytest.raises(SystemExit, match="Stopped"):
+        command.main()
+
+    assert steps[-1] == ("up", "-d", "backend", "worker")  # back up, with the index's own model
+    assert "EMBEDDING_MODEL=multilingual-e5-small" in env.read_text()
+
+
+def test_switch_embedding_model_in_development_stops_only_this_projects_backend_and_worker(monkeypatch, tmp_path):
+    import maintenance.switch_embedding as rebuild
+
+    calls: list[str] = []
+    command, env = _switch_embedding_model_command(monkeypatch, tmp_path, production=False)
+    # Programs named like the real ones: ours in backend/, another project's elsewhere.
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    for name in ("uvicorn", "celery"):
+        script = fake_bin / name
+        script.write_text(f"#!{sys.executable}\nimport time\ntime.sleep(60)\n")  # argv like the real ones
+        script.chmod(0o755)
+    ours = [
+        subprocess.Popen([str(fake_bin / "uvicorn"), "src.main:app", "--reload"], cwd=command.BACKEND_DIR),
+        subprocess.Popen([str(fake_bin / "celery"), "-A", "worker", "worker"], cwd=command.BACKEND_DIR / "src"),
+    ]
+    other = subprocess.Popen([str(fake_bin / "uvicorn"), "main:app"], cwd=tmp_path)
+    time.sleep(0.3)
+
+    def load_model(model, report):
+        calls.append("load")
+        assert all(process.poll() is None for process in ours)  # nothing stopped yet
+
+    async def switch(model, report):
+        calls.append("switch")
+        assert all(process.wait(timeout=5) is not None for process in ours)
+        return 1
+
+    monkeypatch.setattr(rebuild, "load_model", load_model)
+    monkeypatch.setattr(rebuild, "switch", switch)
+    try:
+        command.main()
+        assert calls == ["load", "switch"]
+        assert other.poll() is None  # another project's uvicorn keeps running
+        assert "EMBEDDING_MODEL=bge-small-en" in env.read_text()
+    finally:
+        for process in (*ours, other):
+            process.kill()
+            process.wait()
+
+
+def test_switch_embedding_model_lists_models_and_where_to_find_more(monkeypatch, tmp_path, capsys):
+    command, env = _switch_embedding_model_command(monkeypatch, tmp_path, production=True)
+    monkeypatch.setenv("COLUMNS", "200")
+    monkeypatch.setattr(sys, "argv", ["switch-embedding-model", "no-such-model"])
+    with pytest.raises(SystemExit):
+        command.main()
+    shown = capsys.readouterr().out
+    assert "Unknown embedding model 'no-such-model'" in shown
+    assert "https://huggingface.co/BAAI/bge-m3" in shown  # each model's card
+    assert "documentations/deployment.md" in shown and "mteb/leaderboard" in shown  # details, and other models
+    assert env.read_text() == "EMBEDDING_MODEL=multilingual-e5-small\n"  # nothing changed
+
+    monkeypatch.setattr(sys, "argv", ["switch-embedding-model"])
+    with pytest.raises(SystemExit):
+        command.main()
+    shown = capsys.readouterr().out
+    assert "Usage: uv run switch-embedding-model MODEL" in shown
+    assert "Current model: multilingual-e5-small" in shown  # from .env
 
 
 def test_rotation_refuses_keys_that_do_not_belong_to_the_data(infra, monkeypatch):
@@ -204,15 +339,51 @@ def test_first_administrator_is_created_once(capsys, monkeypatch, infra):  # inf
     monkeypatch.setattr(sys, "argv", ["create_admin", "not-an-email"])
     with pytest.raises(SystemExit):
         create_admin.main()
+    monkeypatch.setattr(sys, "argv", ["create_admin", "root@corp.invalid"])  # still a reserved name
+    with pytest.raises(SystemExit, match="Invalid email"):
+        create_admin.main()
+
+
+def test_an_internal_company_local_address_signs_in(capsys, monkeypatch, infra):
+    from fastapi.testclient import TestClient
+
+    import main
+    from maintenance import create_admin
+
+    # Active Directory domains are often company.local, reserved for mDNS.
+    monkeypatch.setattr(sys, "argv", ["create_admin", "It.Admin@Company.Local"])
+    create_admin.main()
+    password = capsys.readouterr().out.rsplit(": ", 1)[1].strip()
+
+    with TestClient(main.app, base_url="https://testserver") as fresh:
+        assert login(fresh, "it.admin@company.local", password).status_code == 200
 
 
 def test_model_download_fetches_the_configured_embedding_model(monkeypatch, capsys):
+    from huggingface_hub.errors import LocalEntryNotFoundError
+
     from maintenance import download_models
 
     fetched: list[str] = []
-    monkeypatch.setattr(download_models, "snapshot_download", lambda repo: fetched.append(repo) or "/models/x")
-    download_models.main()
+    on_disk: set[str] = set()
+
+    def snapshot_download(repo, local_files_only=False):
+        if local_files_only:
+            if repo not in on_disk:
+                raise LocalEntryNotFoundError("not cached")
+            return "/models/x"
+        fetched.append(repo)
+        on_disk.add(repo)
+        return "/models/x"
+
+    monkeypatch.setattr(download_models, "snapshot_download", snapshot_download)
+    # deploy.sh up checks first, offline, and downloads only what is missing.
+    with pytest.raises(SystemExit, match="not downloaded"):
+        download_models.main(["--check"])
+    download_models.main([])
     assert fetched == ["intfloat/multilingual-e5-small"] and "ready in /models/x" in capsys.readouterr().out
+    download_models.main(["--check"])
+    assert "is downloaded" in capsys.readouterr().out
 
 
 def test_seeders_prepare_permissions_roles_and_the_search_collection(infra):

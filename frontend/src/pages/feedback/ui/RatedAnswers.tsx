@@ -6,6 +6,7 @@ import type {AnswerRating} from "@/entities/chat/model";
 import {SourceList} from "@/entities/chat/SourceList";
 import type {UserDetailLinkState} from "@/entities/user/model";
 import {useI18n} from "@/shared/i18n/I18nProvider";
+import {PageHeader} from "@/shared/ui/PageHeader";
 import {localeIntlTag} from "@/shared/i18n/messages";
 import {can} from "@/shared/lib/api/me";
 import {usePageParam} from "@/shared/lib/hooks/usePageParam";
@@ -32,21 +33,21 @@ export function RatedAnswers() {
 
     return (
         <div className="stack stack--lg w-full">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div className="stack">
-                    <h1>{t("feedback.title")}</h1>
-                    <p className="max-w-xl text-muted-foreground">{t("feedback.subtitle")}</p>
-                </div>
-                <NativeSelect
-                    className="w-full sm:w-48"
-                    aria-label={t("feedback.show")}
-                    value={rating}
-                    onChange={(event) => updateParams({rating: event.target.value, page: "1"})}
-                >
-                    <NativeSelectOption value="down">{t("feedback.bad")}</NativeSelectOption>
-                    <NativeSelectOption value="up">{t("feedback.good")}</NativeSelectOption>
-                </NativeSelect>
-            </div>
+            <PageHeader
+                title={t("feedback.title")}
+                subtitle={t("feedback.subtitle")}
+                action={
+                    <NativeSelect
+                        className="w-full sm:w-48"
+                        aria-label={t("feedback.show")}
+                        value={rating}
+                        onChange={(event) => updateParams({rating: event.target.value, page: "1"})}
+                    >
+                        <NativeSelectOption value="down">{t("feedback.bad")}</NativeSelectOption>
+                        <NativeSelectOption value="up">{t("feedback.good")}</NativeSelectOption>
+                    </NativeSelect>
+                }
+            />
 
             {status === "error" ? (
                 <StatusCard title={t("feedback.loadErrorTitle")} detail={error} onRetry={reload} />

@@ -4,7 +4,7 @@ Vectors of two models cannot be compared, and models of the same size are
 not told apart by the collection, so the model's EMBEDDING_MODEL key is kept
 in `system_state`. The backend and the worker refuse to start when
 EMBEDDING_MODEL names another model: changing it needs every document
-embedded again (maintenance/switch_embedding.py).
+embedded again (`uv run switch-embedding-model`, src/switch_embedding_model).
 """
 
 from dataclasses import dataclass
@@ -75,7 +75,6 @@ async def verify_index_model(session: AsyncSession) -> None:
         "misconfigured",
         f"EMBEDDING_MODEL is {configured}, but the documents are indexed with {stored}. "
         f"Set EMBEDDING_MODEL back to {stored}, or switch the model: "
-        f"deploy/deploy.sh switch-model {configured} "
-        f"(development: cd backend/src && uv run python -m maintenance.switch_embedding {configured}).",
+        f"cd backend && uv run switch-embedding-model {configured}",
         status_code=500,
     )

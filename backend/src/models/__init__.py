@@ -4,6 +4,7 @@ from .chat_request import ChatRequest
 from .document import Document, DocumentClassification, DocumentStatus
 from .document_line import DocumentLine
 from .document_text import DocumentText
+from .error_log import ErrorLog
 from .notification import Notification, NotificationType
 from .rbac import Permission, Role
 from .revoked_token import RevokedToken
@@ -21,6 +22,7 @@ __all__ = [
     "DocumentStatus",
     "DocumentLine",
     "DocumentText",
+    "ErrorLog",
     "Notification",
     "NotificationType",
     "Permission",

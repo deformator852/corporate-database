@@ -33,6 +33,7 @@ dependencies = [
 [project.scripts]
 setup = "setup.app:main"
 configure = "configure:main"
+switch-embedding-model = "switch_embedding_model:main"
 
 [tool.uv]
 package = true

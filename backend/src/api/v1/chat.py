@@ -13,6 +13,7 @@ from fastapi import (
     status,
 )
 from pydantic import Field, TypeAdapter, ValidationError
+from sqlalchemy import select
 
 from api.deps import (
     get_audit_service,
@@ -23,8 +24,9 @@ from api.deps import (
     require_permission,
 )
 from api.ws import RECHECK_SECONDS, seconds_left, still_allowed
+from database import AsyncSessionLocal
 from exceptions import AppError
-from i18n import t
+from i18n import t, use_language
 from models.audit import AuditAction
 from models.user import User
 from schemas.chat import (
@@ -312,6 +314,9 @@ async def _on_client_message(
     embedder: EmbeddingModel,
     generator: OllamaGenerator,
 ) -> asyncio.Task[ChatAnswerSchema] | None:
+    # Read per message: the user may switch languages with the socket open.
+    async with AsyncSessionLocal() as session:
+        use_language(await session.scalar(select(User.language).where(User.id == user_id)))
     try:
         incoming = IncomingMessage.validate_json(raw)
     except ValidationError as exc:

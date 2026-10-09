@@ -26,7 +26,8 @@ shows you how to run it on a development machine.
 
 Open `http://localhost:5173`. The development server forwards `/api` requests
 and WebSockets to the backend. The interface language follows `APP_LANGUAGE`
-in `backend/.env`.
+in `backend/.env`; with several `APP_LANGUAGES`, users switch in the header.
+Restart the development server after changing them.
 
 ## Checking your changes
 

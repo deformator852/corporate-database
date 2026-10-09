@@ -5,6 +5,7 @@ import {createMemoryRouter, RouterProvider} from "react-router";
 import {routes} from "@/router";
 import type {SessionUser} from "@/shared/auth/types";
 import {I18nProvider} from "@/shared/i18n/I18nProvider";
+import type {Locale} from "@/shared/i18n/messages";
 import {ThemeProvider} from "@/theme/ThemeProvider";
 import {mockApi, reply, type MockApi} from "./api";
 
@@ -15,6 +16,7 @@ export function sessionUser(permissions: string[] = [], extra: Partial<SessionUs
         last_name: "Ruiz",
         email: "marta@acme.io",
         permissions,
+        language: null,
         ...extra,
     } as SessionUser;
 }
@@ -27,6 +29,8 @@ export function renderApp(
     path: string,
     user: SessionUser | null,
     script: (server: MockApi) => void = () => {},
+    // Whatever backend/.env enables, tests run in English unless they ask.
+    {locales = ["en"]}: {locales?: Locale[]} = {},
 ) {
     const server = mockApi();
     const signedOut = reply(401, {code: "unauthorized", message: "Not authenticated"});
@@ -34,11 +38,10 @@ export function renderApp(
     server.on("POST", "/auth/refresh", user ? {} : signedOut);
     server.on("GET", "/notifications", {items: [], page: 1, per_page: 20, total: 0, pages: 0, unread_count: 0});
     server.on("GET", "/chat/conversations", {items: [], page: 1, per_page: 30, total: 0, pages: 0});
-    server.on("GET", "/system/reindex", {active: false, percent: 100});
     script(server);
     const router = createMemoryRouter(routes, {initialEntries: [path]});
     const view = render(
-        <I18nProvider>
+        <I18nProvider locales={locales}>
             <ThemeProvider>
                 <RouterProvider router={router}/>
             </ThemeProvider>

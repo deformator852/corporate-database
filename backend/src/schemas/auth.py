@@ -26,6 +26,14 @@ class PasswordChangeSchema(BaseModel):
     _fits = field_validator("new_password")(check_password_fits)
 
 
+class LanguageSchema(BaseModel):
+    """The user's interface language, one of APP_LANGUAGES."""
+
+    model_config = MODEL_CONFIG
+
+    language: str = Field(max_length=8)
+
+
 class SessionUserSchema(BaseModel):
     model_config = ORM_MODEL_CONFIG
 
@@ -34,6 +42,8 @@ class SessionUserSchema(BaseModel):
     last_name: str
     email: Email
     permissions: list[str]
+    # None until the user picks one in the header: the default language.
+    language: str | None
 
     @classmethod
     def from_user(cls, user: User) -> Self:
@@ -42,5 +52,6 @@ class SessionUserSchema(BaseModel):
             first_name=user.first_name,
             last_name=user.last_name,
             email=user.email,
+            language=user.language,
             permissions=sorted({permission.key for role in user.roles for permission in role.permissions}),
         )

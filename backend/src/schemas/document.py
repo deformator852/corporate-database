@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from models.document import Document, DocumentClassification
 from schemas.model_config import MODEL_CONFIG, ORM_MODEL_CONFIG, UPLOAD_MODEL_CONFIG
+from schemas.page import PageSchema
 
 
 class DocumentListItemSchema(BaseModel):
@@ -25,14 +26,8 @@ class DocumentListItemSchema(BaseModel):
         return cls.model_validate(document)
 
 
-class DocumentListResponseSchema(BaseModel):
-    model_config = MODEL_CONFIG
-
+class DocumentListResponseSchema(PageSchema):
     items: list[DocumentListItemSchema]
-    page: int
-    per_page: int
-    total: int
-    pages: int
 
     @classmethod
     def from_page(
@@ -43,13 +38,11 @@ class DocumentListResponseSchema(BaseModel):
         per_page: int,
         total: int,
     ) -> Self:
-        pages = (total + per_page - 1) // per_page if per_page and total else 0
         return cls(
             items=[DocumentListItemSchema.from_document(document) for document in documents],
             page=page,
             per_page=per_page,
             total=total,
-            pages=pages,
         )
 
 

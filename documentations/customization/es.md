@@ -311,7 +311,7 @@ sesión.
 Una ruta con el mismo `path` reemplaza la página del núcleo, e `index: true`
 reemplaza el Inicio. Las rutas del núcleo son `index` (Inicio), `documents`,
 `users`, `users/:userId`, `roles`, `permissions`, `feedback`, `chat-history`,
-`chat-history/:conversationId`, `account`, `audit` y `system`.
+`chat-history/:conversationId`, `account`, `audit`, `system` y `errors`.
 
 ```tsx
 routes: [{path: "users", Component: MyUsersPage}],
@@ -339,8 +339,10 @@ nav: [{to: "/documents", labelKey: "custom.nav.files", end: true, can: "document
   `"nav.documents": "Archivos"`.
 * Los idiomas son `en`, `es` y `fr`. Una clave que falta usa `en` y, si
   tampoco existe, la propia clave.
-* La interfaz usa el idioma del sistema elegido en `uv run setup`
-  (`APP_LANGUAGE` en `backend/.env`).
+* La interfaz usa los idiomas elegidos en `uv run setup` o
+  `uv run configure` (`APP_LANGUAGE`, el predeterminado, y `APP_LANGUAGES`,
+  entre los que los usuarios cambian en la cabecera, en `backend/.env`). Dé
+  un valor a sus claves en cada uno de ellos.
 
 ## Añadir temas
 

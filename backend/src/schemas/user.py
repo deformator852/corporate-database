@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 from models.user import User
 from schemas.email import Email
 from schemas.model_config import MODEL_CONFIG, ORM_MODEL_CONFIG
+from schemas.page import PageSchema
 from schemas.role import RoleRefSchema
 from services.password import MAX_PASSWORD_BYTES, password_fits
 
@@ -37,14 +38,8 @@ class UserListItemSchema(BaseModel):
         )
 
 
-class UserListResponseSchema(BaseModel):
-    model_config = MODEL_CONFIG
-
+class UserListResponseSchema(PageSchema):
     items: list[UserListItemSchema]
-    page: int
-    per_page: int
-    total: int
-    pages: int
 
     @classmethod
     def from_page(
@@ -56,7 +51,6 @@ class UserListResponseSchema(BaseModel):
         total: int,
         admin_ids: set[int],
     ) -> Self:
-        pages = (total + per_page - 1) // per_page if per_page and total else 0
         last_admin_id = next(iter(admin_ids)) if len(admin_ids) == 1 else None
         return cls(
             items=[
@@ -69,7 +63,6 @@ class UserListResponseSchema(BaseModel):
             page=page,
             per_page=per_page,
             total=total,
-            pages=pages,
         )
 
 

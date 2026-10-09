@@ -4,9 +4,11 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-# Interface language, baked into the build (vite.config.ts).
+# Default interface language and the ones users switch between, baked into
+# the build (vite.config.ts).
 ARG APP_LANGUAGE=en
-ENV APP_LANGUAGE=$APP_LANGUAGE
+ARG APP_LANGUAGES=
+ENV APP_LANGUAGE=$APP_LANGUAGE APP_LANGUAGES=$APP_LANGUAGES
 RUN npm run build
 
 FROM caddy:2.11.4-alpine

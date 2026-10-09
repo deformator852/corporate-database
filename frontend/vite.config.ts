@@ -4,15 +4,18 @@ import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv } from "vite";
 import tailwindcss from "@tailwindcss/vite";
 
+function backendEnv(mode: string) {
+  return loadEnv(mode, path.resolve(import.meta.dirname, "../backend"), "APP_LANGUAGE");
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss()],
   define: {
-    // System language chosen by `uv run setup`; backend/.env is the single source.
-    "import.meta.env.APP_LANGUAGE": JSON.stringify(
-      loadEnv(mode, path.resolve(import.meta.dirname, "../backend"), "APP_LANGUAGE")
-        .APP_LANGUAGE ?? "",
-    ),
+    // Default and enabled languages chosen by `uv run setup`; backend/.env is
+    // the single source.
+    "import.meta.env.APP_LANGUAGE": JSON.stringify(backendEnv(mode).APP_LANGUAGE ?? ""),
+    "import.meta.env.APP_LANGUAGES": JSON.stringify(backendEnv(mode).APP_LANGUAGES ?? ""),
   },
   resolve: {
     alias: {

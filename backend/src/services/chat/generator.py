@@ -4,10 +4,11 @@ import httpx
 from ollama import AsyncClient, RequestError, ResponseError
 
 from exceptions import AppError
+from i18n import current_language
 from schemas.chat import ChatMessageSchema
 from services.chat.answer_sources import SOURCES_RULE, HideSourcesLine, OnDelta, sources_of
 from services.chat.context_document import ContextDocument
-from settings import LANGUAGES, language, llm_host, llm_model, llm_num_ctx
+from settings import LANGUAGES, llm_host, llm_model, llm_num_ctx
 
 _TIMEOUT = httpx.Timeout(180.0)
 
@@ -69,7 +70,7 @@ class OllamaGenerator:
         payload = [
             {
                 "role": "system",
-                "content": _SYSTEM.format(language=LANGUAGES[language()]),
+                "content": _SYSTEM.format(language=LANGUAGES[current_language()]),
             },
             *_history(messages, num_ctx // 4 * _CHARS_PER_TOKEN),
         ]

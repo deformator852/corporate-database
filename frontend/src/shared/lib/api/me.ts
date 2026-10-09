@@ -16,6 +16,11 @@ export async function signOut(): Promise<void> {
     }
 }
 
+/** The user's interface language: the server answers and notifies in it. */
+export async function saveLanguage(language: string): Promise<void> {
+    await api.put("/auth/language", {language});
+}
+
 export function can(permission: string, user = useSessionStore.getState().user) {
     return user?.permissions.includes(permission) ?? false;
 }

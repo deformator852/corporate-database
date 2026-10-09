@@ -241,9 +241,30 @@ def test_key_command_needs_a_key(env):
 def test_language_step(env, answers):
     from setup.steps.language import LanguageStep
 
-    answers.extend([9, 3])  # out of range, then French
+    answers.extend([False, 9, 3])  # one language: out of range, then French
     LanguageStep().run(_console())
-    assert _values(env)["APP_LANGUAGE"] == "fr"
+    assert (_values(env)["APP_LANGUAGE"], _values(env)["APP_LANGUAGES"]) == ("fr", "fr")
+
+    # Several: at least two, then the default among them.
+    answers.extend([True, "2", "9,1", "1,2", 2])
+    LanguageStep().run(_console())
+    assert (_values(env)["APP_LANGUAGE"], _values(env)["APP_LANGUAGES"]) == ("es", "es,en")
+
+    answers.extend([None, None, None])  # the defaults keep the choice
+    LanguageStep().run(_console())
+    assert (_values(env)["APP_LANGUAGE"], _values(env)["APP_LANGUAGES"]) == ("es", "es,en")
+
+
+def test_several_languages_offer_models_for_all_of_them():
+    from setup.steps import embedding, llm
+
+    assert [option.key for option in embedding.options_for(["en", "fr"])] == [
+        "multilingual-e5-small",
+        "multilingual-e5-base",
+        "bge-m3",
+    ]
+    assert [option.key for option in embedding.options_for(["en"])][0] == "bge-small-en"
+    assert llm.options_for(["en", "es", "fr"]) == llm.OPTIONS["en"]
 
 
 def test_chat_capacity_step(env, answers):
@@ -329,7 +350,7 @@ def test_setup_and_configure_run_their_steps(env, answers, monkeypatch, capsys):
     ran: list[list[str]] = []
     monkeypatch.setattr(configure, "run", lambda steps, *a, **k: ran.append([s.title for s in steps]))
     configure.main()
-    assert ran == [["LLM model", "Chat capacity", "Chunk size", "Encryption key storage"]]
+    assert ran == [["System language", "LLM model", "Chat capacity", "Chunk size", "Encryption key storage"]]
 
     env.write_text("DATA_ENCRYPTION_KEY=" + "k" * 40 + "\n")
     monkeypatch.setattr(sys, "argv", ["setup", "key"])

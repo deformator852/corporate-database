@@ -1,7 +1,7 @@
 import asyncio
 
 from celery import Celery
-from celery.signals import worker_init
+from celery.signals import after_setup_logger, worker_init
 
 from extensions import task_modules
 from settings import rabbitmq_url
@@ -22,6 +22,15 @@ celery.conf.update(
     worker_concurrency=1,
     worker_prefetch_multiplier=1,
 )
+
+
+@after_setup_logger.connect
+def store_errors(**_kwargs: object) -> None:
+    """Failed tasks and logged warnings go to the error log page. After
+    Celery's own logging setup, which replaces the root logger's handlers."""
+    from services import error_log
+
+    error_log.install("worker")
 
 
 @worker_init.connect

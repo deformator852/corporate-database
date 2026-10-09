@@ -311,7 +311,7 @@ cookies de session.
 Une route avec le même `path` remplace la page du noyau, et `index: true`
 remplace l'Accueil. Les chemins du noyau sont `index` (Accueil), `documents`,
 `users`, `users/:userId`, `roles`, `permissions`, `feedback`, `chat-history`,
-`chat-history/:conversationId`, `account`, `audit` et `system`.
+`chat-history/:conversationId`, `account`, `audit`, `system` et `errors`.
 
 ```tsx
 routes: [{path: "users", Component: MyUsersPage}],
@@ -340,8 +340,10 @@ nav: [{to: "/documents", labelKey: "custom.nav.files", end: true, can: "document
   `"nav.documents": "Fichiers"`.
 * Les langues sont `en`, `es` et `fr`. Une clé manquante utilise `en`, puis la
   clé elle-même.
-* L'interface utilise la langue du système choisie dans `uv run setup`
-  (`APP_LANGUAGE` dans `backend/.env`).
+* L'interface utilise les langues choisies dans `uv run setup` ou
+  `uv run configure` (`APP_LANGUAGE`, la langue par défaut, et
+  `APP_LANGUAGES`, entre lesquelles les utilisateurs basculent dans l'en-tête,
+  dans `backend/.env`). Donnez une valeur à vos clés dans chacune d'elles.
 
 ## Ajouter des thèmes
 

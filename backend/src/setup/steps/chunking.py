@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import Confirm, IntPrompt
+from rich.prompt import Confirm
 from rich.table import Table
 
 from settings import (
@@ -17,6 +17,7 @@ from settings import (
 )
 
 from ..env import ENV_PATH, env_value, upsert_env
+from ..prompts import ask_int
 
 # Rough page of a text document, for the disk estimate.
 _CHARS_PER_PAGE = 2_500
@@ -133,25 +134,12 @@ def _input_limits(spec: EmbeddingSpec) -> dict[str, int]:
 
 
 def _ask_custom(console: Console, size: int, overlap: int) -> tuple[int, int]:
-    while True:
-        size = IntPrompt.ask(
-            f"Chunk size, characters ({MIN_CHUNK_SIZE}-{MAX_CHUNK_SIZE})",
-            default=size,
-            console=console,
-        )
-        if MIN_CHUNK_SIZE <= size <= MAX_CHUNK_SIZE:
-            break
-        console.print(f"Enter a number from {MIN_CHUNK_SIZE} to {MAX_CHUNK_SIZE}.")
+    size = ask_int(
+        console, f"Chunk size, characters ({MIN_CHUNK_SIZE}-{MAX_CHUNK_SIZE})", size, MIN_CHUNK_SIZE, MAX_CHUNK_SIZE
+    )
     suggested = min(overlap, size // 2) if overlap else round(size * 0.18)
-    while True:
-        overlap = IntPrompt.ask(
-            f"Overlap, characters (0-{size // 2}; 10-20% recommended)",
-            default=suggested,
-            console=console,
-        )
-        if 0 <= overlap <= size // 2:
-            return size, overlap
-        console.print(f"Enter a number from 0 to {size // 2}.")
+    overlap = ask_int(console, f"Overlap, characters (0-{size // 2}; 10-20% recommended)", suggested, 0, size // 2)
+    return size, overlap
 
 
 class ChunkingStep:
@@ -212,14 +200,11 @@ class ChunkingStep:
             )
 
         while True:
-            choice = IntPrompt.ask("Choice", default=default, console=console)
-            if 1 <= choice <= len(PRESETS):
+            choice = ask_int(console, "Choice", default, 1, custom)
+            if choice < custom:
                 size, overlap = PRESETS[choice - 1].size, PRESETS[choice - 1].overlap
-            elif choice == custom:
-                size, overlap = _ask_custom(console, current_size, current_overlap)
             else:
-                console.print(f"Enter a number from 1 to {custom}.")
-                continue
+                size, overlap = _ask_custom(console, current_size, current_overlap)
             # The overlap is prepended, so a stored chunk is up to size + overlap.
             longest = size + overlap
             too_long = [LANGUAGES[code] for code, chars in limits.items() if longest > chars]

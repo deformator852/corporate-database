@@ -2,17 +2,10 @@ import {CircleAlert, FileText, Pencil, RotateCw, Trash2} from "lucide-react";
 import {useState} from "react";
 
 import {Button} from "@/components/ui/button";
-import {Card} from "@/components/ui/card";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
+import {TableCell, TableRow} from "@/components/ui/table";
 import {useI18n} from "@/shared/i18n/I18nProvider";
 import {ListPagination} from "@/shared/ui/ListPagination";
+import {DataTable} from "@/shared/ui/DataTable";
 import {StatusCard} from "@/shared/ui/StatusCard";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
 import {openDocumentFile} from "@/shared/lib/documentFile";
@@ -62,7 +55,6 @@ export function DocumentList({
     const total = data?.total ?? 0;
     const pages = data?.pages ?? 0;
     const hasActions = Boolean(actions.onEdit || actions.onProcessAgain || actions.onDelete);
-    const columns = hasActions ? 6 : 5;
 
     if (status === "error") {
         return (
@@ -86,44 +78,23 @@ export function DocumentList({
 
     return (
         <div className="stack">
-            <Card className="gap-0 py-0">
-                <Table aria-labelledby={headingId}>
-                    <TableHeader>
-                        <TableRow className="hover:bg-transparent">
-                            <TableHead className="px-4">{t("common.name")}</TableHead>
-                            <TableHead>{t("common.file")}</TableHead>
-                            <TableHead>{t("common.access")}</TableHead>
-                            <TableHead>{t("common.status")}</TableHead>
-                            <TableHead className="px-4">{t("common.progress")}</TableHead>
-                            {hasActions ? (
-                                <TableHead className="px-4">
-                                    <span className="sr-only">{t("common.actions")}</span>
-                                </TableHead>
-                            ) : null}
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {status === "loading" ? (
-                            <TableRow className="hover:bg-transparent">
-                                <TableCell
-                                    colSpan={columns}
-                                    className="px-4 py-8 text-muted-foreground"
-                                >
-                                    {t("documents.loading")}
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            items.map((document) => (
-                                <DocumentRow
-                                    key={document.id}
-                                    document={document}
-                                    actions={hasActions ? actions : null}
-                                />
-                            ))
-                        )}
-                    </TableBody>
-                </Table>
-            </Card>
+            <DataTable
+                aria-labelledby={headingId}
+                columns={[
+                    {label: t("common.name"), className: "px-4"},
+                    {label: t("common.file")},
+                    {label: t("common.access")},
+                    {label: t("common.status")},
+                    {label: t("common.progress"), className: "px-4"},
+                    hasActions && {label: <span className="sr-only">{t("common.actions")}</span>, className: "px-4"},
+                ]}
+                loading={status === "loading"}
+                loadingText={t("documents.loading")}
+            >
+                {items.map((document) => (
+                    <DocumentRow key={document.id} document={document} actions={hasActions ? actions : null} />
+                ))}
+            </DataTable>
             {data && pages > 1 ? (
                 <ListPagination
                     page={page}

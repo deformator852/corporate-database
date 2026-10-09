@@ -4,6 +4,7 @@ from typing import Literal, Self
 from pydantic import AwareDatetime, BaseModel, Field, field_validator, model_validator
 
 from schemas.model_config import MODEL_CONFIG
+from schemas.page import PageSchema
 
 # Documents a question may be limited to.
 MAX_CHAT_DOCUMENTS = 20
@@ -151,24 +152,16 @@ class ChatConversationItemSchema(BaseModel):
     updated_at: datetime
 
 
-class ChatConversationListSchema(BaseModel):
-    model_config = MODEL_CONFIG
-
+class ChatConversationListSchema(PageSchema):
     items: list[ChatConversationItemSchema]
-    page: int
-    per_page: int
-    total: int
-    pages: int
 
     @classmethod
     def from_page(cls, items: list, *, page: int, per_page: int, total: int) -> Self:
-        pages = (total + per_page - 1) // per_page if per_page and total else 0
         return cls(
             items=[ChatConversationItemSchema(id=c.id, title=c.title, updated_at=c.updated_at) for c in items],
             page=page,
             per_page=per_page,
             total=total,
-            pages=pages,
         )
 
 
@@ -220,14 +213,8 @@ class ChatReviewItemSchema(ChatConversationItemSchema):
     user: ChatUserSchema
 
 
-class ChatReviewListSchema(BaseModel):
-    model_config = MODEL_CONFIG
-
+class ChatReviewListSchema(PageSchema):
     items: list[ChatReviewItemSchema]
-    page: int
-    per_page: int
-    total: int
-    pages: int
 
     @classmethod
     def from_page(cls, items: list, *, page: int, per_page: int, total: int) -> Self:
@@ -246,7 +233,6 @@ class ChatReviewListSchema(BaseModel):
             page=page,
             per_page=per_page,
             total=total,
-            pages=(total + per_page - 1) // per_page if per_page and total else 0,
         )
 
 
@@ -292,14 +278,8 @@ class ChatFeedbackItemSchema(BaseModel):
     user: ChatUserSchema | None
 
 
-class ChatFeedbackListSchema(BaseModel):
-    model_config = MODEL_CONFIG
-
+class ChatFeedbackListSchema(PageSchema):
     items: list[ChatFeedbackItemSchema]
-    page: int
-    per_page: int
-    total: int
-    pages: int
 
     @classmethod
     def from_page(cls, items: list, *, page: int, per_page: int, total: int) -> Self:
@@ -319,5 +299,4 @@ class ChatFeedbackListSchema(BaseModel):
             page=page,
             per_page=per_page,
             total=total,
-            pages=(total + per_page - 1) // per_page if per_page and total else 0,
         )

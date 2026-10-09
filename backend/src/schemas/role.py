@@ -6,6 +6,7 @@ from models.rbac.constants import ADMIN_ROLE_KEY
 from models.rbac.role import Role
 from schemas.key import key_from_name
 from schemas.model_config import MODEL_CONFIG, ORM_MODEL_CONFIG
+from schemas.page import PageSchema
 
 
 class RoleRefSchema(BaseModel):
@@ -45,14 +46,8 @@ class RoleListItemSchema(BaseModel):
         )
 
 
-class RoleListResponseSchema(BaseModel):
-    model_config = MODEL_CONFIG
-
+class RoleListResponseSchema(PageSchema):
     items: list[RoleListItemSchema]
-    page: int
-    per_page: int
-    total: int
-    pages: int
 
     @classmethod
     def from_page(
@@ -63,13 +58,11 @@ class RoleListResponseSchema(BaseModel):
         per_page: int,
         total: int,
     ) -> Self:
-        pages = (total + per_page - 1) // per_page if per_page and total else 0
         return cls(
             items=[RoleListItemSchema.from_role(role) for role in roles],
             page=page,
             per_page=per_page,
             total=total,
-            pages=pages,
         )
 
 

@@ -18,6 +18,7 @@ import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
 import {cn} from "cn";
 import {useI18n} from "@/shared/i18n/I18nProvider";
+import {PageHeader} from "@/shared/ui/PageHeader";
 import {documentStatusKey} from "@/entities/document/model";
 import type {MessageKey} from "@/shared/i18n/messages";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
@@ -70,26 +71,32 @@ export function SystemStatusPage() {
 
     return (
         <div className="stack stack--lg w-full">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div className="stack">
-                    <h1>{t("system.title")}</h1>
-                    <p className="max-w-xl text-muted-foreground">{t("system.subtitle")}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                    {checkedAt ? (
-                        <span className="text-xs text-muted-foreground tabular-nums">
-                            {t("system.checkedAt", {time: checkedAt.toLocaleTimeString()})}
-                        </span>
-                    ) : null}
-                    <Button type="button" variant="outline" size="sm" disabled={loading} onClick={() => {
-                            setLoading(true);
-                            load();
-                        }}>
-                        <RefreshCw className={cn(loading && "animate-spin")} aria-hidden />
-                        {t("system.refresh")}
-                    </Button>
-                </div>
-            </div>
+            <PageHeader
+                title={t("system.title")}
+                subtitle={t("system.subtitle")}
+                action={
+                    <div className="flex items-center gap-3">
+                        {checkedAt ? (
+                            <span className="text-xs text-muted-foreground tabular-nums">
+                                {t("system.checkedAt", {time: checkedAt.toLocaleTimeString()})}
+                            </span>
+                        ) : null}
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={loading}
+                            onClick={() => {
+                                setLoading(true);
+                                load();
+                            }}
+                        >
+                            <RefreshCw className={cn(loading && "animate-spin")} aria-hidden />
+                            {t("system.refresh")}
+                        </Button>
+                    </div>
+                }
+            />
 
             {error ? (
                 <div role="alert" className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">

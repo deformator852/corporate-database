@@ -1,5 +1,6 @@
 import os
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from typing import Any, NoReturn
 from uuid import NAMESPACE_URL, uuid5
@@ -20,6 +21,7 @@ from qdrant_client.http.models import (
     PayloadField,
     PayloadSchemaType,
     PointStruct,
+    ScoredPoint,
     SparseVectorParams,
     VectorParams,
 )
@@ -80,26 +82,21 @@ def _qdrant_client() -> AsyncQdrantClient:
     )
 
 
-def _raise_unavailable(exc: Exception) -> NoReturn:
-    raise AppError(
-        "unavailable",
-        "Could not reach Qdrant.",
-        status_code=503,
-    ) from exc
-
-
 def _raise_conflict(message: str) -> NoReturn:
     raise AppError("conflict", message, status_code=409)
 
 
-def _raise_from_unexpected(exc: UnexpectedResponse) -> NoReturn:
-    if exc.status_code in {401, 403}:
-        raise AppError(
-            "forbidden",
-            "Qdrant rejected the request.",
-            status_code=403,
-        ) from exc
-    _raise_unavailable(exc)
+@asynccontextmanager
+async def _qdrant_errors() -> AsyncIterator[None]:
+    """Qdrant failures as AppError: rejected (403) or unreachable (503)."""
+    try:
+        yield
+    except UnexpectedResponse as exc:
+        if exc.status_code in {401, 403}:
+            raise AppError("forbidden", "Qdrant rejected the request.", status_code=403) from exc
+        raise AppError("unavailable", "Could not reach Qdrant.", status_code=503) from exc
+    except (RequestError, ResponseHandlingException) as exc:
+        raise AppError("unavailable", "Could not reach Qdrant.", status_code=503) from exc
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,7 +119,8 @@ class Rag:
         self.vector_size = embedding_model().dims
 
     async def ensure_collection(self) -> None:
-        try:
+        async with _qdrant_errors():
+            # Twice: another process may delete it between the two steps.
             for _ in range(2):
                 if not await self.client.collection_exists(COLLECTION_NAME):
                     await self._create_if_absent()
@@ -131,16 +129,21 @@ class Rag:
                     await self._ensure_indexes()
                     return
                 except UnexpectedResponse as exc:
-                    if exc.status_code == 404:
-                        continue
+                    if exc.status_code != 404:
+                        raise
+        _raise_conflict(f"Collection {COLLECTION_NAME} was not created.")
+
+    async def _if_indexed[T](self, operation: Callable[[], Awaitable[T]], missing: T) -> T:
+        """`operation` on the collection, or `missing` when there is none
+        yet: nothing is indexed, so there is nothing to read or change."""
+        async with _qdrant_errors():
+            try:
+                if await self.client.collection_exists(COLLECTION_NAME):
+                    return await operation()
+            except UnexpectedResponse as exc:
+                if exc.status_code != 404:  # deleted meanwhile
                     raise
-            _raise_conflict(f"Collection {COLLECTION_NAME} was not created.")
-        except AppError:
-            raise
-        except UnexpectedResponse as exc:
-            _raise_from_unexpected(exc)
-        except (RequestError, ResponseHandlingException) as exc:
-            _raise_unavailable(exc)
+        return missing
 
     async def upsert_chunks(
         self,
@@ -176,45 +179,29 @@ class Rag:
         ]
         if not points:
             return
-        try:
+        async with _qdrant_errors():
             await self.client.upsert(collection_name=COLLECTION_NAME, points=points)
-        except UnexpectedResponse as exc:
-            _raise_from_unexpected(exc)
-        except (RequestError, ResponseHandlingException) as exc:
-            _raise_unavailable(exc)
 
     async def update_document(self, document_id: int, *, name: str, classification: str) -> None:
         """New name and classification on every chunk of the document."""
-        try:
-            if not await self.client.collection_exists(COLLECTION_NAME):
-                return
-            await self.client.set_payload(
+        await self._if_indexed(
+            lambda: self.client.set_payload(
                 collection_name=COLLECTION_NAME,
                 payload={"name": name, "classification": classification},
                 points=_document_filter(document_id),
                 wait=True,
-            )
-        except UnexpectedResponse as exc:
-            if exc.status_code == 404:
-                return
-            _raise_from_unexpected(exc)
-        except (RequestError, ResponseHandlingException) as exc:
-            _raise_unavailable(exc)
+            ),
+            missing=None,
+        )
 
     async def delete_document(self, document_id: int) -> None:
-        try:
-            if not await self.client.collection_exists(COLLECTION_NAME):
-                return
-            await self.client.delete(
+        await self._if_indexed(
+            lambda: self.client.delete(
                 collection_name=COLLECTION_NAME,
                 points_selector=_document_filter(document_id),
-            )
-        except UnexpectedResponse as exc:
-            if exc.status_code == 404:
-                return
-            _raise_from_unexpected(exc)
-        except (RequestError, ResponseHandlingException) as exc:
-            _raise_unavailable(exc)
+            ),
+            missing=None,
+        )
 
     async def search(
         self,
@@ -238,38 +225,34 @@ class Rag:
                 must=[query_filter, FieldCondition(key="document_id", match=MatchAny(any=list(document_ids)))]
             )
         wanted = identifiers(question)
-        try:
-            if not await self.client.collection_exists(COLLECTION_NAME):
-                return []
-            result = await self.client.query_points(
+
+        async def query() -> tuple[list[ScoredPoint], list[ScoredPoint]]:
+            by_vector = await self.client.query_points(
                 collection_name=COLLECTION_NAME,
                 query=vector,
                 query_filter=query_filter,
                 limit=limit,
                 with_payload=True,
             )
-            by_keyword = None
-            if wanted:
-                by_keyword = await self.client.query_points(
-                    collection_name=COLLECTION_NAME,
-                    query=query_keywords(question),
-                    using=KEYWORDS,
-                    query_filter=query_filter,
-                    limit=limit,
-                    with_payload=True,
-                    with_vectors=[""],
-                )
-        except UnexpectedResponse as exc:
-            if exc.status_code == 404:
-                return []
-            _raise_from_unexpected(exc)
-        except (RequestError, ResponseHandlingException) as exc:
-            _raise_unavailable(exc)
+            if not wanted:
+                return by_vector.points, []
+            by_keyword = await self.client.query_points(
+                collection_name=COLLECTION_NAME,
+                query=query_keywords(question),
+                using=KEYWORDS,
+                query_filter=query_filter,
+                limit=limit,
+                with_payload=True,
+                with_vectors=[""],
+            )
+            return by_vector.points, by_keyword.points
+
+        vector_points, keyword_points = await self._if_indexed(query, missing=([], []))
         found: dict[object, SearchHit] = {}
-        for point in result.points:
+        for point in vector_points:
             if (hit := _hit(point.payload, point.score)) is not None:
                 found[point.id] = hit
-        for point in by_keyword.points if by_keyword is not None else []:
+        for point in keyword_points:
             # Its cosine, to rank it with the vector hits.
             hit = found.get(point.id) or _hit(point.payload, _cosine(vector, point.vector))
             if hit is not None and holds(hit.text, wanted):
@@ -281,8 +264,8 @@ class Rag:
         missing ones are left out."""
         if not indexes:
             return {}
-        try:
-            records, _offset = await self.client.scroll(
+        records, _offset = await self._if_indexed(
+            lambda: self.client.scroll(
                 collection_name=COLLECTION_NAME,
                 scroll_filter=Filter(
                     must=[
@@ -293,13 +276,9 @@ class Rag:
                 limit=len(indexes),
                 with_payload=True,
                 with_vectors=False,
-            )
-        except UnexpectedResponse as exc:
-            if exc.status_code == 404:
-                return {}
-            _raise_from_unexpected(exc)
-        except (RequestError, ResponseHandlingException) as exc:
-            _raise_unavailable(exc)
+            ),
+            missing=([], None),
+        )
         found: dict[int, tuple[str, int]] = {}
         for record in records:
             if (hit := _hit(record.payload, 0.0)) is not None:

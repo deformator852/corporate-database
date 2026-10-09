@@ -4,6 +4,7 @@ import {
     NOTIFICATIONS_PER_PAGE,
     type NotificationListPage,
 } from "@/widgets/notifications/model/notifications";
+import {apiSocketUrl} from "@/shared/lib/ws";
 
 export async function getNotificationsPage(
     page: number,
@@ -51,8 +52,7 @@ export async function clearNotifications(): Promise<void> {
 }
 
 export function notificationsSocketUrl(): string {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${protocol}//${window.location.host}/api/v1/notifications/ws`;
+    return apiSocketUrl("/notifications/ws");
 }
 
 function readCookie(name: string): string | undefined {

@@ -1,13 +1,13 @@
 import {zodResolver} from "@hookform/resolvers/zod";
 import {CircleAlert, FileUp} from "lucide-react";
-import {useMemo, useRef, useState, type DragEvent} from "react";
+import {useMemo, useRef, useState, type DragEvent, type RefObject} from "react";
 import {useForm, useWatch} from "react-hook-form";
 
 import {Button} from "@/components/ui/button";
 import {NativeSelect} from "@/components/ui/native-select";
 import {Field, FieldError, FieldGroup, FieldLabel} from "@/components/ui/field";
 import {Input} from "@/components/ui/input";
-import {useI18n} from "@/shared/i18n/I18nProvider";
+import {useI18n, type TranslateFn} from "@/shared/i18n/I18nProvider";
 import {documentClassificationKey} from "@/entities/document/model";
 import {can} from "@/shared/lib/api/me";
 import {uploadFiles} from "@pages/documents/model/uploadFiles";
@@ -30,7 +30,6 @@ type DocumentUploadFormProps = {
 export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
     const {t} = useI18n();
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [dragging, setDragging] = useState(false);
     const [success, setSuccess] = useState<string | null>(null);
     // Files sent so far while uploading several, one request per file.
     const [sent, setSent] = useState(0);
@@ -95,29 +94,6 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
         );
     }
 
-    function handleDragOver(event: DragEvent<HTMLDivElement>) {
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "copy";
-        setDragging(true);
-    }
-
-    function handleDragLeave(event: DragEvent<HTMLDivElement>) {
-        if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
-            return;
-        }
-        setDragging(false);
-    }
-
-    function handleDrop(event: DragEvent<HTMLDivElement>) {
-        event.preventDefault();
-        event.stopPropagation();
-        setDragging(false);
-        if (isSubmitting) {
-            return;
-        }
-        assignFiles([...event.dataTransfer.files]);
-    }
-
     async function onSubmit(data: DocumentUploadFormData) {
         setSuccess(null);
         const {failed, converted} = await uploadFiles({
@@ -135,13 +111,7 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
         setFailures(data.files.length > 1 ? failed : new Map());
         if (failed.size === 0) {
             reset({name: "", classification: data.classification, files: []});
-            setSuccess(
-                data.files.length > 1
-                    ? t("documents.upload.successMany", {count: data.files.length})
-                    : converted
-                      ? t("documents.upload.successConverted")
-                      : t("documents.upload.success"),
-            );
+            setSuccess(successMessage(t, data.files.length, converted));
             return;
         }
         setValue("files", [...failed.keys()]);
@@ -233,49 +203,17 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
 
                 <Field data-invalid={!!fileError || undefined}>
                     <FieldLabel htmlFor="document-file">{t("common.file")}</FieldLabel>
-                    <div
-                        className={`relative cursor-pointer rounded-lg border border-dashed px-4 py-6 text-center transition-colors ${
-                            dragging
-                                ? "border-ring bg-accent"
-                                : "border-input"
-                        }`}
-                        onClick={(event) => {
-                            // The input's own click bubbles up here: do not reopen it.
-                            if (!isSubmitting && event.target !== fileInputRef.current) {
-                                fileInputRef.current?.click();
-                            }
-                        }}
-                        onDragOver={handleDragOver}
-                        onDragLeave={handleDragLeave}
-                        onDrop={handleDrop}
-                    >
-                        <FileUp className="mx-auto mb-2 size-5 text-muted-foreground" aria-hidden />
-                        <p className="text-sm">{t("documents.upload.dropPrompt")}</p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            {several
+                    <FileDropZone
+                        inputRef={fileInputRef}
+                        disabled={isSubmitting}
+                        summary={
+                            several
                                 ? t("documents.upload.filesSelected", {count: files.length})
-                                : files.length === 1
-                                  ? files[0].name
-                                  : t("documents.upload.dropHint")}
-                        </p>
-                        {/* Inside the drop zone, not a direct child of Field: Field gives
-                            direct .sr-only children their natural width, which widened
-                            the page on phones. */}
-                        <input
-                            id="document-file"
-                            ref={fileInputRef}
-                            type="file"
-                            multiple
-                            accept={DOCUMENT_ACCEPT}
-                            disabled={isSubmitting}
-                            className="sr-only"
-                            aria-invalid={!!fileError || undefined}
-                            aria-describedby={fileError ? fileErrorId : undefined}
-                            onChange={(event) => {
-                                assignFiles([...(event.target.files ?? [])]);
-                            }}
-                        />
-                    </div>
+                                : (files[0]?.name ?? t("documents.upload.dropHint"))
+                        }
+                        errorId={fileError ? fileErrorId : undefined}
+                        onFiles={assignFiles}
+                    />
                     <FieldError id={fileErrorId} errors={[fileError ? {message: fileError} : undefined]} />
                     {listed ? (
                         <>
@@ -296,12 +234,90 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
             </FieldGroup>
 
             <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting
-                    ? several
-                        ? t("documents.upload.progress", {done: sent + 1, total: files.length})
-                        : t("common.uploading")
-                    : t("documents.upload.submit")}
+                {!isSubmitting
+                    ? t("documents.upload.submit")
+                    : several
+                      ? t("documents.upload.progress", {done: sent + 1, total: files.length})
+                      : t("common.uploading")}
             </Button>
         </form>
+    );
+}
+
+function successMessage(t: TranslateFn, count: number, converted: boolean): string {
+    if (count > 1) {
+        return t("documents.upload.successMany", {count});
+    }
+    return converted ? t("documents.upload.successConverted") : t("documents.upload.success");
+}
+
+/** Click to choose files or drop them here. */
+function FileDropZone({
+    inputRef,
+    disabled,
+    summary,
+    errorId,
+    onFiles,
+}: {
+    inputRef: RefObject<HTMLInputElement | null>;
+    disabled: boolean;
+    /** The chosen files, or a hint while there are none. */
+    summary: string;
+    /** Set while the files are invalid. */
+    errorId?: string;
+    onFiles: (files: File[]) => void;
+}) {
+    const {t} = useI18n();
+    const [dragging, setDragging] = useState(false);
+
+    return (
+        <div
+            className={`relative cursor-pointer rounded-lg border border-dashed px-4 py-6 text-center transition-colors ${
+                dragging ? "border-ring bg-accent" : "border-input"
+            }`}
+            onClick={(event) => {
+                // The input's own click bubbles up here: do not reopen it.
+                if (!disabled && event.target !== inputRef.current) {
+                    inputRef.current?.click();
+                }
+            }}
+            onDragOver={(event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "copy";
+                setDragging(true);
+            }}
+            onDragLeave={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                    setDragging(false);
+                }
+            }}
+            onDrop={(event: DragEvent<HTMLDivElement>) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setDragging(false);
+                if (!disabled) {
+                    onFiles([...event.dataTransfer.files]);
+                }
+            }}
+        >
+            <FileUp className="mx-auto mb-2 size-5 text-muted-foreground" aria-hidden />
+            <p className="text-sm">{t("documents.upload.dropPrompt")}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{summary}</p>
+            {/* Inside the drop zone, not a direct child of Field: Field gives
+                direct .sr-only children their natural width, which widened
+                the page on phones. */}
+            <input
+                id="document-file"
+                ref={inputRef}
+                type="file"
+                multiple
+                accept={DOCUMENT_ACCEPT}
+                disabled={disabled}
+                className="sr-only"
+                aria-invalid={errorId ? true : undefined}
+                aria-describedby={errorId}
+                onChange={(event) => onFiles([...(event.target.files ?? [])])}
+            />
+        </div>
     );
 }

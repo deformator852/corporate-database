@@ -3,8 +3,7 @@ import {useState} from "react";
 import {Link, useLocation} from "react-router";
 
 import {Button} from "@/components/ui/button";
-import {Card} from "@/components/ui/card";
-import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "@/components/ui/table";
+import {TableCell, TableRow} from "@/components/ui/table";
 import type {ChatHistoryLinkState} from "@/entities/chat/model";
 import type {UserDetailLinkState} from "@/entities/user/model";
 import {useI18n} from "@/shared/i18n/I18nProvider";
@@ -15,6 +14,8 @@ import {useRequest} from "@/shared/lib/hooks/useRequest";
 import {useUrlParams} from "@/shared/lib/hooks/useUrlParams";
 import {formatDateTime} from "@/shared/lib/time";
 import {ListPagination} from "@/shared/ui/ListPagination";
+import {DataTable} from "@/shared/ui/DataTable";
+import {PageHeader} from "@/shared/ui/PageHeader";
 import {StatusCard} from "@/shared/ui/StatusCard";
 import {ChatPurgeDialog} from "@/widgets/chat-purge/ui/ChatPurgeDialog";
 import {getReviewedChats} from "@pages/chat-history/api/chatHistory";
@@ -44,18 +45,18 @@ export function ChatHistoryList() {
 
     return (
         <div className="stack stack--lg w-full">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div className="stack">
-                    <h1>{t("chatHistory.title")}</h1>
-                    <p className="max-w-xl text-muted-foreground">{t("chatHistory.subtitle")}</p>
-                </div>
-                {can("chat.purge") ? (
-                    <Button type="button" variant="destructive" onClick={() => setPurging(true)}>
-                        <Eraser aria-hidden />
-                        {t("chatPurge.open")}
-                    </Button>
-                ) : null}
-            </div>
+            <PageHeader
+                title={t("chatHistory.title")}
+                subtitle={t("chatHistory.subtitle")}
+                action={
+                    can("chat.purge") ? (
+                        <Button type="button" variant="destructive" onClick={() => setPurging(true)}>
+                            <Eraser aria-hidden />
+                            {t("chatPurge.open")}
+                        </Button>
+                    ) : null
+                }
+            />
 
             {userId != null ? (
                 <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -90,48 +91,44 @@ export function ChatHistoryList() {
                 <StatusCard title={t("chatHistory.empty")} />
             ) : (
                 <div className="stack">
-                    <Card className="gap-0 py-0">
-                        <Table aria-label={t("chatHistory.title")}>
-                            <TableHeader>
-                                <TableRow className="hover:bg-transparent">
-                                    <TableHead className="px-4">{t("chatHistory.chat")}</TableHead>
-                                    <TableHead>{t("chatHistory.user")}</TableHead>
-                                    <TableHead className="text-right">{t("chatHistory.messages")}</TableHead>
-                                    <TableHead className="px-4">{t("chatHistory.lastActivity")}</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {items.map((chat) => (
-                                    <TableRow key={chat.id}>
-                                        <TableCell className="max-w-80 px-4 font-medium">
-                                            <Link
-                                                to={`/chat-history/${chat.id}`}
-                                                state={linkState}
-                                                title={chat.title}
-                                                className="block truncate underline-offset-4 hover:underline"
-                                            >
-                                                {chat.title}
-                                            </Link>
-                                        </TableCell>
-                                        <TableCell>
-                                            <button
-                                                type="button"
-                                                className="cursor-pointer text-left underline-offset-4 hover:underline"
-                                                title={t("chatHistory.onlyUser", {name: chat.user.name})}
-                                                onClick={() => updateParams({user: String(chat.user.id), page: "1"})}
-                                            >
-                                                {chat.user.name || chat.user.email}
-                                            </button>
-                                        </TableCell>
-                                        <TableCell className="text-right tabular-nums">{chat.message_count}</TableCell>
-                                        <TableCell className="px-4 text-muted-foreground tabular-nums">
-                                            {formatDateTime(chat.updated_at, tag)}
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </Card>
+                    <DataTable
+                        aria-label={t("chatHistory.title")}
+                        columns={[
+                            {label: t("chatHistory.chat"), className: "px-4"},
+                            {label: t("chatHistory.user")},
+                            {label: t("chatHistory.messages"), className: "text-right"},
+                            {label: t("chatHistory.lastActivity"), className: "px-4"},
+                        ]}
+                    >
+                        {items.map((chat) => (
+                            <TableRow key={chat.id}>
+                                <TableCell className="max-w-80 px-4 font-medium">
+                                    <Link
+                                        to={`/chat-history/${chat.id}`}
+                                        state={linkState}
+                                        title={chat.title}
+                                        className="block truncate underline-offset-4 hover:underline"
+                                    >
+                                        {chat.title}
+                                    </Link>
+                                </TableCell>
+                                <TableCell>
+                                    <button
+                                        type="button"
+                                        className="cursor-pointer text-left underline-offset-4 hover:underline"
+                                        title={t("chatHistory.onlyUser", {name: chat.user.name})}
+                                        onClick={() => updateParams({user: String(chat.user.id), page: "1"})}
+                                    >
+                                        {chat.user.name || chat.user.email}
+                                    </button>
+                                </TableCell>
+                                <TableCell className="text-right tabular-nums">{chat.message_count}</TableCell>
+                                <TableCell className="px-4 text-muted-foreground tabular-nums">
+                                    {formatDateTime(chat.updated_at, tag)}
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </DataTable>
                     {data && data.pages > 1 ? (
                         <ListPagination
                             page={page}

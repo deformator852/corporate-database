@@ -7,15 +7,14 @@ from huggingface_hub.constants import HF_HUB_CACHE
 from qdrant_client import QdrantClient
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import IntPrompt
 from rich.table import Table
 
 from settings import EMBEDDING_MODELS, LANGUAGES
 
 from ..env import ENV_PATH, env_value, upsert_env
-from .language import current_language
+from ..prompts import GIB, ask_int, gib, warn_if_no_room
+from .language import current_languages
 
-_GIB = 1024**3
 _COLLECTION = "documents"
 
 
@@ -37,15 +36,15 @@ class EmbeddingOption:
 
 
 def _small(key: str, gib: float) -> EmbeddingOption:
-    return EmbeddingOption(key, "Light", int(gib * _GIB), "2 GB", "4 GB")
+    return EmbeddingOption(key, "Light", int(gib * GIB), "2 GB", "4 GB")
 
 
 def _medium(key: str, gib: float) -> EmbeddingOption:
-    return EmbeddingOption(key, "Balanced (default)", int(gib * _GIB), "4 GB", "8 GB")
+    return EmbeddingOption(key, "Balanced (default)", int(gib * GIB), "4 GB", "8 GB")
 
 
 def _large(key: str, gib: float) -> EmbeddingOption:
-    return EmbeddingOption(key, "Best quality", int(gib * _GIB), "8 GB", "16 GB")
+    return EmbeddingOption(key, "Best quality", int(gib * GIB), "8 GB", "16 GB")
 
 
 _E5_SMALL = _small("multilingual-e5-small", 2.1)
@@ -66,10 +65,18 @@ OPTIONS: dict[str, tuple[EmbeddingOption, ...]] = {
     ),
     "es": (_E5_SMALL, _E5_BASE, _BGE_M3),
 }
+# Several APP_LANGUAGES: models that match a question with documents in any
+# of them.
+MULTILINGUAL = (_E5_SMALL, _E5_BASE, _BGE_M3)
 
 
-def _fmt_bytes(n: int) -> str:
-    return f"{n / _GIB:.1f} GB"
+def options_for(languages: list[str]) -> tuple[EmbeddingOption, ...]:
+    return OPTIONS[languages[0]] if len(languages) == 1 else MULTILINGUAL
+
+
+def _names(languages: list[str]) -> str:
+    names = [LANGUAGES[code] for code in languages]
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
 
 
 def _cache_dir(hf_id: str) -> Path:
@@ -113,11 +120,11 @@ def _download(console: Console, option: EmbeddingOption) -> None:
         console.print(f"[red]Could not download {option.key}: {exc}[/]")
 
 
-def _choose(console: Console, language: str) -> EmbeddingOption:
-    options = OPTIONS[language]
+def _choose(console: Console, languages: list[str]) -> EmbeddingOption:
+    options = options_for(languages)
     current = env_value(ENV_PATH, "EMBEDDING_MODEL")
     free = shutil.disk_usage("/").free
-    table = Table(title=f"Embedding models for {LANGUAGES[language]} documents")
+    table = Table(title=f"Embedding models for {_names(languages)} documents")
     table.add_column("#", justify="right")
     table.add_column("Model")
     table.add_column("Disk")
@@ -133,7 +140,7 @@ def _choose(console: Console, language: str) -> EmbeddingOption:
         table.add_row(
             str(index),
             option.key,
-            _fmt_bytes(option.disk_bytes),
+            gib(option.disk_bytes),
             option.ram_min,
             option.ram_recommended,
             str(option.dims),
@@ -141,23 +148,18 @@ def _choose(console: Console, language: str) -> EmbeddingOption:
             option.summary + ("  (current)" if option.key == current else ""),
         )
     console.print(table)
-    console.print(
-        f"[yellow]These models are tuned for {LANGUAGES[language]}: documents in "
-        "other languages are found less reliably.[/]"
-    )
-    console.print(f"Free disk: {_fmt_bytes(free)}")
-    while True:
-        choice = IntPrompt.ask("Choice", default=default, console=console)
-        if 1 <= choice <= len(options):
-            selected = options[choice - 1]
-            if selected.disk_bytes * 11 // 10 > free and not _cached(selected.hf_id):
-                console.print(
-                    f"[yellow]This model needs about "
-                    f"{_fmt_bytes(selected.disk_bytes)}; "
-                    f"only {_fmt_bytes(free)} is free.[/]"
-                )
-            return selected
-        console.print(f"Enter a number from 1 to {len(options)}.")
+    if len(languages) == 1:
+        console.print(
+            f"[yellow]These models are tuned for {_names(languages)}: documents in "
+            "other languages are found less reliably.[/]"
+        )
+    else:
+        console.print("These models find documents in any of the chosen languages, whatever the question's language.")
+    console.print(f"Free disk: {gib(free)}")
+    selected = options[ask_int(console, "Choice", default, 1, len(options)) - 1]
+    if not _cached(selected.hf_id):
+        warn_if_no_room(console, selected.disk_bytes, free)
+    return selected
 
 
 def _lock(console: Console, message: str, current: str | None) -> None:
@@ -180,14 +182,18 @@ class EmbeddingStep:
                 current,
             )
             return
+        languages = current_languages()
+        if current and len(languages) > 1 and current not in {option.key for option in MULTILINGUAL}:
+            console.print(
+                f"[yellow]{current} is tuned for one language. For {_names(languages)} documents, switch to a "
+                "multilingual model: uv run switch-embedding-model multilingual-e5-base[/]"
+            )
         if points:
             _lock(
                 console,
                 "The embedding model cannot be changed here while Qdrant "
                 f"collection '{_COLLECTION}' has {points} point(s): every "
-                "document must be embedded again. Use "
-                "deploy/deploy.sh switch-model MODEL (development: "
-                "cd src && uv run python -m maintenance.switch_embedding MODEL).",
+                "document must be embedded again. Use uv run switch-embedding-model MODEL.",
                 current,
             )
             return
@@ -202,7 +208,7 @@ class EmbeddingStep:
             )
         )
         console.print("A larger embedding model usually finds more relevant documents. It needs more disk and RAM.")
-        selected = _choose(console, current_language())
+        selected = _choose(console, languages)
         upsert_env(ENV_PATH, "EMBEDDING_MODEL", selected.key)
         console.print(f"Wrote EMBEDDING_MODEL={selected.key} to {ENV_PATH}")
         _download(console, selected)

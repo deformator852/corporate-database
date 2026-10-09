@@ -10,14 +10,9 @@ import {
     type ChatReply,
     type ChatServerMessage,
 } from "@pages/home/model/chat";
-import {reconnectDelay} from "@/shared/lib/ws";
+import {apiSocketUrl, openSocket} from "@/shared/lib/ws";
 
 const FALLBACK = "Could not send the message.";
-
-function chatSocketUrl(): string {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${protocol}//${window.location.host}/api/v1/chat/ws`;
-}
 
 export type ChatHandlers = {
     /** The question is saved in this chat; comes before any answer. */
@@ -38,95 +33,64 @@ export type ChatSocket = {
     close: () => void;
 };
 
+type Pending = {
+    resolve: (reply: ChatReply) => void;
+    reject: (error: Error) => void;
+    handlers: ChatHandlers;
+};
+
+/** One question at a time over a socket that reconnects; a drop fails the
+ * question being answered. */
 export function connectChatSocket(): ChatSocket {
     let closed = false;
-    let socket: WebSocket | null = null;
-    let timer: number | undefined;
-    let pending: {
-        resolve: (reply: ChatReply) => void;
-        reject: (error: Error) => void;
-        handlers: ChatHandlers;
-    } | null = null;
+    let pending: Pending | null = null;
 
     const failPending = (message: string, code = "unavailable") => {
-        if (pending == null) {
-            return;
-        }
-        pending.reject(new ChatRequestError(code, message));
+        pending?.reject(new ChatRequestError(code, message));
         pending = null;
-    };
-
-    const open = () => {
-        if (closed) {
-            return;
-        }
-        const next = new WebSocket(chatSocketUrl());
-        socket = next;
-        next.addEventListener("message", (event) => {
-            if (typeof event.data !== "string") {
-                return;
-            }
-            let parsed: unknown;
-            try {
-                parsed = JSON.parse(event.data);
-            } catch {
-                failPending(FALLBACK, "invalid");
-                return;
-            }
-            if (!isChatServerMessage(parsed) || pending == null) {
-                return;
-            }
-            if (parsed.type === "started") {
-                pending.handlers.onStarted?.(parsed.conversation_id);
-                return;
-            }
-            if (parsed.type === "delta") {
-                pending.handlers.onDelta?.(parsed.content);
-                return;
-            }
-            finish(parsed);
-        });
-        next.addEventListener("close", (event) => {
-            failPending(FALLBACK);
-            if (closed || socket !== next) {
-                return;
-            }
-            void reconnectDelay(event.code).then((delay) => {
-                if (delay !== null && !closed) {
-                    timer = window.setTimeout(open, delay);
-                }
-            });
-        });
-        next.addEventListener("error", () => {
-            next.close();
-        });
     };
 
     const finish = (message: Exclude<ChatServerMessage, {type: "delta" | "started"}>) => {
-        if (pending == null) {
-            return;
-        }
         const current = pending;
         pending = null;
+        if (current == null) {
+            return;
+        }
         if (message.type === "error") {
             current.reject(new ChatRequestError(message.code, message.message));
-            return;
-        }
-        if (message.type === "cancelled") {
+        } else if (message.type === "cancelled") {
             current.reject(new ChatCancelledError());
-            return;
+        } else {
+            current.resolve({
+                content: message.content,
+                conversationId: message.conversation_id,
+                messageId: message.message_id,
+                sources: message.sources,
+            });
         }
-        current.resolve({
-            content: message.content,
-            conversationId: message.conversation_id,
-            messageId: message.message_id,
-            sources: message.sources,
-        });
     };
 
-    // Deferred so an immediate close() (React StrictMode remount) cancels it
-    // instead of aborting a socket mid-handshake.
-    timer = window.setTimeout(open, 0);
+    const onMessage = (data: string) => {
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(data);
+        } catch {
+            failPending(FALLBACK, "invalid");
+            return;
+        }
+        if (!isChatServerMessage(parsed) || pending == null) {
+            return;
+        }
+        if (parsed.type === "started") {
+            pending.handlers.onStarted?.(parsed.conversation_id);
+        } else if (parsed.type === "delta") {
+            pending.handlers.onDelta?.(parsed.content);
+        } else {
+            finish(parsed);
+        }
+    };
+
+    const live = openSocket(apiSocketUrl("/chat/ws"), {onMessage, onDrop: () => failPending(FALLBACK)});
 
     return {
         send(messages, conversationId, handlers = {}, options = {}) {
@@ -137,7 +101,7 @@ export function connectChatSocket(): ChatSocket {
                 document_ids: options.documentIds ?? [],
                 replace_message_id: options.replaceMessageId ?? null,
             };
-            const target = socket;
+            const target = live.current();
             if (target == null || closed) {
                 return Promise.reject(new ChatRequestError("unavailable", FALLBACK));
             }
@@ -148,20 +112,19 @@ export function connectChatSocket(): ChatSocket {
                 pending = {resolve, reject, handlers};
                 void waitUntilOpen(target).then(
                     () => {
-                        if (socket !== target || target.readyState !== WebSocket.OPEN) {
+                        // Replaced or closed meanwhile: the question is lost.
+                        if (live.current() !== target || target.readyState !== WebSocket.OPEN) {
                             failPending(FALLBACK);
                             return;
                         }
                         target.send(JSON.stringify(body));
                     },
-                    () => {
-                        failPending(FALLBACK);
-                    },
+                    () => failPending(FALLBACK),
                 );
             });
         },
         cancel() {
-            const target = socket;
+            const target = live.current();
             if (target == null || pending == null || closed) {
                 return;
             }
@@ -175,11 +138,7 @@ export function connectChatSocket(): ChatSocket {
         close() {
             closed = true;
             failPending(FALLBACK);
-            if (timer !== undefined) {
-                window.clearTimeout(timer);
-            }
-            socket?.close();
-            socket = null;
+            live.close();
         },
     };
 }

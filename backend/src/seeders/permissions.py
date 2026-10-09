@@ -85,6 +85,11 @@ SYSTEM_PERMISSIONS = (
         "View system status",
         "See whether the database, search, storage, queue and AI models work",
     ),
+    (
+        "system.errors",
+        "View error log",
+        "See the warnings and errors of the backend and the worker, with their tracebacks",
+    ),
 )
 
 ALL_PERMISSIONS = (

@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from models.audit import AuditLog
 from schemas.model_config import MODEL_CONFIG, ORM_MODEL_CONFIG
+from schemas.page import PageSchema
 
 
 class AuditEntrySchema(BaseModel):
@@ -22,24 +23,16 @@ class AuditEntrySchema(BaseModel):
     ip: str | None
 
 
-class AuditListResponseSchema(BaseModel):
-    model_config = MODEL_CONFIG
-
+class AuditListResponseSchema(PageSchema):
     items: list[AuditEntrySchema]
-    page: int
-    per_page: int
-    total: int
-    pages: int
 
     @classmethod
     def from_page(cls, entries: list[AuditLog], *, page: int, per_page: int, total: int) -> Self:
-        pages = (total + per_page - 1) // per_page if per_page and total else 0
         return cls(
             items=[AuditEntrySchema.model_validate(entry) for entry in entries],
             page=page,
             per_page=per_page,
             total=total,
-            pages=pages,
         )
 
 

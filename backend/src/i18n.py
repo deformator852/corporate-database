@@ -1,14 +1,19 @@
 """Server-side translation of messages users see.
 
-The whole system runs in one language (APP_LANGUAGE), so the backend
-translates: error responses (`main.py`, chat socket) and texts stored for
-later display (notification messages, document processing errors).
+Each user reads the system in their language: one of APP_LANGUAGES, chosen
+in the header (`users.language`), APP_LANGUAGE until they choose. `t()`
+translates to the language of the current request, socket message or
+worker job (`use_language`): error responses (`main.py`, chat socket) and
+texts stored for later display (notification messages, document processing
+errors), which take their owner's language.
 Keys are the English texts; a missing translation falls back to English.
 Configuration errors stay English: they name .env variables for operators.
 """
 
+from contextvars import ContextVar
+
 from exceptions import AppError
-from settings import language
+from settings import language, languages
 
 _ES = {
     # Auth and sessions
@@ -65,6 +70,7 @@ _ES = {
     "The start of the period must be before its end.": "El inicio del periodo debe ser anterior a su fin.",
     "The current password is wrong.": "La contraseña actual es incorrecta.",
     "Fragment not found": "Fragmento no encontrado",
+    "Something went wrong. Try again.": "Algo salió mal. Inténtelo de nuevo.",
     "The new password must differ from the current one.": "La nueva contraseña debe ser distinta de la actual.",
     # Search and assistant
     "Could not reach Qdrant.": "No se pudo conectar con el índice de búsqueda.",
@@ -80,6 +86,7 @@ _ES = {
     "Enter a message.": "Escribe un mensaje.",
     "The last message must be from the user.": "El último mensaje debe ser del usuario.",
     "Conversation not found": "Conversación no encontrada",
+    "This language is not available.": "Este idioma no está disponible.",
     "Notification not found": "Notificación no encontrada",
 }
 
@@ -138,6 +145,7 @@ _FR = {
     "The start of the period must be before its end.": "Le début de la période doit précéder sa fin.",
     "The current password is wrong.": "Le mot de passe actuel est incorrect.",
     "Fragment not found": "Fragment introuvable",
+    "Something went wrong. Try again.": "Une erreur est survenue. Réessayez.",
     "The new password must differ from the current one.": "Le nouveau mot de passe doit être différent de l’actuel.",
     # Search and assistant
     "Could not reach Qdrant.": "Impossible de joindre l’index de recherche.",
@@ -153,17 +161,35 @@ _FR = {
     "Enter a message.": "Saisissez un message.",
     "The last message must be from the user.": "Le dernier message doit venir de l’utilisateur.",
     "Conversation not found": "Conversation introuvable",
+    "This language is not available.": "Cette langue n’est pas disponible.",
     "Notification not found": "Notification introuvable",
 }
 
 CATALOG: dict[str, dict[str, str]] = {"es": _ES, "fr": _FR}
 
 
+_current: ContextVar[str | None] = ContextVar("language", default=None)
+
+
+def use_language(code: str | None) -> None:
+    """`t()` speaks `code` in this request, task or job from now on; a
+    language that is not enabled (or None) means the default one."""
+    try:
+        enabled = languages()
+    except AppError:
+        enabled = ()
+    _current.set(code if code in enabled else None)
+
+
+def current_language() -> str:
+    return _current.get() or language()
+
+
 def t(message: str, **params: object) -> str:
-    """`message` in the system language. Params fill {placeholders} after
+    """`message` in the current language. Params fill {placeholders} after
     translation. Unknown messages (and English) pass through unchanged."""
     try:
-        table = CATALOG.get(language(), {})
+        table = CATALOG.get(current_language(), {})
     except AppError:
         table = {}
     template = table.get(message, message)

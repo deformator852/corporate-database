@@ -21,7 +21,7 @@ services:
         export POSTGRES_DB="$$DB_NAME"
         # Drop the rest of backend/.env (encryption key, other passwords);
         # the image's own variables stay.
-        unset $$(compgen -e | grep -xE 'DB_.*|JWT_.*|DATA_.*|QDRANT_.*|MINIO_.*|LLM_.*|EMBEDDING_MODEL|APP_LANGUAGE|CHUNK_.*|TEXT_.*|API_DOCS|SITE_ADDRESS|TLS|CHAT_.*|RABBITMQ_(USER|PASSWORD|HOST|PORT)')
+        unset $$(compgen -e | grep -xE 'DB_.*|JWT_.*|DATA_.*|QDRANT_.*|MINIO_.*|LLM_.*|EMBEDDING_MODEL|APP_LANGUAGES?|CHUNK_.*|TEXT_.*|API_DOCS|SITE_ADDRESS|TLS|CHAT_.*|RABBITMQ_(USER|PASSWORD|HOST|PORT)')
         # POSTGRES_PASSWORD only applies to a new volume. Re-apply it on every
         # start (local socket, trusted) so a password rotated in .env works.
         (
@@ -85,7 +85,7 @@ services:
         export RABBITMQ_DEFAULT_PASS="$$RABBITMQ_PASSWORD"
         # Drop the rest of backend/.env (encryption key, other passwords);
         # the image's own variables stay.
-        unset $$(compgen -e | grep -xE 'DB_.*|JWT_.*|DATA_.*|QDRANT_.*|MINIO_.*|LLM_.*|EMBEDDING_MODEL|APP_LANGUAGE|CHUNK_.*|TEXT_.*|API_DOCS|SITE_ADDRESS|TLS|CHAT_.*|RABBITMQ_(USER|PASSWORD|HOST|PORT)')
+        unset $$(compgen -e | grep -xE 'DB_.*|JWT_.*|DATA_.*|QDRANT_.*|MINIO_.*|LLM_.*|EMBEDDING_MODEL|APP_LANGUAGES?|CHUNK_.*|TEXT_.*|API_DOCS|SITE_ADDRESS|TLS|CHAT_.*|RABBITMQ_(USER|PASSWORD|HOST|PORT)')
         (
           until rabbitmqctl -q await_startup >/dev/null 2>&1; do sleep 2; done
           rabbitmqctl -q add_user "$$RABBITMQ_DEFAULT_USER" "$$RABBITMQ_DEFAULT_PASS" >/dev/null 2>&1 ||

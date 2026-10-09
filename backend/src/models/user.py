@@ -27,6 +27,8 @@ class User(TimestampMixin, Base):
     sessions_valid_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Set: the account cannot sign in; it and its history stay (offboarding).
     disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Chosen in the header, one of APP_LANGUAGES; None: the default language.
+    language: Mapped[str | None] = mapped_column(String(8))
 
     @property
     def is_disabled(self) -> bool:

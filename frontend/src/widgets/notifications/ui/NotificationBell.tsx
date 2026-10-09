@@ -1,5 +1,5 @@
 import {Bell, BellOff, CircleAlert, CircleCheck, X} from "lucide-react";
-import {useEffect, useEffectEvent, useState} from "react";
+import {useState} from "react";
 
 import {Button} from "@/components/ui/button";
 import {Popover, PopoverContent, PopoverTrigger} from "@/components/ui/popover";
@@ -11,12 +11,14 @@ import {
     formatRelativeTime,
     isFailure,
     notificationTypeKey,
+    type NotificationItem,
 } from "@/widgets/notifications/model/notifications";
 import {useNotificationFeed} from "@/widgets/notifications/model/useNotificationFeed";
 import {useNotificationReadBatch} from "@/widgets/notifications/model/useNotificationReadBatch";
+import {useReadOnSight} from "@/widgets/notifications/model/useReadOnSight";
 
 export function NotificationBell() {
-    const {t, locale} = useI18n();
+    const {t} = useI18n();
     const [open, setOpen] = useState(false);
     // State, not a ref: the list mounts after the popover opens, and the
     // read observer must attach once it exists.
@@ -28,45 +30,17 @@ export function NotificationBell() {
     const feed = useNotificationFeed();
     const {data} = feed;
     const unreadCount = data?.unread_count ?? 0;
-    const markRead = useEffectEvent(feed.markRead);
 
     const unreadKey =
         data?.items
             .filter((item) => !item.read)
             .map((item) => item.id)
             .join(",") ?? "";
-
-    useEffect(() => {
-        const root = list;
-        if (!open || root == null || unreadKey.length === 0) {
-            return;
-        }
-        const seen = new Set<number>();
-        const observer = new IntersectionObserver(
-            (entries) => {
-                for (const entry of entries) {
-                    if (!entry.isIntersecting) {
-                        continue;
-                    }
-                    const id = Number(entry.target.getAttribute("data-notification-id"));
-                    if (!Number.isInteger(id) || seen.has(id)) {
-                        continue;
-                    }
-                    seen.add(id);
-                    queue(id);
-                    setFresh((current) => new Set(current).add(id));
-                    markRead(id);
-                }
-            },
-            {root, threshold: 0.6},
-        );
-        for (const node of root.querySelectorAll("[data-unread='true']")) {
-            observer.observe(node);
-        }
-        return () => {
-            observer.disconnect();
-        };
-    }, [open, list, unreadKey, queue]);
+    useReadOnSight(list, open, unreadKey, (id) => {
+        queue(id);
+        setFresh((current) => new Set(current).add(id));
+        feed.markRead(id);
+    });
 
     function handleScroll() {
         if (list != null && list.scrollHeight - list.scrollTop - list.clientHeight <= 80) {
@@ -74,10 +48,46 @@ export function NotificationBell() {
         }
     }
 
-    const label =
-        unreadCount > 0
-            ? t("notifications.unread", {count: unreadCount})
-            : t("notifications.label");
+    let body;
+    if (feed.error) {
+        body = (
+            <div className="flex flex-col items-start gap-3 px-4 py-5">
+                <p className="text-sm text-muted-foreground">{feed.error}</p>
+                <Button type="button" variant="outline" size="sm" onClick={feed.retry}>
+                    {t("common.tryAgain")}
+                </Button>
+            </div>
+        );
+    } else if (data && data.items.length > 0) {
+        body = (
+            <ul
+                ref={setList}
+                className="max-h-[min(26rem,70vh)] list-none overflow-y-auto overscroll-contain p-0"
+                onScroll={handleScroll}
+            >
+                {data.items.map((item) => (
+                    <NotificationRow
+                        key={item.id}
+                        item={item}
+                        isNew={!item.read || fresh.has(item.id)}
+                        onDismiss={() => void feed.dismiss(item.id)}
+                    />
+                ))}
+            </ul>
+        );
+    } else if (feed.loading) {
+        body = <p className="px-4 py-8 text-center text-sm text-muted-foreground">{t("notifications.loading")}</p>;
+    } else {
+        body = (
+            <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+                <span className="flex size-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                    <BellOff className="size-5" aria-hidden />
+                </span>
+                <p className="font-medium">{t("notifications.empty")}</p>
+                <p className="text-sm text-muted-foreground">{t("notifications.emptyHint")}</p>
+            </div>
+        );
+    }
 
     return (
         <Popover
@@ -97,7 +107,9 @@ export function NotificationBell() {
                         variant="ghost"
                         size="icon"
                         className="relative"
-                        aria-label={label}
+                        aria-label={
+                            unreadCount > 0 ? t("notifications.unread", {count: unreadCount}) : t("notifications.label")
+                        }
                     />
                 }
             >
@@ -133,103 +145,58 @@ export function NotificationBell() {
                         {t("notifications.clearAll")}
                     </Button>
                 </div>
-                {feed.error ? (
-                    <div className="flex flex-col items-start gap-3 px-4 py-5">
-                        <p className="text-sm text-muted-foreground">{feed.error}</p>
-                        <Button type="button" variant="outline" size="sm" onClick={feed.retry}>
-                            {t("common.tryAgain")}
-                        </Button>
-                    </div>
-                ) : !data || data.items.length === 0 ? (
-                    feed.loading ? (
-                        <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                            {t("notifications.loading")}
-                        </p>
-                    ) : (
-                        <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
-                            <span className="flex size-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                                <BellOff className="size-5" aria-hidden />
-                            </span>
-                            <p className="font-medium">{t("notifications.empty")}</p>
-                            <p className="text-sm text-muted-foreground">
-                                {t("notifications.emptyHint")}
-                            </p>
-                        </div>
-                    )
-                ) : (
-                    <ul
-                        ref={setList}
-                        className="max-h-[min(26rem,70vh)] list-none overflow-y-auto overscroll-contain p-0"
-                        onScroll={handleScroll}
-                    >
-                        {data.items.map((item) => {
-                            const failed = isFailure(item.type);
-                            const isNew = !item.read || fresh.has(item.id);
-                            const Icon = failed ? CircleAlert : CircleCheck;
-                            return (
-                                <li
-                                    key={item.id}
-                                    data-notification-id={item.id}
-                                    data-unread={item.read ? undefined : "true"}
-                                    className={cn(
-                                        "group relative flex gap-3 border-b px-4 py-3 transition-colors last:border-b-0 hover:bg-muted/60",
-                                        isNew && "bg-primary/5",
-                                    )}
-                                >
-                                    <span
-                                        className={cn(
-                                            "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full",
-                                            failed
-                                                ? "bg-destructive/10 text-destructive"
-                                                : "bg-success/10 text-success",
-                                        )}
-                                        aria-hidden
-                                    >
-                                        <Icon className="size-4" />
-                                    </span>
-                                    <div className="min-w-0 flex-1 pr-6">
-                                        <p className="flex items-center gap-1.5 font-medium">
-                                            {isNew ? (
-                                                <span className="sr-only">{t("notifications.new")}</span>
-                                            ) : null}
-                                            <span className="truncate">
-                                                {t(notificationTypeKey(item.type))}
-                                            </span>
-                                        </p>
-                                        <p className="mt-0.5 text-sm break-words text-muted-foreground">
-                                            {item.message}
-                                        </p>
-                                        <time
-                                            dateTime={item.created_at}
-                                            title={formatNotificationTime(
-                                                item.created_at,
-                                                localeIntlTag(locale),
-                                            )}
-                                            className="mt-1 block text-xs text-muted-foreground"
-                                        >
-                                            {formatRelativeTime(
-                                                item.created_at,
-                                                localeIntlTag(locale),
-                                            )}
-                                        </time>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        aria-label={t("notifications.dismiss")}
-                                        title={t("notifications.dismiss")}
-                                        onClick={() => {
-                                            void feed.dismiss(item.id);
-                                        }}
-                                        className="absolute top-2.5 right-2.5 flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity outline-none group-hover:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-ring/50 [@media(hover:none)]:opacity-100"
-                                    >
-                                        <X className="size-4" aria-hidden />
-                                    </button>
-                                </li>
-                            );
-                        })}
-                    </ul>
-                )}
+                {body}
             </PopoverContent>
         </Popover>
+    );
+}
+
+function NotificationRow({item, isNew, onDismiss}: {item: NotificationItem; isNew: boolean; onDismiss: () => void}) {
+    const {t, locale} = useI18n();
+    const failed = isFailure(item.type);
+    const Icon = failed ? CircleAlert : CircleCheck;
+
+    return (
+        <li
+            data-notification-id={item.id}
+            data-unread={item.read ? undefined : "true"}
+            className={cn(
+                "group relative flex gap-3 border-b px-4 py-3 transition-colors last:border-b-0 hover:bg-muted/60",
+                isNew && "bg-primary/5",
+            )}
+        >
+            <span
+                className={cn(
+                    "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full",
+                    failed ? "bg-destructive/10 text-destructive" : "bg-success/10 text-success",
+                )}
+                aria-hidden
+            >
+                <Icon className="size-4" />
+            </span>
+            <div className="min-w-0 flex-1 pr-6">
+                <p className="flex items-center gap-1.5 font-medium">
+                    {isNew ? <span className="sr-only">{t("notifications.new")}</span> : null}
+                    <span className="truncate">{t(notificationTypeKey(item.type))}</span>
+                </p>
+                <p className="mt-0.5 text-sm break-words text-muted-foreground">{item.message}</p>
+                <time
+                    dateTime={item.created_at}
+                    title={formatNotificationTime(item.created_at, localeIntlTag(locale))}
+                    className="mt-1 block text-xs text-muted-foreground"
+                >
+                    {formatRelativeTime(item.created_at, localeIntlTag(locale))}
+                </time>
+            </div>
+            <button
+                type="button"
+                aria-label={t("notifications.dismiss")}
+                title={t("notifications.dismiss")}
+                onClick={onDismiss}
+                className="absolute top-2.5 right-2.5 flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity outline-none group-hover:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-ring/50 [@media(hover:none)]:opacity-100"
+            >
+                <X className="size-4" aria-hidden />
+            </button>
+        </li>
     );
 }

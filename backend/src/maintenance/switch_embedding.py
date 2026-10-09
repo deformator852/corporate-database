@@ -1,8 +1,8 @@
-"""Switches the search index to another embedding model, or rebuilds it with
-the current one (e.g. after changing CHUNK_SIZE).
+"""Rebuilds the search index for an embedding model: the step of
+`uv run switch-embedding-model MODEL` (src/switch_embedding_model) that touches the data. In
+production that command runs it inside the backend image:
 
-    deploy/deploy.sh switch-model MODEL                                      (production)
-    cd backend/src && uv run python -m maintenance.switch_embedding MODEL    (development)
+    python -m maintenance.switch_embedding MODEL
 
 Vectors of two models cannot be mixed, so every document is embedded again:
 this drops the search index, queues every processed document and records
@@ -11,10 +11,8 @@ from their stored files, without "ready" notices; each document is found by
 search again once it is done (the Documents page shows the progress). Chats,
 documents and their files are not touched.
 
-Stop the backend and the worker first (deploy.sh does): they would keep
-using the old model. In development this also writes EMBEDDING_MODEL to
-backend/.env; production keeps .env outside the container, so deploy.sh
-writes it. Resumable: if it stops midway, run it again.
+The backend and the worker must be stopped (switch-embedding-model stops them): they
+would keep using the old model. Resumable: if it stops midway, run it again.
 """
 
 import asyncio
@@ -34,8 +32,9 @@ from services.search.rag import COLLECTION_NAME, Rag
 from settings import EMBEDDING_MODELS
 
 
-async def switch(model: str, report: Callable[[str], None] = print) -> int:
-    """Rebuilds the index for `model`; returns how many documents were queued."""
+def load_model(model: str, report: Callable[[str], None] = print) -> None:
+    """Makes `model` the configured one and loads it. Production runs
+    offline, so it must already be on disk (switch-embedding-model downloads it)."""
     if model not in EMBEDDING_MODELS:
         raise AppError(
             "misconfigured",
@@ -43,17 +42,21 @@ async def switch(model: str, report: Callable[[str], None] = print) -> int:
             status_code=500,
         )
     os.environ["EMBEDDING_MODEL"] = model
-    # Before anything is dropped: production runs offline, so the model must
-    # already be on disk (deploy.sh downloads it first).
     report(f"Loading {model}...")
     try:
-        await asyncio.to_thread(EmbeddingModel().warm_up)
+        EmbeddingModel().warm_up()
     except Exception as exc:
         raise AppError(
             "unavailable",
-            f"Could not load {model}: {exc}. Download it first (deploy/deploy.sh models).",
+            f"Could not load {model}: {exc}. Check the name and that it is downloaded.",
             status_code=503,
         ) from exc
+
+
+async def switch(model: str, report: Callable[[str], None] = print) -> int:
+    """Rebuilds the index for `model`; returns how many documents were queued."""
+    # Before anything is dropped: a model that cannot load changes nothing.
+    await asyncio.to_thread(load_model, model, report)
     async with AsyncSessionLocal() as session:
         previous = await stored_index_model(session)
     report(f"Index model: {previous or 'not recorded'} -> {model}")
@@ -81,15 +84,6 @@ async def switch(model: str, report: Callable[[str], None] = print) -> int:
     return queued
 
 
-def _write_env(model: str) -> None:
-    """Development: backend/.env sits next to the code."""
-    from setup.env import ENV_PATH, upsert_env
-
-    if ENV_PATH.exists():
-        upsert_env(ENV_PATH, "EMBEDDING_MODEL", model)
-        print(f"Wrote EMBEDDING_MODEL={model} to {ENV_PATH}")
-
-
 async def main(model: str) -> None:
     try:
         await switch(model)
@@ -97,8 +91,6 @@ async def main(model: str) -> None:
         raise SystemExit(f"Stopped: {exc.message}") from None
     finally:
         await engine.dispose()
-    _write_env(model)
-    print("Start the backend and the worker again.")
 
 
 if __name__ == "__main__":

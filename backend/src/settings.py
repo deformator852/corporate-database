@@ -1,3 +1,4 @@
+import logging
 import os
 from dataclasses import dataclass
 from functools import partial
@@ -14,10 +15,15 @@ from exceptions import AppError
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(ENV_FILE)
 
+# The Hub answers anonymous downloads with an "unauthenticated requests"
+# notice (X-HF-Warning) that huggingface_hub logs as a warning; public models
+# need no token, so it would only fill the console and the error log.
+logging.getLogger("huggingface_hub.utils._http").setLevel(logging.ERROR)
+
 DOCUMENT_EVENTS_EXCHANGE = "document.events"
 NOTIFICATION_EVENTS_EXCHANGE = "notification.events"
 
-# APP_LANGUAGE → name used in the LLM system prompt.
+# Language code → name used in the LLM system prompt.
 LANGUAGES = {
     "en": "English",
     "es": "Spanish",
@@ -78,6 +84,20 @@ def language() -> str:
             status_code=500,
         )
     return value
+
+
+def languages() -> tuple[str, ...]:
+    """APP_LANGUAGES: the languages users switch between, the default
+    (APP_LANGUAGE) first. Unset: only the default."""
+    default = language()
+    codes = [code.strip() for code in (os.getenv("APP_LANGUAGES") or "").split(",") if code.strip()]
+    if any(code not in LANGUAGES for code in codes):
+        raise AppError(
+            "misconfigured",
+            "Unknown language in APP_LANGUAGES.",
+            status_code=500,
+        )
+    return tuple(dict.fromkeys([default, *codes]))
 
 
 def embedding_model_key() -> str:
@@ -201,6 +221,11 @@ def chunk_overlap() -> int:
 def chat_retention_days() -> int:
     """Saved chats idle this long are deleted; 0 keeps them forever."""
     return max(0, _int_env("CHAT_RETENTION_DAYS", 90))
+
+
+def error_log_retention_days() -> int:
+    """Error log entries older than this are deleted; 0 keeps them forever."""
+    return max(0, _int_env("ERROR_LOG_RETENTION_DAYS", 30))
 
 
 DEFAULT_CHAT_QUESTIONS = 20

@@ -10,10 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import AsyncSessionLocal, engine
 from exceptions import AppError
-from i18n import t
+from i18n import t, use_language
 from models.document import DONE_STATUSES, Document, DocumentStatus
 from models.document_text import DocumentText
 from models.notification import Notification, NotificationType
+from models.user import User
 from services.documents.boilerplate import shared_lines
 from services.documents.embedding_text import STRUCTURED, embedding_texts
 from services.documents.events import DocumentEventPublisher
@@ -258,7 +259,18 @@ class DocumentProcessor:
         await self.notifications.emit(notification)
 
     async def _require(self, document_id: int) -> Document | None:
-        return await self.session.scalar(select(Document).where(Document.id == document_id))
+        row = (
+            await self.session.execute(
+                select(Document, User.language)
+                .outerjoin(User, User.id == Document.user_id)
+                .where(Document.id == document_id)
+            )
+        ).first()
+        if row is None:
+            return None
+        # The owner reads what this job stores: the error and the notices.
+        use_language(row.language)
+        return row.Document
 
     async def _set(self, document: Document, status: DocumentStatus, progress: int) -> None:
         document.status = status

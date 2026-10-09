@@ -7,6 +7,7 @@ import {
     NO_FILTERS,
     type DocumentFilters,
 } from "@pages/documents/model/documents";
+import {apiSocketUrl} from "@/shared/lib/ws";
 
 export async function getDocumentsPage(
     page: number,
@@ -60,6 +61,5 @@ export async function deleteDocument(documentId: number): Promise<void> {
 }
 
 export function documentsSocketUrl(): string {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${protocol}//${window.location.host}/api/v1/documents/ws`;
+    return apiSocketUrl("/documents/ws");
 }

@@ -2,86 +2,65 @@ import {useState} from "react";
 import {Ban, CircleCheck, Pencil, Plus, Trash2} from "lucide-react";
 import {Link, useLocation} from "react-router";
 
+import {Badge} from "@/components/ui/badge";
 import {Button} from "@/components/ui/button";
-import {Card} from "@/components/ui/card";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
+import {TableCell, TableRow} from "@/components/ui/table";
+import type {UserDetailLinkState} from "@/entities/user/model";
 import {useSessionStore} from "@/shared/auth/session-store";
 import {useI18n} from "@/shared/i18n/I18nProvider";
-import {usePageParam} from "@/shared/lib/hooks/usePageParam";
-import {useRequest} from "@/shared/lib/hooks/useRequest";
-import {ListPagination} from "@/shared/ui/ListPagination";
-import {StatusCard} from "@/shared/ui/StatusCard";
-import {can} from "@/shared/lib/api/me";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
-import {deleteUser, disableUser, enableUser, getUsersPage} from "@pages/users/list/api/users";
-import {
-    type UserListItem,
-} from "@pages/users/list/model/users";
-import type {UserDetailLinkState} from "@/entities/user/model";
-import {Badge} from "@/components/ui/badge";
+import {can} from "@/shared/lib/api/me";
+import {refreshAfterDelete, usePageParam} from "@/shared/lib/hooks/usePageParam";
+import {useRequest} from "@/shared/lib/hooks/useRequest";
 import {ConfirmDialog} from "@/shared/ui/ConfirmDialog";
+import {DataTable} from "@/shared/ui/DataTable";
+import {ListPagination} from "@/shared/ui/ListPagination";
+import {PageHeader} from "@/shared/ui/PageHeader";
+import {StatusCard} from "@/shared/ui/StatusCard";
+import {deleteUser, disableUser, enableUser, getUsersPage} from "@pages/users/list/api/users";
+import type {UserListItem} from "@pages/users/list/model/users";
 import {UserFormDialog} from "@pages/users/list/ui/UserFormDialog";
 
 function fullName(user: UserListItem) {
     return `${user.first_name} ${user.last_name}`;
 }
 
+/** What the signed-in user may do to the users in the list. */
+type UserActions = {
+    canUpdate: boolean;
+    canDisable: boolean;
+    canDelete: boolean;
+    edit: (user: UserListItem) => void;
+    enable: (user: UserListItem) => void;
+    disable: (user: UserListItem) => void;
+    remove: (user: UserListItem) => void;
+    enablingId: number | null;
+    // Shown in the row whose "Enable" failed.
+    enableError: {id: number; message: string} | null;
+    isSelf: (user: UserListItem) => boolean;
+};
+
 export function UsersList() {
     const {t} = useI18n();
-    const canViewUser = can("users.view");
-    const location = useLocation();
-    // The user page's Back link returns to this page of the list.
-    const linkState: UserDetailLinkState = {from: location.pathname + location.search};
     const [page, goToPage] = usePageParam();
-
-    const canCreate = can("users.create");
-    const canUpdate = can("users.update");
-    const canDelete = can("users.delete");
-    const canDisable = can("users.disable");
-    const showActions = canUpdate || canDisable || canDelete;
     const sessionUser = useSessionStore((state) => state.user);
+    const canCreate = can("users.create");
     const [formOpen, setFormOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<UserListItem | null>(null);
     const [deletingUser, setDeletingUser] = useState<UserListItem | null>(null);
     const [disablingUser, setDisablingUser] = useState<UserListItem | null>(null);
     const [enablingId, setEnablingId] = useState<number | null>(null);
-    // Shown in the row whose "Enable" failed.
-    const [enableError, setEnableError] = useState<{id: number; message: string} | null>(null);
+    const [enableError, setEnableError] = useState<UserActions["enableError"]>(null);
 
     const {status, data, error, reload} = useRequest(String(page), () => getUsersPage(page), t("users.loadError"));
     const items = data?.items ?? [];
-    const total = data?.total ?? 0;
 
-    const openCreate = () => {
-        setEditingUser(null);
-        setFormOpen(true);
-    };
-
-    const openEdit = (user: UserListItem) => {
+    const openForm = (user: UserListItem | null) => {
         setEditingUser(user);
         setFormOpen(true);
     };
 
-    const handleSaved = () => {
-        reload();
-    };
-
-    const handleDeleted = () => {
-        if (items.length === 1 && page > 1) {
-            goToPage(page - 1);
-            return;
-        }
-        reload();
-    };
-
-    const handleEnable = async (user: UserListItem) => {
+    const enable = async (user: UserListItem) => {
         setEnablingId(user.id);
         setEnableError(null);
         try {
@@ -94,204 +73,62 @@ export function UsersList() {
         }
     };
 
-    const isSelf = (user: UserListItem) => {
-        if (sessionUser == null) {
-            return false;
-        }
-        return sessionUser.id === user.id || sessionUser.email === user.email;
+    const actions: UserActions = {
+        canUpdate: can("users.update"),
+        canDisable: can("users.disable"),
+        canDelete: can("users.delete"),
+        edit: openForm,
+        enable: (user) => void enable(user),
+        disable: setDisablingUser,
+        remove: setDeletingUser,
+        enablingId,
+        enableError,
+        isSelf: (user) => sessionUser != null && (sessionUser.id === user.id || sessionUser.email === user.email),
     };
+    const showActions = actions.canUpdate || actions.canDisable || actions.canDelete;
+
+    const createButton = (className?: string) =>
+        canCreate ? (
+            <Button type="button" className={className} onClick={() => openForm(null)}>
+                <Plus aria-hidden/>
+                {t("users.create")}
+            </Button>
+        ) : null;
 
     return (
         <div className="stack stack--lg w-full">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="stack">
-                    <h1 id="users-heading">{t("users.title")}</h1>
-                    <p className="max-w-xl text-muted-foreground">
-                        {t("users.subtitle")}
-                    </p>
-                </div>
-                {canCreate ? (
-                    <Button type="button" className="self-start" onClick={openCreate}>
-                        <Plus aria-hidden/>
-                        {t("users.create")}
-                    </Button>
-                ) : null}
-            </div>
+            <PageHeader id="users-heading" title={t("users.title")} subtitle={t("users.subtitle")} action={createButton("self-start")}/>
 
             {status === "error" ? (
                 <StatusCard title={t("users.loadErrorTitle")} detail={error} onRetry={reload} />
-            ) : status === "ready" && total === 0 ? (
+            ) : status === "ready" && data?.total === 0 ? (
                 <StatusCard title={t("users.emptyTitle")} detail={t("users.emptyDescription")}>
-                    {canCreate ? (
-                        <Button type="button" onClick={openCreate}>
-                            <Plus aria-hidden/>
-                            {t("users.create")}
-                        </Button>
-                    ) : null}
+                    {createButton()}
                 </StatusCard>
             ) : (
                 <div className="stack">
-                    <Card className="gap-0 py-0">
-                        <Table aria-labelledby="users-heading">
-                            <TableHeader>
-                                <TableRow className="hover:bg-transparent">
-                                    <TableHead className="px-4">{t("common.name")}</TableHead>
-                                    <TableHead>{t("common.email")}</TableHead>
-                                    <TableHead>{t("users.table.role")}</TableHead>
-                                    {showActions ? (
-                                        <TableHead className="px-4 text-right">
-                                            {t("common.actions")}
-                                        </TableHead>
-                                    ) : null}
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {status === "loading" ? (
-                                    <TableRow className="hover:bg-transparent">
-                                        <TableCell
-                                            colSpan={showActions ? 4 : 3}
-                                            className="px-4 py-8 text-muted-foreground"
-                                        >
-                                            {t("users.loading")}
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    items.map((user) => (
-                                        <TableRow key={user.id}>
-                                            <TableCell className="px-4 font-medium">
-                                                <span className="inline-flex flex-wrap items-center gap-2">
-                                                    {canViewUser ? (
-                                                        <Link
-                                                            to={`/users/${user.id}`}
-                                                            state={linkState}
-                                                            className="underline-offset-4 hover:underline"
-                                                            aria-label={t("userDetail.openAria", {
-                                                                name: fullName(user),
-                                                            })}
-                                                        >
-                                                            {fullName(user)}
-                                                        </Link>
-                                                    ) : (
-                                                        fullName(user)
-                                                    )}
-                                                    {user.disabled ? (
-                                                        <Badge variant="secondary">{t("users.disabled")}</Badge>
-                                                    ) : null}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell className="text-muted-foreground">
-                                                {user.email}
-                                            </TableCell>
-                                            <TableCell>
-                                                {user.roles.length > 0
-                                                    ? user.roles
-                                                          .map((role) => role.name)
-                                                          .join(", ")
-                                                    : t("common.noDataDash")}
-                                            </TableCell>
-                                            {showActions ? (
-                                                <TableCell className="px-4">
-                                                    <div className="flex justify-end gap-1">
-                                                        {canUpdate ? (
-                                                            <Button
-                                                                type="button"
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                aria-label={t("users.editAria", {
-                                                                    name: fullName(user),
-                                                                })}
-                                                                onClick={() => openEdit(user)}
-                                                            >
-                                                                <Pencil aria-hidden/>
-                                                                {t("common.edit")}
-                                                            </Button>
-                                                        ) : null}
-                                                        {canDisable && user.disabled ? (
-                                                            <Button
-                                                                type="button"
-                                                                variant="outline"
-                                                                size="sm"
-                                                                aria-label={t("users.enableAria", {
-                                                                    name: fullName(user),
-                                                                })}
-                                                                disabled={enablingId === user.id}
-                                                                onClick={() => {
-                                                                    void handleEnable(user);
-                                                                }}
-                                                            >
-                                                                <CircleCheck aria-hidden/>
-                                                                {t("users.enable")}
-                                                            </Button>
-                                                        ) : null}
-                                                        {canDisable && !user.disabled ? (
-                                                            <Button
-                                                                type="button"
-                                                                variant="outline"
-                                                                size="sm"
-                                                                aria-label={
-                                                                    isSelf(user)
-                                                                        ? t("users.cannotDisableSelf")
-                                                                        : t("users.disableAria", {
-                                                                              name: fullName(user),
-                                                                          })
-                                                                }
-                                                                disabled={isSelf(user)}
-                                                                title={
-                                                                    isSelf(user)
-                                                                        ? t("users.cannotDisableSelf")
-                                                                        : undefined
-                                                                }
-                                                                onClick={() => setDisablingUser(user)}
-                                                            >
-                                                                <Ban aria-hidden/>
-                                                                {t("users.disable")}
-                                                            </Button>
-                                                        ) : null}
-                                                        {canDelete ? (
-                                                            <Button
-                                                                type="button"
-                                                                variant="destructive"
-                                                                size="sm"
-                                                                aria-label={
-                                                                    isSelf(user)
-                                                                        ? t("users.cannotDeleteSelf")
-                                                                        : t("users.deleteAria", {
-                                                                              name: fullName(user),
-                                                                          })
-                                                                }
-                                                                disabled={isSelf(user)}
-                                                                title={
-                                                                    isSelf(user)
-                                                                        ? t("users.cannotDeleteSelf")
-                                                                        : undefined
-                                                                }
-                                                                onClick={() => setDeletingUser(user)}
-                                                            >
-                                                                <Trash2 aria-hidden/>
-                                                                {t("common.delete")}
-                                                            </Button>
-                                                        ) : null}
-                                                    </div>
-                                                    {enableError?.id === user.id ? (
-                                                        <p role="alert" className="mt-1 text-right text-xs text-destructive">
-                                                            {enableError.message}
-                                                        </p>
-                                                    ) : null}
-                                                </TableCell>
-                                            ) : null}
-                                        </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </Card>
+                    <DataTable
+                        aria-labelledby="users-heading"
+                        columns={[
+                            {label: t("common.name"), className: "px-4"},
+                            {label: t("common.email")},
+                            {label: t("users.table.role")},
+                            showActions && {label: t("common.actions"), className: "px-4 text-right"},
+                        ]}
+                        loading={status === "loading"}
+                        loadingText={t("users.loading")}
+                    >
+                        {items.map((user) => (
+                            <UserRow key={user.id} user={user} actions={showActions ? actions : null}/>
+                        ))}
+                    </DataTable>
 
                     {data ? (
                         <ListPagination
                             page={page}
                             pages={data.pages}
                             perPage={data.per_page}
-                            total={total}
+                            total={data.total}
                             shown={items.length}
                             onPageChange={goToPage}
                         />
@@ -304,7 +141,7 @@ export function UsersList() {
                 open={formOpen}
                 user={editingUser}
                 onOpenChange={setFormOpen}
-                onSaved={handleSaved}
+                onSaved={reload}
             />
             <ConfirmDialog
                 open={deletingUser != null}
@@ -323,7 +160,7 @@ export function UsersList() {
                 onConfirm={async () => {
                     if (deletingUser) {
                         await deleteUser(deletingUser.id);
-                        handleDeleted();
+                        refreshAfterDelete(page, items.length, goToPage, reload);
                     }
                 }}
             />
@@ -344,10 +181,121 @@ export function UsersList() {
                 onConfirm={async () => {
                     if (disablingUser) {
                         await disableUser(disablingUser.id);
-                        handleSaved();
+                        reload();
                     }
                 }}
             />
         </div>
+    );
+}
+
+function UserRow({user, actions}: {user: UserListItem; actions: UserActions | null}) {
+    const {t} = useI18n();
+    const location = useLocation();
+    // The user page's Back link returns to this page of the list.
+    const linkState: UserDetailLinkState = {from: location.pathname + location.search};
+    const name = fullName(user);
+
+    return (
+        <TableRow>
+            <TableCell className="px-4 font-medium">
+                <span className="inline-flex flex-wrap items-center gap-2">
+                    {can("users.view") ? (
+                        <Link
+                            to={`/users/${user.id}`}
+                            state={linkState}
+                            className="underline-offset-4 hover:underline"
+                            aria-label={t("userDetail.openAria", {name})}
+                        >
+                            {name}
+                        </Link>
+                    ) : (
+                        name
+                    )}
+                    {user.disabled ? <Badge variant="secondary">{t("users.disabled")}</Badge> : null}
+                </span>
+            </TableCell>
+            <TableCell className="text-muted-foreground">{user.email}</TableCell>
+            <TableCell>
+                {user.roles.length > 0 ? user.roles.map((role) => role.name).join(", ") : t("common.noDataDash")}
+            </TableCell>
+            {actions ? (
+                <TableCell className="px-4">
+                    <UserRowActions user={user} actions={actions}/>
+                </TableCell>
+            ) : null}
+        </TableRow>
+    );
+}
+
+function UserRowActions({user, actions}: {user: UserListItem; actions: UserActions}) {
+    const {t} = useI18n();
+    const name = fullName(user);
+    const self = actions.isSelf(user);
+
+    return (
+        <>
+            <div className="flex justify-end gap-1">
+                {actions.canUpdate ? (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        aria-label={t("users.editAria", {name})}
+                        onClick={() => actions.edit(user)}
+                    >
+                        <Pencil aria-hidden/>
+                        {t("common.edit")}
+                    </Button>
+                ) : null}
+                {actions.canDisable && user.disabled ? (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        aria-label={t("users.enableAria", {name})}
+                        disabled={actions.enablingId === user.id}
+                        onClick={() => actions.enable(user)}
+                    >
+                        <CircleCheck aria-hidden/>
+                        {t("users.enable")}
+                    </Button>
+                ) : null}
+                {actions.canDisable && !user.disabled ? (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        // Nobody can disable or delete themselves; the label says why.
+                        aria-label={self ? t("users.cannotDisableSelf") : t("users.disableAria", {name})}
+                        title={self ? t("users.cannotDisableSelf") : undefined}
+                        disabled={self}
+                        onClick={() => actions.disable(user)}
+                    >
+                        <Ban aria-hidden/>
+                        {t("users.disable")}
+                    </Button>
+                ) : null}
+                {actions.canDelete ? (
+                    <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        aria-label={self ? t("users.cannotDeleteSelf") : t("users.deleteAria", {name})}
+                        title={self ? t("users.cannotDeleteSelf") : undefined}
+                        disabled={self}
+                        onClick={() => actions.remove(user)}
+                    >
+                        <Trash2 aria-hidden/>
+                        {t("common.delete")}
+                    </Button>
+                ) : null}
+            </div>
+            {actions.enableError?.id === user.id ? (
+                <p role="alert" className="mt-1 text-right text-xs text-destructive">
+                    {actions.enableError.message}
+                </p>
+            ) : null}
+        </>
     );
 }
