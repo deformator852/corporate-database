@@ -1,0 +1,1 @@
+# CA of the SSO provider's TLS certificate goes here as ca.pem, when a company CA signed it (uv run configure copies it).

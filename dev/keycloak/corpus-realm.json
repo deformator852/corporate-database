@@ -1,0 +1,55 @@
+{
+  "realm": "corpus",
+  "displayName": "Acme (local SSO test)",
+  "enabled": true,
+  "groups": [{"name": "Corpus Admins"}, {"name": "Legal"}],
+  "users": [
+    {
+      "username": "ana",
+      "email": "ana@acme.test",
+      "emailVerified": true,
+      "firstName": "Ana",
+      "lastName": "Lopez",
+      "enabled": true,
+      "credentials": [{"type": "password", "value": "ana-password-1", "temporary": false}],
+      "groups": ["/Corpus Admins"]
+    },
+    {
+      "username": "bob",
+      "email": "bob@acme.test",
+      "emailVerified": true,
+      "firstName": "Bob",
+      "lastName": "Martin",
+      "enabled": true,
+      "credentials": [{"type": "password", "value": "bob-password-1", "temporary": false}],
+      "groups": ["/Legal"]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "corpus",
+      "name": "Corpus",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "corpus-local-secret-0123456789",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost:5173/api/v1/auth/sso/callback"],
+      "attributes": {"pkce.code.challenge.method": "S256"},
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": {
+            "claim.name": "groups",
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "false",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

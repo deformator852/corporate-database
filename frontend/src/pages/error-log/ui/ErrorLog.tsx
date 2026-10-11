@@ -13,11 +13,12 @@ import {StatusCard} from "@/shared/ui/StatusCard";
 import {cn} from "cn";
 import {getErrorLogPage} from "@pages/error-log/api/errorLog";
 import {
+    ERROR_CATEGORIES,
     ERROR_LEVELS,
-    ERROR_SOURCES,
+    categoryKey,
     levelKey,
-    sourceKey,
     type ErrorLogEntry,
+    type ErrorLogFilters,
 } from "@pages/error-log/model/errorLog";
 
 /** Warnings and errors of the backend and the worker, newest first, with
@@ -26,46 +27,39 @@ export function ErrorLog() {
     const {t} = useI18n();
     const [params, updateParams] = useUrlParams();
     const [page, goToPage] = usePageParam();
-    const level = (ERROR_LEVELS as readonly string[]).includes(params.get("level") ?? "") ? params.get("level")! : "";
-    const source = (ERROR_SOURCES as readonly string[]).includes(params.get("source") ?? "") ? params.get("source")! : "";
+    const filters: ErrorLogFilters = {
+        level: known(ERROR_LEVELS, params.get("level")),
+        category: known(ERROR_CATEGORIES, params.get("category")),
+    };
     const {status, data, error, reload} = useRequest(
-        `${page}:${level}:${source}`,
-        () => getErrorLogPage(page, level, source),
+        `${page}:${filters.level}:${filters.category}`,
+        () => getErrorLogPage(page, filters),
         t("errorLog.loadError"),
     );
     const items = data?.items ?? [];
+    const choose = (name: keyof ErrorLogFilters) => (value: string) => updateParams({[name]: value, page: "1"});
 
     return (
         <div className="stack stack--lg w-full">
             <PageHeader title={t("errorLog.title")} subtitle={t("errorLog.subtitle")} />
 
             <div className="flex flex-col gap-3 sm:flex-row">
-                <NativeSelect
-                    className="w-full sm:w-56"
-                    aria-label={t("errorLog.filterLevel")}
-                    value={level}
-                    onChange={(event) => updateParams({level: event.target.value, page: "1"})}
-                >
-                    <NativeSelectOption value="">{t("errorLog.allLevels")}</NativeSelectOption>
-                    {ERROR_LEVELS.map((value) => (
-                        <NativeSelectOption key={value} value={value}>
-                            {t(levelKey(value))}
-                        </NativeSelectOption>
-                    ))}
-                </NativeSelect>
-                <NativeSelect
-                    className="w-full sm:w-56"
-                    aria-label={t("errorLog.filterSource")}
-                    value={source}
-                    onChange={(event) => updateParams({source: event.target.value, page: "1"})}
-                >
-                    <NativeSelectOption value="">{t("errorLog.allSources")}</NativeSelectOption>
-                    {ERROR_SOURCES.map((value) => (
-                        <NativeSelectOption key={value} value={value}>
-                            {t(sourceKey(value))}
-                        </NativeSelectOption>
-                    ))}
-                </NativeSelect>
+                <Filter
+                    label={t("errorLog.filterCategory")}
+                    all={t("errorLog.allCategories")}
+                    values={ERROR_CATEGORIES}
+                    labelOf={(value) => t(categoryKey(value))}
+                    value={filters.category}
+                    onChange={choose("category")}
+                />
+                <Filter
+                    label={t("errorLog.filterLevel")}
+                    all={t("errorLog.allLevels")}
+                    values={ERROR_LEVELS}
+                    labelOf={(value) => t(levelKey(value))}
+                    value={filters.level}
+                    onChange={choose("level")}
+                />
             </div>
 
             {status === "error" ? (
@@ -99,6 +93,45 @@ export function ErrorLog() {
     );
 }
 
+/** `value` when it is one of `values`; anything else means no filter. */
+function known(values: readonly string[], value: string | null): string {
+    return value != null && values.includes(value) ? value : "";
+}
+
+function Filter({
+    label,
+    all,
+    values,
+    labelOf,
+    value,
+    onChange,
+}: {
+    label: string;
+    all: string;
+    values: readonly string[];
+    labelOf: (value: string) => string;
+    value: string;
+    onChange: (value: string) => void;
+}) {
+    return (
+        <NativeSelect className="w-full sm:w-56" aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>
+            <NativeSelectOption value="">{all}</NativeSelectOption>
+            {values.map((option) => (
+                <NativeSelectOption key={option} value={option}>
+                    {labelOf(option)}
+                </NativeSelectOption>
+            ))}
+        </NativeSelect>
+    );
+}
+
+// Unhandled errors are bugs to look at first: they stand out.
+const CATEGORY_STYLE: Record<string, string> = {
+    unhandled: "border border-destructive/40 text-destructive",
+    app: "border border-border",
+    library: "border border-dashed border-border",
+};
+
 const LEVEL_STYLE: Record<string, string> = {
     warning: "bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-100",
     error: "bg-destructive/10 text-destructive",
@@ -117,7 +150,9 @@ function ErrorEntry({entry}: {entry: ErrorLogEntry}) {
                 <span className={cn("rounded-full px-2 py-0.5 font-medium", LEVEL_STYLE[entry.level])}>
                     {t(levelKey(entry.level))}
                 </span>
-                <span>{t(sourceKey(entry.source))}</span>
+                <span className={cn("rounded-full px-2 py-0.5", CATEGORY_STYLE[entry.category])}>
+                    {t(categoryKey(entry.category))}
+                </span>
                 <span className="font-mono">{entry.logger}</span>
                 <time dateTime={entry.created_at} className="tabular-nums">
                     {time.format(new Date(entry.created_at))}

@@ -92,8 +92,8 @@ SYSTEM_PERMISSIONS = (
     ),
     (
         "system.rechunk",
-        "Re-chunk documents",
-        "Cut documents processed before a chunk size change again, with the current size",
+        "Update documents for search",
+        "Prepare documents again for search after the search settings change (System page)",
     ),
 )
 

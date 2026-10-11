@@ -6,4 +6,7 @@ export type SessionUser = {
     permissions: string[];
     /** Chosen in the header; null: the default language. */
     language: string | null;
+    /** Signs in with a Corpus password, which they may change. False for
+     * SSO users, and for everyone while single sign-on is on. */
+    uses_password: boolean;
 };

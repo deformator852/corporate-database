@@ -21,6 +21,7 @@ MODULES = (
     "setup.steps.chunking",
     "setup.steps.chat",
     "setup.steps.key_store",
+    "setup.steps.sso",
 )
 
 
@@ -65,8 +66,8 @@ def test_env_file_helpers(env, monkeypatch):
     env_module.upsert_env(env, "DB_USER", "corporate")
     env_module.upsert_env(env, "NEW_KEY", "value")
     assert env.read_text() == "# DB_USER=commented\nDB_USER=corporate\nOTHER=1\n\nNEW_KEY=value\n"
-    with pytest.raises(ValueError):
-        env_module.upsert_env(env, "BAD", "two words")
+    env_module.upsert_env(env, "SPACED", "two words")  # a group name, a button label
+    assert "SPACED='two words'" in env.read_text() and env_module.env_value(env, "SPACED") == "two words"
 
     tokens = iter(["-starts-with-dash", "fine"])
     monkeypatch.setattr(env_module.secrets, "token_urlsafe", lambda n: next(tokens))
@@ -350,7 +351,7 @@ def test_setup_and_configure_run_their_steps(env, answers, monkeypatch, capsys):
     ran: list[list[str]] = []
     monkeypatch.setattr(configure, "run", lambda steps, *a, **k: ran.append([s.title for s in steps]))
     configure.main()
-    assert ran == [["System language", "LLM model", "Chat capacity", "Chunk size", "Encryption key storage"]]
+    assert ran == [["System language", "LLM model", "Chat capacity", "Chunk size", "Sign-in", "Encryption key storage"]]
 
     env.write_text("DATA_ENCRYPTION_KEY=" + "k" * 40 + "\n")
     monkeypatch.setattr(sys, "argv", ["setup", "key"])
@@ -361,3 +362,75 @@ def test_setup_and_configure_run_their_steps(env, answers, monkeypatch, capsys):
     app.run([step], "Done.", footer="Restart now.")
     output = capsys.readouterr().out
     assert "step ran" in output and "Done." in output and "Restart now." in output
+
+
+def test_sign_in_step_turns_sso_on_and_off(env, answers):
+    from setup.steps.sso import SsoStep
+
+    env.write_text("SITE_ADDRESS=corpus.acme.io\n")
+    answers.extend([True, "http://idp", "https://idp.acme.io/realms/acme/", ""])  # https asked again; no CA
+    answers.extend(["corpus", "s3cret", None, "Acme", None, "Corpus Admins=admin;Legal=legal"])
+    answers.extend([False])  # no takeover by email
+    console = _console()
+    SsoStep().run(console)
+
+    values = _values(env)
+    assert values["OIDC_ISSUER"] == "https://idp.acme.io/realms/acme"  # asked again until https
+    assert values["OIDC_CLIENT_SECRET"] == "s3cret" and "s3cret" not in console.export_text()
+    assert values["OIDC_REDIRECT_URI"] == "https://corpus.acme.io/api/v1/auth/sso/callback"
+    assert values["OIDC_ROLE_MAP"] == "'Corpus Admins=admin;Legal=legal'"  # quoted: it has a space
+
+    answers.extend([True, None, None, None, "", None, None, None, None, None])  # keep everything
+    SsoStep().run(_console())
+    assert _values(env)["OIDC_CLIENT_SECRET"] == "s3cret"
+
+    # No map: administrators assign roles; the key goes instead of failing.
+    answers.extend([True, None, None, None, "", None, None, None, "", None])
+    SsoStep().run(_console())
+    assert "OIDC_ROLE_MAP" not in _values(env)
+
+    answers.extend([False])
+    SsoStep().run(_console())
+    values = _values(env)
+    assert "OIDC_ISSUER" not in values and "OIDC_CLIENT_SECRET" not in values
+
+
+def test_secret_prompts_never_show_the_current_secret(env, monkeypatch):
+    """rich prints a prompt's default next to it; for a secret that would put
+    it on the screen (and in terminal logs) whenever setup runs again."""
+    from rich.prompt import PromptBase
+
+    from setup.steps import key_store, sso
+
+    env.write_text(
+        "VAULT_SECRET_ID=current-secret-id\nOIDC_ISSUER=https://idp.acme.io\nOIDC_CLIENT_ID=corpus\n"
+        "OIDC_CLIENT_SECRET=current-client-secret\nOIDC_REDIRECT_URI=https://c.acme.io/cb\nOIDC_NAME=Acme\n"
+        "OIDC_GROUPS_CLAIM=groups\nOIDC_ROLE_MAP=A=admin\n"
+    )
+    shown: list[str] = []
+
+    def ask(cls, prompt="", *, default=..., show_default=True, password=False, console=None, **kwargs):
+        if password and show_default and default not in (..., None, ""):
+            shown.append(str(default))
+        return default if default is not ... else ""
+
+    monkeypatch.setattr(PromptBase, "ask", classmethod(ask))
+    assert key_store._ask_vault(_console()).secret_id == "current-secret-id"  # Enter keeps it
+    monkeypatch.setattr(sso.Confirm, "ask", classmethod(lambda cls, *a, **k: True))
+    sso.SsoStep().run(_console())
+    assert shown == [] and _values(env)["OIDC_CLIENT_SECRET"] == "current-client-secret"
+
+
+def test_env_values_with_spaces_are_quoted_and_read_back(tmp_path):
+    from dotenv import dotenv_values
+
+    from setup.env import env_value, upsert_env
+
+    path = tmp_path / ".env"
+    upsert_env(path, "OIDC_NAME", "Microsoft Entra")
+    upsert_env(path, "OIDC_ROLE_MAP", "CN=Corpus Admins,OU=Groups,DC=acme=admin")
+    assert env_value(path, "OIDC_NAME") == "Microsoft Entra"
+    assert dotenv_values(path)["OIDC_ROLE_MAP"] == "CN=Corpus Admins,OU=Groups,DC=acme=admin"
+    for bad in ("", "two\nlines", "it's mine"):
+        with pytest.raises(ValueError):
+            upsert_env(path, "OIDC_NAME", bad)

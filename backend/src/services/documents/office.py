@@ -1,15 +1,27 @@
 import asyncio
 import os
 import shutil
+import signal
 import tempfile
 from pathlib import Path
 
 from exceptions import AppError
 
 CONVERT_TIMEOUT_SECONDS = 60
+# Each conversion starts a LibreOffice of a few hundred MB: a burst of .doc
+# uploads must not take all the memory of the backend.
+_CONVERSIONS = asyncio.Semaphore(2)
+# LibreOffice parses files from users: it gets no secrets of the backend
+# (keys, passwords), only what it needs to run.
+_PASSED_ENV = ("PATH", "LANG", "LC_ALL", "TMPDIR")
 
 
 async def convert_doc_to_docx(content: bytes) -> bytes:
+    async with _CONVERSIONS:
+        return await _convert(content)
+
+
+async def _convert(content: bytes) -> bytes:
     soffice = shutil.which("soffice") or shutil.which("libreoffice")
     if soffice is None:
         raise AppError(
@@ -27,7 +39,7 @@ async def convert_doc_to_docx(content: bytes) -> bytes:
         profile.mkdir()
         await asyncio.to_thread(source.write_bytes, content)
 
-        env = os.environ.copy()
+        env = {name: os.environ[name] for name in _PASSED_ENV if name in os.environ}
         env["HOME"] = str(tmp_path)
         process = await asyncio.create_subprocess_exec(
             soffice,
@@ -45,6 +57,9 @@ async def convert_doc_to_docx(content: bytes) -> bytes:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=env,
+            # Its own process group: soffice starts soffice.bin, which a kill
+            # of soffice alone would leave running.
+            start_new_session=True,
         )
         try:
             await asyncio.wait_for(
@@ -52,7 +67,10 @@ async def convert_doc_to_docx(content: bytes) -> bytes:
                 timeout=CONVERT_TIMEOUT_SECONDS,
             )
         except TimeoutError as exc:
-            process.kill()
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
             await process.communicate()
             raise AppError(
                 "unavailable",

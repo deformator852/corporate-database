@@ -6,13 +6,16 @@ from models.user import User
 from schemas.email import Email
 from schemas.model_config import MODEL_CONFIG, ORM_MODEL_CONFIG
 from schemas.user import check_password_fits
+from services.password import uses_password
 
 
 class LoginSchema(BaseModel):
     model_config = MODEL_CONFIG
 
     email: Email
-    password: str
+    # No stored password is longer (bcrypt reads 72 bytes); a bound keeps
+    # huge bodies from being encoded and compared.
+    password: str = Field(max_length=200)
 
 
 class PasswordChangeSchema(BaseModel):
@@ -44,6 +47,9 @@ class SessionUserSchema(BaseModel):
     permissions: list[str]
     # None until the user picks one in the header: the default language.
     language: str | None
+    # Signs in with a Corpus password, which they may change. False for SSO
+    # users, and, while single sign-on is on, for all but administrators.
+    uses_password: bool
 
     @classmethod
     def from_user(cls, user: User) -> Self:
@@ -53,5 +59,6 @@ class SessionUserSchema(BaseModel):
             last_name=user.last_name,
             email=user.email,
             language=user.language,
+            uses_password=uses_password(user),
             permissions=sorted({permission.key for role in user.roles for permission in role.permissions}),
         )

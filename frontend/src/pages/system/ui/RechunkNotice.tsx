@@ -10,17 +10,7 @@ import {rechunkDocuments} from "@pages/system/api/system";
 
 /** Documents cut with another chunk size than the current one: they keep
  * working as they are; an admin may cut them again. */
-export function RechunkNotice({
-    outdated,
-    size,
-    overlap,
-    onStarted,
-}: {
-    outdated: number;
-    size: number;
-    overlap: number;
-    onStarted: () => void;
-}) {
+export function RechunkNotice({outdated, onStarted}: {outdated: number; onStarted: () => void}) {
     const {t} = useI18n();
     const [confirming, setConfirming] = useState(false);
     const [started, setStarted] = useState<number | null>(null);
@@ -37,7 +27,7 @@ export function RechunkNotice({
     }
     return (
         <Card className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm">{t("system.rechunk.outdated", {count: outdated, size, overlap})}</p>
+            <p className="text-sm">{t("system.rechunk.outdated", {count: outdated})}</p>
             {can("system.rechunk") ? (
                 <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => setConfirming(true)}>
                     <Scissors aria-hidden />

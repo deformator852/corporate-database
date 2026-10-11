@@ -64,7 +64,11 @@ def _keys_to_move() -> str:
 def _ask_vault(console: Console) -> VaultConfig:
     def ask(name: str, label: str, default: str = "", *, password: bool = False) -> str:
         current = _setting(name) or default
-        return Prompt.ask(label, default=current or None, password=password, console=console) or ""
+        if password:
+            # Never shown, not even as the default: Enter keeps the current one.
+            label += " (hidden while you type or paste" + ("; Enter keeps the current one)" if current else ")")
+            return Prompt.ask(label, default=current, password=True, show_default=False, console=console) or ""
+        return Prompt.ask(label, default=current or None, console=console) or ""
 
     ca = ask("VAULT_CACERT", "CA file of Vault's certificate (empty: system CAs)").strip()
     if ca and Path(ca).resolve() != CA_COPY.resolve():

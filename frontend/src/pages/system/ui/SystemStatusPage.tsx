@@ -148,12 +148,7 @@ export function SystemStatusPage() {
                         </div>
                     </section>
 
-                    <RechunkNotice
-                        outdated={data.outdated_chunks}
-                        size={data.config.chunk_size}
-                        overlap={data.config.chunk_overlap}
-                        onStarted={load}
-                    />
+                    <RechunkNotice outdated={data.outdated_chunks} onStarted={load} />
 
                     <div className="grid gap-4 lg:grid-cols-2">
                         <section aria-labelledby="documents-heading" className="stack">

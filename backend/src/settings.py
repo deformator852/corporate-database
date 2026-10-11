@@ -266,3 +266,64 @@ def llm_model() -> str:
             status_code=500,
         )
     return value
+
+
+def _flag(name: str, default: bool) -> bool:
+    raw = (os.getenv(name) or "").strip().lower()
+    return default if not raw else raw in {"1", "true", "yes", "on"}
+
+
+@dataclass(frozen=True, slots=True)
+class OidcConfig:
+    """Single sign-on with the company's identity provider (OpenID Connect):
+    Microsoft Entra ID, ADFS, Keycloak, Okta and the like."""
+
+    issuer: str
+    client_id: str
+    client_secret: str
+    # This server's callback, as registered at the provider:
+    # https://SITE/api/v1/auth/sso/callback.
+    redirect_uri: str
+    # Shown on the sign-in button: "Sign in with NAME".
+    name: str
+    # ID token claim listing the user's groups.
+    groups_claim: str
+    # Provider group -> Corpus role key. Mapped roles follow the groups at
+    # every sign-in; other roles stay as administrators set them.
+    role_map: dict[str, str]
+    # A first SSO sign-in takes over the Corpus account with the same email.
+    link_by_email: bool
+    # host:port to dial instead of the issuer's host, with TLS still checked
+    # against the issuer's name: production's sso-tunnel, the backend's only
+    # way out of the internal network.
+    connect: str = ""
+    # CA file of the provider's certificate when a company CA signed it.
+    cacert: str = ""
+
+
+def _role_map(raw: str) -> dict[str, str]:
+    """`group=role;group=role`. Split at the last `=`: group names may hold
+    one (LDAP DNs: CN=Legal,OU=Groups,DC=acme)."""
+    pairs = (pair.rpartition("=") for pair in raw.split(";") if pair.strip())
+    return {group.strip(): role.strip() for group, _, role in pairs if group.strip() and role.strip()}
+
+
+def oidc_config() -> OidcConfig | None:
+    """None while OIDC_ISSUER is unset: SSO is off."""
+    issuer = (os.getenv("OIDC_ISSUER") or "").strip().rstrip("/")
+    if not issuer:
+        return None
+    if not issuer.startswith("https://"):
+        raise AppError("misconfigured", "OIDC_ISSUER must be an https:// address.", status_code=500)
+    return OidcConfig(
+        issuer=issuer,
+        client_id=_require("OIDC_CLIENT_ID"),
+        client_secret=_require("OIDC_CLIENT_SECRET"),
+        redirect_uri=_require("OIDC_REDIRECT_URI"),
+        name=(os.getenv("OIDC_NAME") or "SSO").strip(),
+        groups_claim=(os.getenv("OIDC_GROUPS_CLAIM") or "groups").strip(),
+        role_map=_role_map(os.getenv("OIDC_ROLE_MAP") or ""),
+        link_by_email=_flag("OIDC_LINK_BY_EMAIL", False),
+        connect=(os.getenv("OIDC_CONNECT") or "").strip(),
+        cacert=(os.getenv("OIDC_CACERT") or "").strip(),
+    )

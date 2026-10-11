@@ -21,7 +21,8 @@ class DocumentHub:
     async def broadcast(self, payload: dict) -> None:
         classification = payload.get("classification") or "standard"
         stale: list[WebSocket] = []
-        for client, allowed in self._clients.items():
+        # A copy: clients connect and leave while a send is awaited.
+        for client, allowed in list(self._clients.items()):
             if classification not in allowed:
                 continue
             try:

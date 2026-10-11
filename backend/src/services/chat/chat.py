@@ -1,7 +1,7 @@
 import asyncio
 from collections.abc import Sequence
 
-from sqlalchemy import func, literal, or_, select
+from sqlalchemy import and_, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from exceptions import AppError
@@ -19,6 +19,8 @@ from settings import embedding_model
 
 _MAX_DOCS = 2
 _MAX_CHARS = 100_000
+# A document name shorter than this is not looked for in the question.
+_MIN_NAMED_LENGTH = 3
 # Said without asking the model when no document passes the search: given
 # only the chat history, a small model invents an answer that looks sourced.
 NO_DOCUMENTS_ANSWER = "I don't know: none of the documents you can access answer this."
@@ -178,13 +180,17 @@ class ChatService:
     async def _named_document_ids(self, query: str, allowed: tuple[str, ...]) -> list[int]:
         # Documents whose name or filename appears in the question. Postgres
         # compares and returns ids only, instead of loading every document.
+        # Names this short ("A", "HR") are inside almost any question.
         needle = literal(query.lower())
         ids = await self.session.scalars(
             select(Document.id).where(
                 Document.classification.in_(allowed),
                 Document.status == DocumentStatus.COMPLETED,
                 or_(
-                    func.strpos(needle, func.lower(Document.name)) > 0,
+                    and_(
+                        func.length(Document.name) >= _MIN_NAMED_LENGTH,
+                        func.strpos(needle, func.lower(Document.name)) > 0,
+                    ),
                     func.strpos(needle, func.lower(Document.filename)) > 0,
                 ),
             )

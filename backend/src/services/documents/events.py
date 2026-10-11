@@ -1,4 +1,5 @@
 import json
+import logging
 from collections.abc import Awaitable, Callable
 
 import aio_pika
@@ -8,6 +9,8 @@ from models.document import Document
 from settings import DOCUMENT_EVENTS_EXCHANGE, rabbitmq_url
 
 DocumentEvent = dict[str, object]
+
+logger = logging.getLogger(__name__)
 
 
 def document_event(document: Document) -> DocumentEvent:
@@ -67,7 +70,15 @@ async def consume_document_events(
         async with queue.iterator() as messages:
             async for message in messages:
                 async with message.process():
-                    payload = json.loads(message.body.decode())
-                    await on_event(payload)
+                    # One bad message or failed send must not end the
+                    # consumer: live updates would stop for everyone.
+                    try:
+                        payload = json.loads(message.body.decode())
+                    except UnicodeDecodeError, json.JSONDecodeError:
+                        continue
+                    try:
+                        await on_event(payload)
+                    except Exception:
+                        logger.warning("Could not deliver a document event", exc_info=True)
     finally:
         await connection.close()

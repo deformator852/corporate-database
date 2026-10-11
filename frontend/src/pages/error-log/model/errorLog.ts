@@ -2,17 +2,18 @@ import type {MessageKey} from "@/shared/i18n/messages";
 
 export const ERROR_LOG_PER_PAGE = 25;
 export const ERROR_LEVELS = ["warning", "error", "critical"] as const;
-export const ERROR_SOURCES = ["backend", "worker"] as const;
+/** unhandled: a bug nothing caught; app: Corpus logged it; library: a
+ * package Corpus uses warned (backend services/error_log.py). */
+export const ERROR_CATEGORIES = ["unhandled", "app", "library"] as const;
 
 export type ErrorLevel = (typeof ERROR_LEVELS)[number];
-export type ErrorSource = (typeof ERROR_SOURCES)[number];
 
 export type ErrorLogEntry = {
     id: number;
     created_at: string;
     level: string;
-    source: string;
     logger: string;
+    category: string;
     message: string;
     traceback: string | null;
 };
@@ -29,6 +30,9 @@ export function levelKey(level: string): MessageKey {
     return `errorLog.level.${level}` as MessageKey;
 }
 
-export function sourceKey(source: string): MessageKey {
-    return `errorLog.source.${source}` as MessageKey;
+export function categoryKey(category: string): MessageKey {
+    return `errorLog.category.${category}` as MessageKey;
 }
+
+/** The filters the page reads from its address. */
+export type ErrorLogFilters = {level: string; category: string};

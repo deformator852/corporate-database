@@ -104,5 +104,49 @@ Start the backend and the worker again and the worker embeds them with the
 new model. Run it with the current model to rebuild the index, for example
 after changing the chunk size.
 
+## Testing single sign-on locally
+
+A test identity provider (Keycloak) runs in Docker when you ask for it. Its
+realm `corpus` comes from `dev/keycloak/corpus-realm.json`:
+
+| User | Password | Group |
+|---|---|---|
+| `ana` | `ana-password-1` | Corpus Admins |
+| `bob` | `bob-password-1` | Legal |
+
+These are test values; never use them anywhere else.
+
+1. Start Keycloak from the repository root. The first start makes a
+   self-signed certificate in `dev/keycloak/certs/`.
+
+   ```sh
+   docker compose --env-file backend/.env -f docker-compose.local.yml --profile sso up -d keycloak
+   ```
+
+2. Open `https://localhost:8443` once and accept the certificate warning.
+3. In `backend/`, run `uv run configure`. At the Sign-in step answer yes and
+   enter:
+
+   | Question | Answer |
+   |---|---|
+   | Issuer address | `https://localhost:8443/realms/corpus` |
+   | CA file | `../dev/keycloak/certs/ca.pem` |
+   | Client ID | `corpus` |
+   | Client secret | `corpus-local-secret-0123456789` |
+   | Callback address | `http://localhost:5173/api/v1/auth/sso/callback` |
+   | Button name | `Keycloak` |
+   | Group to role map | `Corpus Admins=admin` |
+
+4. Restart the backend and the frontend development server, open
+   `http://localhost:5173/login` and select **Sign in with Keycloak**.
+
+Manage users and groups in the Keycloak admin console,
+`https://localhost:8443/admin` (`admin` / `admin`). Keycloak keeps changes
+until its container is removed; then the realm loads from the file again.
+
+To stop it, run `docker compose -f docker-compose.local.yml --profile sso
+stop keycloak`. To turn single sign-on off, run `uv run configure` and answer
+no at the Sign-in step.
+
 To deploy to a server, see
 [Deploying Corpus on a company server](../documentations/deployment.md).

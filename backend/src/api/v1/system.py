@@ -9,7 +9,7 @@ from database import get_db
 from models.audit import AuditAction
 from models.user import User
 from schemas.error import error_responses
-from schemas.error_log import ErrorLevel, ErrorLogListSchema, ErrorSource
+from schemas.error_log import ErrorCategory, ErrorLevel, ErrorLogListSchema
 from security import get_ws_payload
 from services.audit import AuditService
 from services.documents.document import CeleryDocumentQueue
@@ -45,11 +45,11 @@ async def list_errors(
     page: Annotated[int, Query(ge=1)] = 1,
     per_page: Annotated[int, Query(ge=1, le=100)] = 25,
     level: ErrorLevel | None = None,
-    source: ErrorSource | None = None,
+    category: ErrorCategory | None = None,
     session: AsyncSession = Depends(get_db, scope="function"),
 ) -> ErrorLogListSchema:
     """Warnings and errors of the backend and the worker, newest first."""
-    entries, total = await ErrorLogService(session).list_entries(page, per_page, level, source)
+    entries, total = await ErrorLogService(session).list_entries(page, per_page, level, category)
     return ErrorLogListSchema.from_page(entries, page=page, per_page=per_page, total=total)
 
 

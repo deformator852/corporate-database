@@ -88,6 +88,15 @@ _ES = {
     "Conversation not found": "Conversación no encontrada",
     "This language is not available.": "Este idioma no está disponible.",
     "The search index is already being rebuilt.": "El índice de búsqueda ya se está reconstruyendo.",
+    "Sign in with SSO.": "Inicie sesión con SSO.",
+    "An account with this email already exists. Ask an administrator.": "Ya existe una cuenta con este correo. Consulte a un administrador.",
+    "The SSO provider sent no email address.": "El proveedor de SSO no envió ninguna dirección de correo.",
+    "The sign-in was cancelled.": "Se canceló el inicio de sesión.",
+    "The sign-in expired. Try again.": "El inicio de sesión caducó. Vuelva a intentarlo.",
+    "The SSO provider's answer could not be verified.": "No se pudo verificar la respuesta del proveedor de SSO.",
+    "Could not reach the SSO provider.": "No se pudo contactar con el proveedor de SSO.",
+    "Single sign-on is not set up.": "El inicio de sesión único no está configurado.",
+    "This account signs in with SSO and has no password.": "Esta cuenta inicia sesión con SSO y no tiene contraseña.",
     "Notification not found": "Notificación no encontrada",
 }
 
@@ -164,6 +173,15 @@ _FR = {
     "Conversation not found": "Conversation introuvable",
     "This language is not available.": "Cette langue n’est pas disponible.",
     "The search index is already being rebuilt.": "L’index de recherche est déjà en cours de reconstruction.",
+    "Sign in with SSO.": "Connectez-vous avec le SSO.",
+    "An account with this email already exists. Ask an administrator.": "Un compte avec cet e-mail existe déjà. Contactez un administrateur.",
+    "The SSO provider sent no email address.": "Le fournisseur SSO n’a envoyé aucune adresse e-mail.",
+    "The sign-in was cancelled.": "La connexion a été annulée.",
+    "The sign-in expired. Try again.": "La connexion a expiré. Réessayez.",
+    "The SSO provider's answer could not be verified.": "La réponse du fournisseur SSO n’a pas pu être vérifiée.",
+    "Could not reach the SSO provider.": "Impossible de joindre le fournisseur SSO.",
+    "Single sign-on is not set up.": "L’authentification unique n’est pas configurée.",
+    "This account signs in with SSO and has no password.": "Ce compte se connecte avec le SSO et n’a pas de mot de passe.",
     "Notification not found": "Notification introuvable",
 }
 

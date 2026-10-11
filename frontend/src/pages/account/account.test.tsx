@@ -53,4 +53,10 @@ describe("My account", () => {
             new_password: "new-password-1",
         });
     });
+
+    it("sends SSO users to their company for the password", async () => {
+        renderApp("/account", sessionUser([], {uses_password: false}));
+        expect(await screen.findByText("You sign in with your company account. Change your password there.")).toBeInTheDocument();
+        expect(screen.queryByLabelText("Current password")).not.toBeInTheDocument();
+    });
 });

@@ -65,15 +65,23 @@ api.interceptors.response.use(
 
 export function refreshSession(): Promise<void> {
     if (refreshRequest == null) {
-        refreshRequest = api
-            .post("/auth/refresh")
-            .then(() => undefined)
-            .finally(() => {
-                refreshRequest = null;
-            });
+        refreshRequest = oneTabAtATime(() => api.post("/auth/refresh").then(() => undefined)).finally(() => {
+            refreshRequest = null;
+        });
     }
 
     return refreshRequest;
+}
+
+/**
+ * Each refresh token works once, and every tab shares it. When the access
+ * token expires, the sockets of all tabs drop together and each tab
+ * refreshes: run at once, all but the first would send the token the first
+ * just used up and sign the user out. In turn, each sends the newest one.
+ */
+function oneTabAtATime<T>(work: () => Promise<T>): Promise<T> {
+    const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
+    return locks ? locks.request("corpus-session-refresh", work) : work();
 }
 
 function isRefreshRequest(config: InternalAxiosRequestConfig): boolean {

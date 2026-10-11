@@ -40,7 +40,9 @@ def _pick_one(console: Console, codes: list[str], default: str, prompt: str) -> 
 def _pick_several(console: Console, codes: list[str], current: list[str]) -> list[str]:
     default = ",".join(str(codes.index(code) + 1) for code in current) if len(current) > 1 else ""
     while True:
-        raw = Prompt.ask("Languages (numbers separated by commas)", default=default or None, console=console)
+        raw = Prompt.ask(
+            "Languages (numbers separated by commas, for example 1,2)", default=default or None, console=console
+        )
         try:
             numbers = [int(part) for part in (raw or "").split(",") if part.strip()]
         except ValueError:
@@ -57,13 +59,15 @@ class LanguageStep:
 
     def run(self, console: Console) -> None:
         console.print(
-            "The interface, the assistant's answers, and the embedding models offered next all follow this choice."
+            "Corpus works in one language or in several. With several, each user picks their language "
+            "with a button at the top of the page, and the assistant answers in it. The search models "
+            "offered next are the ones that read every chosen language."
         )
         current = current_languages()
         codes = list(LANGUAGES)
         _table(console, codes, current)
         multilingual = Confirm.ask(
-            "Multilingual: documents in several languages, and each user picks the interface language in the header?",
+            "Use more than one language?",
             default=len(current) > 1,
             console=console,
         )
@@ -74,12 +78,12 @@ class LanguageStep:
                 console,
                 chosen,
                 default,
-                "Default language ("
+                "Language for users who have not picked one ("
                 + ", ".join(f"{index} {LANGUAGES[code]}" for index, code in enumerate(chosen, start=1))
                 + ")",
             )
         else:
-            default = _pick_one(console, codes, current[0], "Choice")
+            default = _pick_one(console, codes, current[0], "Language (number)")
             chosen = [default]
         enabled = ",".join([default, *(code for code in chosen if code != default)])
         upsert_env(ENV_PATH, "APP_LANGUAGE", default)

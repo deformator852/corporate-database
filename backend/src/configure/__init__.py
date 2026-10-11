@@ -4,12 +4,13 @@ from setup.steps.chunking import ChunkingStep
 from setup.steps.key_store import KeyStoreStep
 from setup.steps.language import LanguageStep
 from setup.steps.llm import LlmStep
+from setup.steps.sso import SsoStep
 
 
 def main() -> None:
     try:
         run(
-            [LanguageStep(), LlmStep(), ChatStep(), ChunkingStep(), KeyStoreStep()],
+            [LanguageStep(), LlmStep(), ChatStep(), ChunkingStep(), SsoStep(), KeyStoreStep()],
             "Configure complete.",
             footer=(
                 "Restart to apply: production `deploy/deploy.sh up` (after a language "
@@ -17,8 +18,8 @@ def main() -> None:
                 "languages); development: restart the backend, the worker and the "
                 "frontend dev server (and Ollama for simultaneous "
                 "answers: docker compose --env-file backend/.env -f docker-compose.local.yml up -d ollama). "
-                "The new chunk size applies to documents uploaded afterwards; re-chunk the "
-                "others on the System page, or keep them as they are."
+                "The new chunk size applies to documents uploaded afterwards; update the "
+                "others on the System page (Update documents), or keep them as they are."
             ),
         )
     except KeyboardInterrupt:

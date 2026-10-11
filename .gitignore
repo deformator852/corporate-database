@@ -11,3 +11,5 @@ node_modules
 
 # CA of the company's Vault, copied by uv run setup; differs per installation.
 /deploy/vault/ca.pem
+# CA of the company's SSO provider, copied by uv run configure.
+/deploy/sso/ca.pem

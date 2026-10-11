@@ -148,3 +148,68 @@ def test_old_entries_are_deleted(client):
 
     assert run(age_and_purge()) >= 1
     assert _raw(marker) == []
+
+
+def test_a_flood_from_one_logger_is_capped(client):
+    """A damaged PDF can warn for each of its objects: the log keeps a few a
+    minute per logger, not millions."""
+    from services.error_log import _PER_LOGGER_PER_MINUTE
+
+    marker = uuid.uuid4().hex
+    noisy = logging.getLogger(f"pypdf.test.{marker}")
+    for n in range(_PER_LOGGER_PER_MINUTE * 3):
+        noisy.warning("Object %s broken %s", n, marker)
+    logging.getLogger("services.documents.processor").error("Real problem %s", marker)
+    _stored()
+
+    messages = [message for _, message in _decrypted(marker)]
+    kept = sum("broken" in message for message in messages)
+    # Twice the cap at most: the loop may cross a minute boundary.
+    assert _PER_LOGGER_PER_MINUTE <= kept <= 2 * _PER_LOGGER_PER_MINUTE < _PER_LOGGER_PER_MINUTE * 3
+    assert f"Real problem {marker}" in messages
+
+
+def test_entries_say_whether_they_are_bugs_corpus_or_libraries(client, make_user):
+    marker = uuid.uuid4().hex
+    logging.getLogger("services.documents.processor").error("Corpus noticed %s", marker)
+    logging.getLogger("pypdf._reader").warning("Library warned %s", marker)
+    logging.getLogger("uvicorn.error").error("Server caught %s", marker)
+    logging.getLogger("services.chat").error("Said so %s", marker, extra={"category": "unhandled"})
+    _stored()
+
+    _, email, password = make_user(["system.errors"])
+    login(client, email, password)
+    items = client.get("/api/v1/system/errors", params={"per_page": 100}).json()["items"]
+    kinds = {item["message"].split()[0]: item["category"] for item in items if marker in item["message"]}
+    assert kinds == {"Corpus": "app", "Library": "library", "Server": "unhandled", "Said": "unhandled"}
+    bugs = client.get("/api/v1/system/errors", params={"category": "unhandled", "per_page": 100}).json()["items"]
+    assert {item["category"] for item in bugs} == {"unhandled"}
+    assert client.get("/api/v1/system/errors", params={"category": "other"}).status_code == 400
+
+
+def test_a_socket_error_is_logged_with_its_path_not_as_an_asgi_exception(infra, make_user, monkeypatch):
+    import pytest
+    from fastapi.testclient import TestClient
+
+    import main
+    import security
+
+    marker = uuid.uuid4().hex
+
+    async def broken(_payload, _token):
+        raise RuntimeError(f"database went away {marker}")
+
+    monkeypatch.setattr(security, "session_active", broken)
+    _, email, password = make_user(["system.errors"])
+    with TestClient(main.app, base_url="https://testserver") as client:
+        login(client, email, password)
+        headers = {"origin": "https://testserver", "cookie": f"my_token={client.cookies.get('my_token')}"}
+        with pytest.raises(RuntimeError), client.websocket_connect("/api/v1/notifications/ws", headers=headers):
+            pass
+        _stored()
+        items = client.get("/api/v1/system/errors", params={"per_page": 100}).json()["items"]
+
+    ours = [item for item in items if marker in (item["traceback"] or "")]
+    assert [(item["message"], item["category"]) for item in ours] == [
+        ("Unhandled error on socket /api/v1/notifications/ws", "unhandled")
+    ]

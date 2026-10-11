@@ -209,3 +209,33 @@ def test_auth_errors_use_the_common_shape(client, make_user):
     assert client.get("/api/v1/auth/me").status_code == 200
     client.cookies.clear()
     assert client.get("/api/v1/auth/me").json() == {"code": "unauthorized", "message": "Not authenticated"}
+
+
+def test_a_session_ends_at_its_maximum_age_however_active(client, make_user, monkeypatch):
+    """Refreshing rotates the tokens but keeps the sign-in time, so an active
+    session still ends SESSION_MAX_AGE after the sign-in."""
+    from datetime import timedelta
+
+    import jwt as pyjwt
+
+    import security
+
+    _, email, password = make_user(["documents.list"])
+    login(client, email, password)
+    first = pyjwt.decode(client.cookies["my_refresh"], options={"verify_signature": False})
+    assert client.post("/api/v1/auth/refresh", headers=csrf(client, "csrf_refresh_token")).status_code == 204
+    second = pyjwt.decode(client.cookies["my_refresh"], options={"verify_signature": False})
+    assert second["signed_in_at"] == first["signed_in_at"]
+
+    monkeypatch.setattr(security, "SESSION_MAX_AGE", timedelta(seconds=-1))
+    assert client.post("/api/v1/auth/refresh", headers=csrf(client, "csrf_refresh_token")).status_code == 401
+
+
+def test_the_backend_refuses_a_short_jwt_secret(monkeypatch):
+    import pytest
+
+    import security
+
+    monkeypatch.setattr(security.config, "JWT_SECRET_KEY", "short")
+    with pytest.raises(RuntimeError, match="JWT_SECRET_KEY"):
+        security.check_jwt_secret()

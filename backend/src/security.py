@@ -19,6 +19,11 @@ load_dotenv()
 
 ACCESS_TOKEN_EXPIRES = timedelta(minutes=15)
 REFRESH_TOKEN_EXPIRES = timedelta(hours=8)
+# However active, a session ends this long after the sign-in: refreshing
+# rotates the tokens but never extends past it. For SSO users this is also
+# when the company's provider is asked again (a person disabled there is out).
+SESSION_MAX_AGE = timedelta(hours=12)
+MIN_JWT_SECRET_LENGTH = 32
 
 config = AuthXConfig()
 config.JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
@@ -89,9 +94,29 @@ ACCESS_COOKIE_MAX_AGE = int(ACCESS_TOKEN_EXPIRES.total_seconds())
 REFRESH_COOKIE_MAX_AGE = int(REFRESH_TOKEN_EXPIRES.total_seconds())
 
 
-def set_auth_cookies(response: Response, uid: str, *, fresh: bool) -> None:
-    access_token = security.create_access_token(uid=uid, fresh=fresh)
-    refresh_token = security.create_refresh_token(uid=uid)
+def check_jwt_secret() -> None:
+    """Refuses to start with a missing or short JWT_SECRET_KEY: anyone who
+    guesses it can sign session tokens for any user."""
+    if len(config.JWT_SECRET_KEY or "") < MIN_JWT_SECRET_LENGTH:
+        raise RuntimeError(f"JWT_SECRET_KEY must be at least {MIN_JWT_SECRET_LENGTH} characters; run uv run setup.")
+
+
+def signed_in_at(payload: TokenPayload) -> int:
+    """When the session's sign-in happened (seconds); tokens made before
+    this was recorded count from their own issue time."""
+    value = getattr(payload, "signed_in_at", None)
+    return value if isinstance(value, int) else int(payload.issued_at.timestamp())
+
+
+def session_expired(payload: TokenPayload) -> bool:
+    return datetime.now(UTC).timestamp() - signed_in_at(payload) > SESSION_MAX_AGE.total_seconds()
+
+
+def set_auth_cookies(response: Response, uid: str, *, fresh: bool, since: int | None = None) -> None:
+    """`since`: the sign-in time a refresh carries over; None: signing in now."""
+    data = {"signed_in_at": since if since is not None else int(datetime.now(UTC).timestamp())}
+    access_token = security.create_access_token(uid=uid, fresh=fresh, data=data)
+    refresh_token = security.create_refresh_token(uid=uid, data=data)
     security.set_access_cookies(access_token, response, max_age=ACCESS_COOKIE_MAX_AGE)
     security.set_refresh_cookies(refresh_token, response, max_age=REFRESH_COOKIE_MAX_AGE)
 

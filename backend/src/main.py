@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 
 from authx.exceptions import AuthXException, CSRFError, MissingCSRFTokenError
@@ -8,6 +9,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 load_dotenv()
 
@@ -17,6 +19,7 @@ from exceptions import AppError
 from extensions import plugins
 from i18n import t, use_language
 from schemas.error import ErrorSchema, validation_message
+from security import check_jwt_secret
 from services import error_log
 from services.chat.generator import OllamaGenerator
 from services.chat.history import ChatHistoryService
@@ -72,6 +75,22 @@ async def purge_old_chats() -> None:
         await asyncio.sleep(_PURGE_EVERY_SECONDS)
 
 
+_RESTART_SECONDS = 5
+
+
+async def keep_running(name: str, consume: Callable[[], Awaitable[None]]) -> None:
+    """Runs a consumer again whenever it stops: RabbitMQ down at start or
+    restarted later would otherwise end live updates until a restart."""
+    while True:
+        try:
+            await consume()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.warning("%s stopped; restarting in %s s", name, _RESTART_SECONDS, exc_info=True)
+        await asyncio.sleep(_RESTART_SECONDS)
+
+
 async def on_document_event(payload: dict) -> None:
     """A document moved on: the documents lists, and the model switch banner."""
     await hub.broadcast(payload)
@@ -82,6 +101,7 @@ async def on_document_event(payload: dict) -> None:
 async def lifespan(_app: FastAPI):
     # First: a failed start is worth an entry too.
     error_log.install("backend")
+    check_jwt_secret()
     # Fail fast: with the wrong key, new data would be unreadable later; with
     # another embedding model, search would compare unrelated vectors.
     async with AsyncSessionLocal() as session:
@@ -90,8 +110,12 @@ async def lifespan(_app: FastAPI):
     await close_open_chat_requests()
     warm_up_task = asyncio.create_task(warm_up())
     purge_task = asyncio.create_task(purge_old_chats())
-    document_task = asyncio.create_task(consume_document_events(on_document_event))
-    notification_task = asyncio.create_task(consume_notification_events(dispatch_notification))
+    document_task = asyncio.create_task(
+        keep_running("Document events", lambda: consume_document_events(on_document_event))
+    )
+    notification_task = asyncio.create_task(
+        keep_running("Notification events", lambda: consume_notification_events(dispatch_notification))
+    )
     try:
         yield
     finally:
@@ -147,6 +171,33 @@ async def security_headers(request: Request, call_next):
     return response
 
 
+class SocketErrors:
+    """Exception handlers cover HTTP requests only: a socket's error would
+    reach the log as uvicorn's "Exception in ASGI application". Logged here
+    with the socket's path instead, and marked so uvicorn's copy is skipped.
+    Refusals (no session, no permission) are not errors."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "websocket":
+            await self.app(scope, receive, send)
+            return
+        try:
+            await self.app(scope, receive, send)
+        except Exception as exc:
+            refused = isinstance(exc, AppError) and exc.status_code < 500
+            if not refused and not getattr(exc, error_log.LOGGED, False):
+                # The path, not the query string, as for requests.
+                logger.error(
+                    "Unhandled error on socket %s", scope.get("path"), exc_info=exc, extra={"category": "unhandled"}
+                )
+                setattr(exc, error_log.LOGGED, True)
+            raise
+
+
+app.add_middleware(SocketErrors)
 app.include_router(api_router)
 for plugin in plugins():
     if hasattr(plugin, "setup"):
@@ -185,7 +236,9 @@ async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
 @app.exception_handler(Exception)
 async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResponse:
     # The path, not the query string: it may hold search text.
-    logger.error("Unhandled error on %s %s", request.method, request.url.path, exc_info=exc)
+    logger.error(
+        "Unhandled error on %s %s", request.method, request.url.path, exc_info=exc, extra={"category": "unhandled"}
+    )
     # Starlette re-raises it for the server, and uvicorn logs it again.
     setattr(exc, error_log.LOGGED, True)
     body = ErrorSchema(code="internal", message=t("Something went wrong. Try again."))

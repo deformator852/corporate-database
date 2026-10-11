@@ -8,7 +8,7 @@ from schemas.model_config import ORM_MODEL_CONFIG
 from schemas.page import PageSchema
 
 ErrorLevel = Literal["warning", "error", "critical"]
-ErrorSource = Literal["backend", "worker"]
+ErrorCategory = Literal["unhandled", "app", "library"]
 
 
 class ErrorLogItemSchema(BaseModel):
@@ -19,6 +19,7 @@ class ErrorLogItemSchema(BaseModel):
     level: str
     source: str
     logger: str
+    category: str
     message: str
     traceback: str | None
 

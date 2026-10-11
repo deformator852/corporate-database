@@ -117,6 +117,57 @@ docker compose -f docker-compose.prod.yml exec proxy \
    downloads the new ones before it starts Corpus. To fetch newer versions
    of models already on disk, run `deploy/deploy.sh models`.
 
+## Signing in with the company account (SSO)
+
+Users can sign in with their company account instead of a Corpus password:
+Microsoft Entra ID, ADFS, Keycloak, Okta or another provider that supports
+OpenID Connect. SSO is off until you turn it on.
+
+1. At the provider, register Corpus as a confidential web application with
+   this redirect URI, where SITE is the address users open:
+
+   ```text
+   https://SITE/api/v1/auth/sso/callback
+   ```
+
+   Allow the scopes `openid email profile`. To give roles from groups, add
+   the groups claim to the ID token.
+2. In `backend/`, run `uv run configure`, answer yes to **Use single
+   sign-on?** and enter the issuer address, the client ID and the client
+   secret. The setup asks:
+   * **Button name**: the button says "Sign in with NAME".
+   * **Group to role map**: `GROUP=ROLE_KEY` pairs separated by `;`, for
+     example `Corpus Admins=admin;Legal=legal`. A mapped role follows the
+     groups at every sign-in. Leave it empty to assign roles on the
+     **Users** page.
+   * **Link existing Corpus accounts by email**: someone who already has a
+     Corpus account keeps it at their first SSO sign-in, with its roles and
+     chats. Answer yes only when your IT department assigns the emails at
+     the provider; where people choose their own, one could take over
+     another's account. With no, such a sign-in is refused.
+3. Run `deploy/deploy.sh up`.
+
+While SSO is on, only users with the Admin role sign in with a Corpus
+password, through **Administrator sign-in with a password** under the SSO
+button; everyone else signs in with the company account. So administrators
+can still get in when the provider is down. To let everyone use passwords
+again, run `uv run configure`, answer no to **Use single sign-on?** and run
+`deploy/deploy.sh up`.
+
+A user's first SSO sign-in creates their Corpus account. Corpus recognizes
+the person by the provider's own ID, not by email. Disable a user on the
+**Users** page to stop them signing in; disabling them at the provider stops
+new sign-ins too.
+
+The backend reaches the provider through `sso-tunnel`, which forwards to the
+issuer's host only. The provider's token and key addresses must be on that
+host, as they are for the providers above. If a company CA signed the
+provider's certificate, give its file when the setup asks for the CA.
+
+To turn SSO off, run `uv run configure`, answer no, and run
+`deploy/deploy.sh up`. Users created by SSO have no password: set one for
+them on the **Users** page.
+
 ## Using several languages
 
 Corpus can serve documents and users in several languages: English, Spanish
@@ -147,8 +198,8 @@ rebuild. The header then shows no language button.
 A new chunk size or overlap (`uv run configure`) applies to documents
 uploaded afterwards. Documents processed before keep their chunks and keep
 working. To cut them again with the new size, open **System**: it shows how
-many documents use another size. Select **Re-chunk documents** (permission
-`system.rechunk`). The worker cuts them one at a time, between new uploads,
+many documents use another size. Select **Update documents** (permission
+`system.rechunk`, "Update documents for search"). The worker cuts them one at a time, between new uploads,
 from the text saved at processing time. They stay searchable meanwhile, and
 the progress shows in the banner. The action is recorded in the audit log.
 

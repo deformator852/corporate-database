@@ -5,8 +5,9 @@ name: corpus
 #   internal  - every service; no route to the internet (internal: true)
 #   edge      - only the HTTPS proxy, the one published port
 #   egress    - only the `models` job (profile "setup"), run on purpose to
-#               download AI models, and vault-tunnel (KEY_STORE=vault), which
-#               forwards to Vault alone; nothing else can reach out.
+#               download AI models, vault-tunnel (KEY_STORE=vault), which
+#               forwards to Vault alone, and sso-tunnel (OIDC_ISSUER), which
+#               forwards to the SSO provider alone; nothing else can reach out.
 
 # Each container gets only the variables it needs (never the whole .env): a
 # compromised proxy or database container must not see the encryption key,
@@ -64,10 +65,16 @@ x-worker-env: &worker-env
 x-app: &app
   image: corpus-backend:latest
   restart: unless-stopped
+  # Runs as an unprivileged user (Dockerfile) and needs no Linux privileges:
+  # code that breaks in (a parser, LibreOffice) cannot gain any.
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
   volumes:
     - hf_models:/models/hf
     # CA of Vault's certificate, copied here by `uv run setup` (not a secret).
     - ./deploy/vault:/etc/corpus-vault:ro
+    # CA of the SSO provider's certificate, copied by `uv run configure`.
+    - ./deploy/sso:/etc/corpus-sso:ro
   networks: [internal]
 
 services:
@@ -234,6 +241,16 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?is empty; run uv run setup in backend/}
       CHAT_RETENTION_DAYS: ${CHAT_RETENTION_DAYS:-}
       ERROR_LOG_RETENTION_DAYS: ${ERROR_LOG_RETENTION_DAYS:-}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-}
+      OIDC_NAME: ${OIDC_NAME:-}
+      OIDC_GROUPS_CLAIM: ${OIDC_GROUPS_CLAIM:-}
+      OIDC_ROLE_MAP: ${OIDC_ROLE_MAP:-}
+      OIDC_LINK_BY_EMAIL: ${OIDC_LINK_BY_EMAIL:-}
+      OIDC_CACERT: ${OIDC_CACERT:+/etc/corpus-sso/ca.pem}
+      OIDC_CONNECT: ${OIDC_ISSUER:+sso-tunnel:443}
       CHAT_QUESTIONS_PER_10_MIN: ${CHAT_QUESTIONS_PER_10_MIN:-}
       API_DOCS: "false"
     depends_on:
@@ -242,6 +259,7 @@ services:
       minio-init: {condition: service_completed_successfully}
       ollama: {condition: service_healthy}
       vault-tunnel: {condition: service_started, required: false}
+      sso-tunnel: {condition: service_started, required: false}
 
   worker:
     <<: *app
@@ -264,9 +282,20 @@ services:
     command: ["TCP-LISTEN:8200,fork,reuseaddr", "TCP:${VAULT_UPSTREAM:-vault:8200}"]
     networks: [internal, egress]
 
+  # OIDC_ISSUER set only (profile "sso", set by deploy.sh): the backend's one
+  # way to the company's sign-in server, and only to it. Plain TCP: TLS runs
+  # from the backend to the provider itself, checked against its name.
+  sso-tunnel:
+    image: alpine/socat:1.8.0.3
+    restart: unless-stopped
+    profiles: [sso]
+    command: ["TCP-LISTEN:443,fork,reuseaddr", "TCP:${SSO_UPSTREAM:-sso:443}"]
+    networks: [internal, egress]
+
   proxy:
     image: corpus-proxy:latest
     restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
     # No secrets: only what the Caddyfile reads.
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-localhost}

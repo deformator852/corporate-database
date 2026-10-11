@@ -25,9 +25,21 @@ def remove_env(path: Path, key: str) -> None:
     path.write_text("\n".join(lines) + "\n")
 
 
+def _quoted(key: str, value: str) -> str:
+    """`value` as .env holds it: single quotes around one with spaces (a
+    group name, a button label). Single quotes are literal for python-dotenv,
+    Docker Compose and deploy.sh alike, so no character inside is special."""
+    if not value or "\n" in value or "\r" in value:
+        raise ValueError(f"{key} must be one non-empty line.")
+    if not any(ch.isspace() for ch in value) and value[0] not in {'"', "'"}:
+        return value
+    if "'" in value:
+        raise ValueError(f"{key} cannot hold both spaces and a single quote.")
+    return f"'{value}'"
+
+
 def upsert_env(path: Path, key: str, value: str) -> None:
-    if not value or any(ch.isspace() for ch in value):
-        raise ValueError(f"{key} must be a single token.")
+    value = _quoted(key, value)
     prefix = f"{key}="
     lines = path.read_text().splitlines() if path.exists() else []
     out: list[str] = []

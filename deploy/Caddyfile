@@ -16,11 +16,21 @@
 		Referrer-Policy "no-referrer"
 		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
 		# Inline styles: UI components position popovers with style attributes.
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		# "?": only where the backend set none. Its own (stricter) policies,
+		# such as the sandbox on opened document files, must stay: "-Server"
+		# defers this block until the response is written, so a plain value
+		# would replace them.
+		?Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
 		-Server
 	}
 
 	handle /api/* {
+		# The largest request is one uploaded file (32 MB, MAX_BYTES in
+		# documents/document.py) plus form fields. Without a limit the backend
+		# would spool any size to disk before it could refuse it.
+		request_body {
+			max_size 40MB
+		}
 		# Adds X-Forwarded-For/Proto; run uvicorn with --proxy-headers.
 		reverse_proxy {$BACKEND:127.0.0.1:8000}
 	}

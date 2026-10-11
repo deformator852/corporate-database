@@ -47,14 +47,29 @@ export function Account() {
     if (user == null) {
         return null;
     }
+    const header = (
+        <div className="stack">
+            <h1>{t("account.title")}</h1>
+            <p className="text-muted-foreground">
+                {`${user.first_name} ${user.last_name}`.trim()} · {user.email}
+            </p>
+        </div>
+    );
+    if (!user.uses_password) {
+        // Signs in through SSO: the password lives at the company's provider.
+        return (
+            <div className="stack stack--lg w-full">
+                {header}
+                <Card className="gap-1 px-4 py-4 sm:px-5 sm:py-5">
+                    <h2 className="text-lg">{t("account.ssoTitle")}</h2>
+                    <p className="text-sm text-muted-foreground">{t("account.ssoHint")}</p>
+                </Card>
+            </div>
+        );
+    }
     return (
         <div className="stack stack--lg w-full">
-            <div className="stack">
-                <h1>{t("account.title")}</h1>
-                <p className="text-muted-foreground">
-                    {`${user.first_name} ${user.last_name}`.trim()} · {user.email}
-                </p>
-            </div>
+            {header}
 
             <Card className="gap-4 px-4 py-4 sm:px-5 sm:py-5">
                 <div className="space-y-1">

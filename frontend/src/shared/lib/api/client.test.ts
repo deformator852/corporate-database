@@ -1,7 +1,7 @@
 import {describe, expect, it} from "vitest";
 
 import {useSessionStore} from "@/shared/auth/session-store";
-import {api} from "@/shared/lib/api/client";
+import {api, refreshSession} from "@/shared/lib/api/client";
 import {getApiErrorCode, getApiErrorMessage} from "@/shared/lib/api/errors";
 import {apiError, mockApi, reply} from "@/test/api";
 import {sessionUser} from "@/test/app";
@@ -58,5 +58,29 @@ describe("API client", () => {
         expect(getApiErrorMessage(error, "fallback")).toBe("Role exists");
         expect(getApiErrorCode(error)).toBe("conflict");
         expect(getApiErrorMessage(new Error("boom"), "fallback")).toBe("fallback");
+    });
+
+    it("refreshes one tab at a time, so tabs never spend the same refresh token", async () => {
+        const held: string[] = [];
+        let queue = Promise.resolve();
+        const locks = {
+            // Like the browser's: one holder of a name at a time, in order.
+            request: (name: string, work: () => Promise<unknown>) => {
+                const run = queue.then(async () => {
+                    held.push(name);
+                    return work();
+                });
+                queue = run.then(() => undefined, () => undefined);
+                return run;
+            },
+        };
+        Object.defineProperty(navigator, "locks", {value: locks, configurable: true});
+        try {
+            mockApi().on("POST", "/auth/refresh");
+            await refreshSession();
+            expect(held).toEqual(["corpus-session-refresh"]);
+        } finally {
+            Reflect.deleteProperty(navigator, "locks");
+        }
     });
 });

@@ -37,6 +37,25 @@ os.environ.update(
         "QDRANT_PORT": "6333",
         "QDRANT_API_KEY": "test-qdrant-key-" + "z" * 32,
         "HF_HUB_OFFLINE": "1",
+        # Off unless a test turns it on: the developer's backend/.env may set
+        # it, and with SSO on no password signs in. Empty values win over the
+        # file (load_dotenv never overrides what is set).
+        **dict.fromkeys(
+            [
+                "OIDC_ISSUER",
+                "OIDC_CLIENT_ID",
+                "OIDC_CLIENT_SECRET",
+                "OIDC_REDIRECT_URI",
+                "OIDC_NAME",
+                "OIDC_GROUPS_CLAIM",
+                "OIDC_ROLE_MAP",
+                "OIDC_LINK_BY_EMAIL",
+                "OIDC_CACERT",
+                "OIDC_CONNECT",
+                "APP_LANGUAGES",
+            ],
+            "",
+        ),
     }
 )
 

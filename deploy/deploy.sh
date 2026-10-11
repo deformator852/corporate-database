@@ -33,6 +33,15 @@ if [[ $key_store == vault ]]; then
   export VAULT_UPSTREAM=$upstream
   profiles=(--profile vault)
 fi
+oidc_issuer=$(setting OIDC_ISSUER)
+if [[ -n $oidc_issuer ]]; then
+  # Single sign-on: start sso-tunnel, aimed at the provider's host (https, 443 unless given).
+  upstream=${oidc_issuer#*://}
+  upstream=${upstream%%/*}
+  [[ $upstream == *:* ]] || upstream+=:443
+  export SSO_UPSTREAM=$upstream
+  profiles+=(--profile sso)
+fi
 compose() { docker compose --env-file "$ENV_FILE" -f docker-compose.prod.yml ${profiles[@]+"${profiles[@]}"} "$@"; }
 language=$(setting APP_LANGUAGE)
 languages=$(setting APP_LANGUAGES)

@@ -7,6 +7,7 @@ from .embedding import EmbeddingStep
 from .key_store import KeyStoreStep
 from .language import LanguageStep
 from .llm import LlmStep
+from .sso import SsoStep
 from .storage import StorageStep
 
 SETUP_STEPS = [
@@ -18,4 +19,5 @@ SETUP_STEPS = [
     ChatStep(),
     EmbeddingStep(),
     ChunkingStep(),
+    SsoStep(),
 ]

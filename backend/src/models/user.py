@@ -22,7 +22,11 @@ class User(TimestampMixin, Base):
         secondary="role_users",
         back_populates="users",
     )
-    password: Mapped[str]
+    # None: signs in only through SSO (created at the first SSO sign-in).
+    password: Mapped[str | None]
+    # "ISSUER SUBJECT" of the SSO account: the provider's own, unchanging id
+    # of the person. Emails change and get reused, so they never identify.
+    oidc_subject: Mapped[str | None] = mapped_column(String(512), unique=True)
     # Tokens issued before this moment are rejected (password change).
     sessions_valid_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Set: the account cannot sign in; it and its history stay (offboarding).

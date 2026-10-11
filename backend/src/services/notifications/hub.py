@@ -19,7 +19,8 @@ class NotificationHub:
 
     async def send(self, user_id: int, payload: dict) -> None:
         stale: list[WebSocket] = []
-        for client in self._clients.get(user_id, ()):
+        # A copy: tabs connect and leave while a send is awaited.
+        for client in list(self._clients.get(user_id, ())):
             try:
                 await client.send_json(payload)
             except Exception:

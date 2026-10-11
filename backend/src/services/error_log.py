@@ -19,6 +19,7 @@ import sys
 import threading
 import time
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import cast
 
 from sqlalchemy import CursorResult, delete, func, insert, select
@@ -28,9 +29,22 @@ from sqlalchemy.pool import NullPool
 from models.error_log import ErrorLog
 
 LEVELS = ("warning", "error", "critical")
-SOURCES = ("backend", "worker")
+# unhandled: an error nothing caught (a bug); app: Corpus logged it itself;
+# library: a package Corpus uses warned.
+CATEGORIES = ("unhandled", "app", "library")
+# Loggers that report errors nothing else caught: the web server's, and
+# Celery's for a task that raised.
+_UNHANDLED_LOGGERS = ("uvicorn", "celery.app.trace")
+# Corpus's own top-level modules and packages (src/): their loggers are the app's.
+_SRC = Path(__file__).resolve().parents[1]
+_OWN_MODULES = frozenset(
+    path.stem for path in _SRC.iterdir() if path.suffix == ".py" or (path / "__init__.py").exists()
+)
 _BATCH = 100
 _QUEUE_SIZE = 10_000
+# Entries kept per logger per minute. A damaged PDF can make a parser warn
+# for every object in it; past this the minute's rest only reach the console.
+_PER_LOGGER_PER_MINUTE = 30
 # Marks an exception the app already logged, so uvicorn's own report of the
 # same exception (it re-raises from the error handler) is not stored twice.
 LOGGED = "_corpus_logged"
@@ -44,6 +58,8 @@ class DatabaseLogHandler(logging.Handler):
         self._pid: int | None = None
         self._queue: queue.Queue = queue.Queue(_QUEUE_SIZE)
         self._writer: threading.Thread | None = None
+        # logger -> (minute, entries kept in it)
+        self._recent: dict[str, tuple[int, int]] = {}
 
     def emit(self, record: logging.LogRecord) -> None:
         if threading.current_thread() is self._writer:
@@ -51,12 +67,15 @@ class DatabaseLogHandler(logging.Handler):
         exception = record.exc_info[1] if record.exc_info else None
         if record.name.startswith("uvicorn") and getattr(exception, LOGGED, False):
             return
+        if not self._allow(record):
+            return
         try:
             entry = {
                 "created_at": datetime.fromtimestamp(record.created, UTC),
                 "level": record.levelname.lower()[:16],
                 "source": self.source,
                 "logger": record.name[:128],
+                "category": category_of(record),
                 "message": record.getMessage(),
                 "traceback": _FORMATTER.formatException(record.exc_info) if record.exc_info else None,
             }
@@ -66,6 +85,18 @@ class DatabaseLogHandler(logging.Handler):
             pass  # a flood: the console still has it
         except Exception:  # noqa: BLE001 - logging must never raise
             self.handleError(record)
+
+    def _allow(self, record: logging.LogRecord) -> bool:
+        minute = int(record.created // 60)
+        start, kept = self._recent.get(record.name, (minute, 0))
+        if start != minute:
+            kept = 0
+        if kept >= _PER_LOGGER_PER_MINUTE:
+            return False
+        if len(self._recent) > 1000:
+            self._recent.clear()  # many loggers: forget old minutes
+        self._recent[record.name] = (minute, kept + 1)
+        return True
 
     def _ensure_writer(self) -> None:
         """One writer per process: Celery forks its pool after the handler
@@ -100,6 +131,16 @@ class DatabaseLogHandler(logging.Handler):
             time.sleep(0.05)
 
 
+def category_of(record: logging.LogRecord) -> str:
+    """`extra={"category": ...}` when the code says; else by the logger."""
+    stated = getattr(record, "category", None)
+    if stated in CATEGORIES:
+        return stated
+    if record.name.startswith(_UNHANDLED_LOGGERS):
+        return "unhandled"
+    return "app" if record.name.split(".")[0] in _OWN_MODULES else "library"
+
+
 async def _insert(rows: list[dict]) -> None:
     from database import DATABASE_URL
 
@@ -132,14 +173,18 @@ class ErrorLogService:
         self.session = session
 
     async def list_entries(
-        self, page: int, per_page: int, level: str | None = None, source: str | None = None
+        self,
+        page: int,
+        per_page: int,
+        level: str | None = None,
+        category: str | None = None,
     ) -> tuple[list[ErrorLog], int]:
         """Newest first."""
         conditions = []
+        if category is not None:
+            conditions.append(ErrorLog.category == category)
         if level is not None:
             conditions.append(ErrorLog.level == level)
-        if source is not None:
-            conditions.append(ErrorLog.source == source)
         total = await self.session.scalar(select(func.count()).select_from(ErrorLog).where(*conditions))
         entries = await self.session.scalars(
             select(ErrorLog)

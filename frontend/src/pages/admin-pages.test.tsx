@@ -128,10 +128,10 @@ describe("System status", () => {
             s.on("POST", "/system/rechunk", {documents: 3});
         });
 
-        await user.click(await screen.findByRole("button", {name: "Re-chunk documents"}));
-        await user.click(screen.getByRole("button", {name: "Re-chunk"}));
+        await user.click(await screen.findByRole("button", {name: "Update documents"}));
+        await user.click(screen.getByRole("button", {name: "Update"}));
 
-        expect(await screen.findByText("Re-chunking 3 document(s). Progress shows in the banner at the top.")).toBeInTheDocument();
+        expect(await screen.findByText("Updating 3 document(s). The bar at the top of the page shows how far it is.")).toBeInTheDocument();
         expect(server.sent("POST", "/system/rechunk")).toHaveLength(1);
     });
 
@@ -144,8 +144,8 @@ describe("System status", () => {
                 outdated_chunks: 2,
             }),
         );
-        expect(await screen.findByText(/2 document\(s\) were cut into chunks of another size/)).toBeInTheDocument();
-        expect(screen.queryByRole("button", {name: "Re-chunk documents"})).not.toBeInTheDocument();
+        expect(await screen.findByText(/2 document\(s\) were prepared for search with older settings/)).toBeInTheDocument();
+        expect(screen.queryByRole("button", {name: "Update documents"})).not.toBeInTheDocument();
     });
 
     it("explains when the status cannot be loaded", async () => {
@@ -156,8 +156,8 @@ describe("System status", () => {
 
 describe("Error log", () => {
     const ERROR = {
-        id: 7, created_at: "2026-09-30T10:00:00Z", level: "error", source: "worker",
-        logger: "tasks.document", message: "Processing failed", traceback: "Traceback (most recent call last):\nValueError: bad page",
+        id: 7, created_at: "2026-09-30T10:00:00Z", level: "error",
+        logger: "tasks.document", category: "unhandled", message: "Processing failed", traceback: "Traceback (most recent call last):\nValueError: bad page",
     };
 
     it("lists errors with their traceback and filters by level", async () => {
@@ -169,14 +169,19 @@ describe("Error log", () => {
         );
 
         const entry = (await screen.findByText("Processing failed")).closest("li") as HTMLElement;
-        expect(within(entry).getByText("Worker")).toBeInTheDocument();
         expect(within(entry).getByText("tasks.document")).toBeInTheDocument();
+        expect(within(entry).getByText("Unhandled (bug)")).toBeInTheDocument();
         await user.click(within(entry).getByText("Traceback"));
         expect(screen.getByText(/ValueError: bad page/)).toBeVisible();
 
         await user.selectOptions(screen.getByRole("combobox", {name: "Level"}), "warning");
         expect(await screen.findByText("No errors")).toBeInTheDocument();
         expect(server.sent("GET", "/system/errors").at(-1)?.params.level).toBe("warning");
+
+        await user.selectOptions(screen.getByRole("combobox", {name: "Type"}), "unhandled");
+        await waitFor(() =>
+            expect(server.sent("GET", "/system/errors").at(-1)?.params).toMatchObject({level: "warning", category: "unhandled"}),
+        );
     });
 
     it("is hidden without its permission", async () => {

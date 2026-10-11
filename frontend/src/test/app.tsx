@@ -17,6 +17,7 @@ export function sessionUser(permissions: string[] = [], extra: Partial<SessionUs
         email: "marta@acme.io",
         permissions,
         language: null,
+        uses_password: true,
         ...extra,
     } as SessionUser;
 }
@@ -35,6 +36,7 @@ export function renderApp(
     const server = mockApi();
     const signedOut = reply(401, {code: "unauthorized", message: "Not authenticated"});
     server.on("GET", "/auth/me", user ?? signedOut);
+    server.on("GET", "/auth/methods", {password: true, sso: null});
     server.on("POST", "/auth/refresh", user ? {} : signedOut);
     server.on("GET", "/notifications", {items: [], page: 1, per_page: 20, total: 0, pages: 0, unread_count: 0});
     server.on("GET", "/chat/conversations", {items: [], page: 1, per_page: 30, total: 0, pages: 0});
