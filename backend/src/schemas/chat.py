@@ -119,6 +119,8 @@ class ChatSocketErrorSchema(BaseModel):
 
 Rating = Literal["up", "down"]
 RATING_VALUES: dict[str, int] = {"up": 1, "down": -1}
+# The ratings page: one kind of rating, or every rated answer.
+RatingFilter = Literal["up", "down", "all"]
 
 
 def rating_name(value: int | None) -> Rating | None:
@@ -269,6 +271,8 @@ class ChatFeedbackItemSchema(BaseModel):
     model_config = MODEL_CONFIG
 
     message_id: int
+    # The chat it is in; ratings go with their chat when it is deleted.
+    conversation_id: int
     rating: Rating
     question: str
     answer: str
@@ -287,6 +291,7 @@ class ChatFeedbackListSchema(PageSchema):
             items=[
                 ChatFeedbackItemSchema(
                     message_id=item.message_id,
+                    conversation_id=item.conversation_id,
                     rating="up" if item.rating == 1 else "down",
                     question=item.question,
                     answer=item.answer,

@@ -103,7 +103,7 @@ describe("System status", () => {
                     {name: "embedding", status: "warning", detail: "not loaded yet"},
                 ],
                 documents: {completed: 12, failed: 1},
-                config: {language: "en", llm_model: "llama3.1:8b", llm_context: 16384, embedding_model: "intfloat/multilingual-e5-base", chunk_size: 800, chunk_overlap: 150, text_cleanup: "llm"},
+                config: {language: "en", llm_model: "llama3.1:8b", llm_context: 16384, embedding_model: "intfloat/multilingual-e5-base", chunk_size: 800, chunk_overlap: 150},
             }),
         );
 
@@ -122,7 +122,7 @@ describe("System status", () => {
             s.on("GET", "/system/status", {
                 services: [],
                 documents: {completed: 3},
-                config: {language: "en", llm_model: "llama3.1:8b", llm_context: 16384, embedding_model: "e5", chunk_size: 400, chunk_overlap: 80, text_cleanup: "rules"},
+                config: {language: "en", llm_model: "llama3.1:8b", llm_context: 16384, embedding_model: "e5", chunk_size: 400, chunk_overlap: 80},
                 outdated_chunks: 3,
             });
             s.on("POST", "/system/rechunk", {documents: 3});
@@ -140,7 +140,7 @@ describe("System status", () => {
             s.on("GET", "/system/status", {
                 services: [],
                 documents: {},
-                config: {language: "en", llm_model: "m", llm_context: 1, embedding_model: "e", chunk_size: 400, chunk_overlap: 80, text_cleanup: "rules"},
+                config: {language: "en", llm_model: "m", llm_context: 1, embedding_model: "e", chunk_size: 400, chunk_overlap: 80},
                 outdated_chunks: 2,
             }),
         );

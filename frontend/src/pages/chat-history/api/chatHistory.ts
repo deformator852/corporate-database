@@ -18,3 +18,8 @@ export async function getReviewedConversation(id: number): Promise<ReviewedConve
     const {data} = await api.get<ReviewedConversation>(`/chat/review/conversations/${id}`);
     return data;
 }
+
+/** Deletes one chat with its messages and ratings; recorded in the audit log. */
+export async function deleteReviewedChat(id: number): Promise<void> {
+    await api.delete(`/chat/review/conversations/${id}`);
+}

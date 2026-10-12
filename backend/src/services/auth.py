@@ -78,7 +78,7 @@ class AuthService:
         )
         if user is None:
             user = await self._first_sso_login(identity, config)
-        elif identity.email and identity.email != user.email:
+        elif identity.email_trusted and identity.email and identity.email != user.email:
             # Renamed at the provider: follow, unless another account has it.
             taken = await self.session.scalar(select(User.id).where(User.email == identity.email))
             if taken is None:
@@ -99,7 +99,8 @@ class AuthService:
             select(User).where(User.email == identity.email).options(_USER_WITH_PERMISSIONS)
         )
         if existing is not None:
-            if not config.link_by_email or existing.oidc_subject is not None:
+            # Only an email the provider vouches for may take over an account.
+            if not (config.link_by_email and identity.email_trusted) or existing.oidc_subject is not None:
                 raise AppError(
                     "sso_account_exists",
                     "An account with this email already exists. Ask an administrator.",

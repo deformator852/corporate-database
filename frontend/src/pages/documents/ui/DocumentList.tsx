@@ -1,4 +1,4 @@
-import {CircleAlert, FileText, Pencil, RotateCw, Trash2} from "lucide-react";
+import {CircleAlert, FileText, Pencil, RotateCw} from "lucide-react";
 import {useState} from "react";
 
 import {Button} from "@/components/ui/button";
@@ -6,6 +6,7 @@ import {TableCell, TableRow} from "@/components/ui/table";
 import {useI18n} from "@/shared/i18n/I18nProvider";
 import {ListPagination} from "@/shared/ui/ListPagination";
 import {DataTable} from "@/shared/ui/DataTable";
+import {DeleteButton} from "@/shared/ui/DeleteButton";
 import {StatusCard} from "@/shared/ui/StatusCard";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
 import {openDocumentFile} from "@/shared/lib/documentFile";
@@ -229,18 +230,12 @@ function DocumentRow({
                             </Button>
                         ) : null}
                         {actions.onDelete ? (
-                            <Button
-                                type="button"
-                                variant="destructive"
-                                size="sm"
+                            <DeleteButton
                                 aria-label={t("documents.delete.title", {
                                     name: document.name,
                                 })}
                                 onClick={() => actions.onDelete?.(document)}
-                            >
-                                <Trash2 aria-hidden />
-                                {t("common.delete")}
-                            </Button>
+                            />
                         ) : null}
                     </div>
                     {retryError ? (

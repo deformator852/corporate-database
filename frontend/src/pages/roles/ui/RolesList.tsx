@@ -1,5 +1,5 @@
 import {useState} from "react";
-import {Pencil, Plus, Trash2} from "lucide-react";
+import {Pencil, Plus} from "lucide-react";
 
 import {Button} from "@/components/ui/button";
 import {TableCell, TableRow} from "@/components/ui/table";
@@ -13,6 +13,7 @@ import {ConfirmDialog} from "@/shared/ui/ConfirmDialog";
 import {DataTable} from "@/shared/ui/DataTable";
 import {ListPagination} from "@/shared/ui/ListPagination";
 import {PageHeader} from "@/shared/ui/PageHeader";
+import {DeleteButton} from "@/shared/ui/DeleteButton";
 import {StatusCard} from "@/shared/ui/StatusCard";
 import {RoleFormDialog} from "@pages/roles/ui/RoleFormDialog";
 
@@ -153,10 +154,7 @@ function RoleRow({role, actions}: {role: RoleListItem; actions: RoleActions | nu
                             </Button>
                         ) : null}
                         {actions.canDelete ? (
-                            <Button
-                                type="button"
-                                variant="destructive"
-                                size="sm"
+                            <DeleteButton
                                 // The Admin role cannot be deleted; the label says why.
                                 aria-label={
                                     role.protected ? t("roles.cannotDeleteAdmin") : t("roles.deleteAria", {name: role.name})
@@ -164,10 +162,7 @@ function RoleRow({role, actions}: {role: RoleListItem; actions: RoleActions | nu
                                 title={role.protected ? t("roles.cannotDeleteAdmin") : undefined}
                                 disabled={role.protected}
                                 onClick={() => actions.remove(role)}
-                            >
-                                <Trash2 aria-hidden/>
-                                {t("common.delete")}
-                            </Button>
+                            />
                         ) : null}
                     </div>
                 </TableCell>

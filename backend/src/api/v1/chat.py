@@ -48,7 +48,7 @@ from schemas.chat import (
     ChatSourceSchema,
     ChatStartedSchema,
     ChatUserSchema,
-    Rating,
+    RatingFilter,
 )
 from schemas.error import error_responses, validation_message
 from security import get_ws_payload
@@ -150,6 +150,30 @@ async def review_conversation(
     )
 
 
+@router.delete(
+    "/review/conversations/{conversation_id}",
+    status_code=204,
+    responses=error_responses(401, 403, 404),
+)
+async def delete_conversation(
+    conversation_id: int,
+    actor: User = Depends(require_permission("chat.purge")),
+    review: ChatReviewService = Depends(get_chat_review_service),
+    audit: AuditService = Depends(get_audit_service),
+) -> None:
+    """Deletes one user's chat, with its messages and ratings."""
+    found = await review.delete(actor.id, conversation_id)
+    # Whose chat it was; never its title, which is the first question.
+    audit.record(
+        AuditAction.CHAT_DELETE,
+        actor=actor,
+        target_type="user",
+        target_id=found.user.id,
+        target_label=found.user.email,
+        details={"conversation_id": conversation_id, "messages": found.message_count},
+    )
+
+
 @router.post(
     "/review/purge",
     response_model=ChatPurgedSchema,
@@ -200,14 +224,37 @@ async def rate_answer(
     responses=error_responses(401, 403),
 )
 async def list_feedback(
-    rating: Rating = "down",
+    rating: RatingFilter = "down",
     page: Annotated[int, Query(ge=1)] = 1,
     per_page: Annotated[int, Query(ge=1, le=100)] = 20,
     _user: User = Depends(require_permission("chat.feedback")),
     feedback: FeedbackService = Depends(get_feedback_service),
 ) -> ChatFeedbackListSchema:
-    items, total = await feedback.rated(RATING_VALUES[rating], page, per_page)
+    items, total = await feedback.rated(None if rating == "all" else RATING_VALUES[rating], page, per_page)
     return ChatFeedbackListSchema.from_page(items, page=page, per_page=per_page, total=total)
+
+
+@router.delete(
+    "/feedback/{message_id}",
+    status_code=204,
+    responses=error_responses(401, 403, 404),
+)
+async def remove_rating(
+    message_id: int,
+    actor: User = Depends(require_permission("chat.feedback")),
+    feedback: FeedbackService = Depends(get_feedback_service),
+    audit: AuditService = Depends(get_audit_service),
+) -> None:
+    """Takes a rated answer off the ratings page; the chat stays."""
+    message, owner = await feedback.remove_rating(message_id)
+    audit.record(
+        AuditAction.RATING_DELETE,
+        actor=actor,
+        target_type="user" if owner else None,
+        target_id=owner.id if owner else None,
+        target_label=owner.email if owner else None,
+        details={"conversation_id": message.conversation_id, "message_id": message.id},
+    )
 
 
 IncomingMessage = TypeAdapter(Annotated[ChatAskSchema | ChatCancelSchema, Field(discriminator="type")])

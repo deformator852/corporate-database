@@ -1,7 +1,10 @@
 import {ArrowLeft, ThumbsDown, ThumbsUp} from "lucide-react";
-import {Link, useLocation, useParams} from "react-router";
+import {useEffect, useState} from "react";
+import {Link, useLocation, useNavigate, useParams} from "react-router";
+
 
 import {Card} from "@/components/ui/card";
+import {chatMessageAnchor} from "@/entities/chat/model";
 import {SourceList} from "@/entities/chat/SourceList";
 import type {UserDetailLinkState} from "@/entities/user/model";
 import {useI18n} from "@/shared/i18n/I18nProvider";
@@ -9,9 +12,11 @@ import {localeIntlTag} from "@/shared/i18n/messages";
 import {can} from "@/shared/lib/api/me";
 import {useRequest} from "@/shared/lib/hooks/useRequest";
 import {formatDateTime} from "@/shared/lib/time";
+import {DeleteButton} from "@/shared/ui/DeleteButton";
 import {StatusCard} from "@/shared/ui/StatusCard";
 import {cn} from "cn";
 import {getReviewedConversation} from "@pages/chat-history/api/chatHistory";
+import {ChatDeleteDialog} from "@pages/chat-history/ui/ChatDeleteDialog";
 
 /** One user's saved chat, read-only. */
 export function ChatReview() {
@@ -25,6 +30,15 @@ export function ChatReview() {
         t("chatHistory.chatLoadError"),
     );
     const tag = localeIntlTag(locale);
+    const navigate = useNavigate();
+    const [deleting, setDeleting] = useState(false);
+    // Opened at one message (from the answer ratings): scrolled to and marked.
+    const focused = location.hash.slice(1);
+    useEffect(() => {
+        if (status === "ready" && focused) {
+            document.getElementById(focused)?.scrollIntoView({block: "center"});
+        }
+    }, [status, focused]);
 
     const back = (
         <Link
@@ -57,27 +71,47 @@ export function ChatReview() {
     return (
         <div className="stack stack--lg w-full min-w-0">
             {back}
-            <div className="stack">
-                <h1 className="break-words">{data.title}</h1>
-                <p className="text-sm text-muted-foreground">
-                    {can("users.view") ? (
-                        <Link
-                            to={`/users/${data.user.id}`}
-                            state={linkState}
-                            className="underline-offset-2 hover:underline"
-                        >
-                            {data.user.name || data.user.email}
-                        </Link>
-                    ) : (
-                        data.user.name || data.user.email
-                    )}
-                    {" · "}
-                    {data.user.email}
-                </p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="stack min-w-0">
+                    <h1 className="break-words">{data.title}</h1>
+                    <p className="text-sm text-muted-foreground">
+                        {can("users.view") ? (
+                            <Link
+                                to={`/users/${data.user.id}`}
+                                state={linkState}
+                                className="underline-offset-2 hover:underline"
+                            >
+                                {data.user.name || data.user.email}
+                            </Link>
+                        ) : (
+                            data.user.name || data.user.email
+                        )}
+                        {" · "}
+                        {data.user.email}
+                    </p>
+                </div>
+                {can("chat.purge") ? (
+                    <DeleteButton size="default" className="self-start" onClick={() => setDeleting(true)}>
+                        {t("chatHistory.delete.action")}
+                    </DeleteButton>
+                ) : null}
             </div>
+            <ChatDeleteDialog
+                chat={deleting ? {id: data.id, userName: data.user.name || data.user.email} : null}
+                onClose={() => setDeleting(false)}
+                // Gone: back where the reviewer came from.
+                onDeleted={() => void navigate(backTo, {replace: true})}
+            />
             <Card className="gap-3 px-4 py-4" aria-label={t("chat.conversation")}>
                 {data.messages.map((message) => (
-                    <div key={message.id} className="space-y-1.5">
+                    <div
+                        key={message.id}
+                        id={chatMessageAnchor(message.id)}
+                        className={cn(
+                            "space-y-1.5",
+                            focused === chatMessageAnchor(message.id) && "-mx-2 rounded-xl p-2 ring-2 ring-ring/50",
+                        )}
+                    >
                         <p className="text-xs text-muted-foreground">
                             {message.role === "user" ? data.user.name || data.user.email : t("chat.title")}
                             {" · "}

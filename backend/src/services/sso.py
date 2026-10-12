@@ -16,7 +16,7 @@ import secrets
 import time
 from dataclasses import dataclass
 from typing import Any, cast
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import quote, urlencode, urlsplit
 
 import httpx
 from joserfc import jws, jwt
@@ -41,6 +41,10 @@ class SsoIdentity:
     # "ISSUER SUBJECT": the provider's unchanging id of the person.
     subject: str
     email: str | None
+    # The provider vouches for the email (an "email" claim not marked
+    # unverified): only then may it match or rename a Corpus account.
+    # preferred_username is a display name OIDC says not to rely on.
+    email_trusted: bool
     first_name: str
     last_name: str
     groups: list[str]
@@ -143,18 +147,20 @@ async def finish(config: OidcConfig, secret: str, *, code: str, state: str, cook
         config,
         provider["token_endpoint"],
         method="POST",
-        data={
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": config.redirect_uri,
-            "client_id": config.client_id,
-            "client_secret": config.client_secret,
-            "code_verifier": pending["verifier"],
-        },
-        headers={"Accept": "application/json"},
+        **_client_authentication(
+            config,
+            provider,
+            {
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": config.redirect_uri,
+                "code_verifier": pending["verifier"],
+            },
+        ),
     )
-    keys = KeySet.import_key_set(cast(Any, await _get_json(config, provider["jwks_uri"])))
+    keys_document = await _get_json(config, provider["jwks_uri"])
     try:
+        keys = KeySet.import_key_set(cast(Any, keys_document))
         token = jwt.decode(str(tokens.get("id_token", "")), keys, algorithms=_ALGORITHMS)
         jwt.JWTClaimsRegistry(
             leeway=60,
@@ -164,16 +170,45 @@ async def finish(config: OidcConfig, secret: str, *, code: str, state: str, cook
             exp={"essential": True},
             nonce={"essential": True, "value": pending["nonce"]},
         ).validate(token.claims)
-    except (JoseError, ValueError) as exc:
+        _check_authorized_party(token.claims, config.client_id)
+    except (JoseError, ValueError, TypeError, KeyError) as exc:
         raise AppError("invalid", "The SSO provider's answer could not be verified.", status_code=400) from exc
     return _identity(config, token.claims)
 
 
+def _client_authentication(config: OidcConfig, provider: dict, form: dict) -> dict:
+    """The token request with the client secret where the provider wants
+    it: in the Authorization header (client_secret_basic, the default of
+    the standard and of Okta) unless it only takes it in the form."""
+    methods = provider.get("token_endpoint_auth_methods_supported") or ["client_secret_basic"]
+    headers = {"Accept": "application/json"}
+    if "client_secret_basic" in methods:
+        credentials = f"{quote(config.client_id, safe='')}:{quote(config.client_secret, safe='')}"
+        headers["Authorization"] = "Basic " + base64.b64encode(credentials.encode()).decode()
+        return {"data": {**form, "client_id": config.client_id}, "headers": headers}
+    return {"data": {**form, "client_id": config.client_id, "client_secret": config.client_secret}, "headers": headers}
+
+
+def _check_authorized_party(claims: dict, client_id: str) -> None:
+    """A token meant for several applications must name us as the one it
+    was issued to (OpenID Connect Core 3.1.3.7)."""
+    audience = claims.get("aud")
+    several = isinstance(audience, list) and len(audience) > 1
+    if (several or "azp" in claims) and claims.get("azp") != client_id:
+        raise ValueError("The ID token was issued to another application.")
+
+
 def _identity(config: OidcConfig, claims: dict) -> SsoIdentity:
+    stated = claims.get("email")
+    has_email = isinstance(stated, str) and "@" in stated
+    # An email the provider marked unverified, or a username that looks like
+    # one, may name a new account but never match or rename an existing one.
+    trusted = has_email and claims.get("email_verified") is not False
+    username = claims.get("preferred_username")
     email = next(
         (
             str(value).strip().lower()
-            for value in (claims.get("email"), claims.get("preferred_username"))
+            for value in (stated if has_email else None, username)
             if isinstance(value, str) and "@" in value
         ),
         None,
@@ -184,6 +219,7 @@ def _identity(config: OidcConfig, claims: dict) -> SsoIdentity:
     return SsoIdentity(
         subject=f"{config.issuer} {claims['sub']}",
         email=email,
+        email_trusted=trusted,
         first_name=_name(claims.get("given_name") or (full[0] if full else None), fallback),
         last_name=_name(claims.get("family_name") or (" ".join(full[1:]) if len(full) > 1 else None), fallback),
         groups=[str(group) for group in groups] if isinstance(groups, list) else [],

@@ -28,7 +28,6 @@ from settings import (
     llm_host,
     llm_model,
     llm_num_ctx,
-    text_cleanup_mode,
 )
 
 CHECK_TIMEOUT_SECONDS = 4
@@ -162,7 +161,6 @@ async def system_status(session: AsyncSession) -> dict[str, Any]:
             "embedding_model": spec.hf_id,
             "chunk_size": chunk_size(),
             "chunk_overlap": chunk_overlap(),
-            "text_cleanup": text_cleanup_mode(),
         },
         # Completed documents cut with another chunk size or overlap.
         "outdated_chunks": await outdated_count(session),

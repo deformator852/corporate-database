@@ -127,6 +127,30 @@ def test_chat_history_of_someone_with_more_access_cannot_be_cleared(client, make
     assert run(_exists(conversation))
 
 
+def test_one_chat_is_deleted_whole_by_those_who_may(client, make_user):
+    owner_id, _, _ = make_user(["documents.list"])
+    conversation = _conversation(owner_id)
+    stronger_id, _, _ = make_user(["documents.list", "documents.secret"])
+    guarded = _conversation(stronger_id)
+
+    _, viewer_email, viewer_password = make_user(["chat.history", "documents.list"])
+    login(client, viewer_email, viewer_password)
+    url = f"/api/v1/chat/review/conversations/{conversation}"
+    assert client.delete(url, headers=csrf(client)).status_code == 403  # reading is not deleting
+    client.post("/api/v1/auth/logout", headers=csrf(client))
+
+    _, email, password = make_user(["chat.purge", "documents.list"])
+    login(client, email, password)
+    assert client.delete(url, headers=csrf(client)).status_code == 204
+    assert not run(_exists(conversation))
+    assert client.delete(url, headers=csrf(client)).status_code == 404
+    # Someone with more access than the actor: as if it did not exist.
+    guarded_url = f"/api/v1/chat/review/conversations/{guarded}"
+    assert client.delete(guarded_url, headers=csrf(client)).status_code == 404
+    assert run(_exists(guarded))
+    assert {"conversation_id": conversation, "messages": 1} in _audited("chat.delete")
+
+
 async def _exists(conversation_id: int) -> bool:
     from database import AsyncSessionLocal
     from models.chat import ChatConversation

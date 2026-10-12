@@ -1,0 +1,48 @@
+import {fireEvent, render, screen} from "@testing-library/react";
+import {describe, expect, it} from "vitest";
+
+import {I18nProvider} from "@/shared/i18n/I18nProvider";
+import type {ChatMessage} from "@pages/home/model/chat";
+import {ChatMessages} from "@pages/home/ui/ChatMessages";
+
+const MESSAGES = [
+    {id: "q", role: "user", content: "What is the travel budget?"},
+    {id: "a", role: "assistant", content: "500 EUR a trip.", messageId: 2},
+] as ChatMessage[];
+
+function view(streaming: string | null) {
+    return (
+        <I18nProvider locales={["en"]}>
+            <ChatMessages messages={MESSAGES} streaming={streaming} status="pending" error={null} onRetry={() => {}} />
+        </I18nProvider>
+    );
+}
+
+/** jsdom has no layout: a 1000 px conversation in a 200 px window. */
+function layOut(scroller: HTMLElement) {
+    Object.defineProperty(scroller, "scrollHeight", {configurable: true, value: 1000});
+    Object.defineProperty(scroller, "clientHeight", {configurable: true, value: 200});
+}
+
+describe("Conversation scrolling", () => {
+    it("follows the answer at the bottom but leaves a reader who scrolled up in place", () => {
+        const {rerender} = render(view("Five"));
+        const scroller = screen.getByRole("log");
+        layOut(scroller);
+
+        rerender(view("Five hundred"));
+        expect(scroller.scrollTop).toBe(1000);
+
+        // Up to read or select an earlier message: new text does not pull them down.
+        scroller.scrollTop = 100;
+        fireEvent.scroll(scroller);
+        rerender(view("Five hundred euros"));
+        expect(scroller.scrollTop).toBe(100);
+
+        // Back at the bottom: it follows again.
+        scroller.scrollTop = 800;
+        fireEvent.scroll(scroller);
+        rerender(view("Five hundred euros a trip"));
+        expect(scroller.scrollTop).toBe(1000);
+    });
+});

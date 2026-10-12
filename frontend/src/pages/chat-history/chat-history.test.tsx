@@ -40,7 +40,51 @@ describe("Chat history", () => {
         await user.click(screen.getByRole("link", {name: "Travel budget?"}));
         expect(await screen.findByText("500 EUR per trip.")).toBeInTheDocument();
         expect(screen.getByText("Bad answer")).toBeInTheDocument();
-        expect(screen.queryByRole("textbox")).not.toBeInTheDocument();  // nothing to write or delete
+        expect(screen.queryByRole("textbox")).not.toBeInTheDocument();  // nothing to write
+        expect(screen.queryByRole("button", {name: "Delete chat"})).not.toBeInTheDocument();  // no chat.purge
+    });
+
+    it("deletes one chat from the list after asking", async () => {
+        let deleted = false;
+        const {user, server} = renderApp("/chat-history", sessionUser(["chat.history", "chat.purge"]), (s) => {
+            s.on("GET", "/chat/review/conversations", (request: ApiRequest) => {
+                const page = chats(request);
+                const items = deleted ? page.items.filter((chat) => chat.id !== 7) : page.items;
+                return {...page, items, total: items.length};
+            });
+            s.on("DELETE", "/chat/review/conversations/:id", () => {
+                deleted = true;
+                return {};
+            });
+        });
+
+        const table = await screen.findByRole("table", {name: "Chat history"});
+        await user.click(within(table).getByRole("button", {name: "Delete chat Travel budget?"}));
+        const dialog = await screen.findByRole("alertdialog");
+        expect(dialog).toHaveTextContent("Ana López's chat is deleted with all its messages and answer ratings.");
+        await user.click(within(dialog).getByRole("button", {name: "Delete"}));
+
+        await waitFor(() => expect(within(screen.getByRole("table")).queryByText("Travel budget?")).not.toBeInTheDocument());
+        expect(server.sent("DELETE", "/chat/review/conversations/7")).toHaveLength(1);
+    });
+
+    it("deletes the open chat and goes back to the list", async () => {
+        const {user, router} = renderApp("/chat-history", sessionUser(["chat.history", "chat.purge"]), (s) => {
+            s.on("GET", "/chat/review/conversations", chats);
+            s.on("GET", "/chat/review/conversations/:id", {
+                id: 7,
+                title: "Travel budget?",
+                user: ANA,
+                messages: [{id: 1, role: "user", content: "Travel budget?", sources: [], created_at: CHAT.created_at, rating: null}],
+            });
+            s.on("DELETE", "/chat/review/conversations/:id");
+        });
+
+        await user.click(await screen.findByRole("link", {name: "Travel budget?"}));
+        await user.click(await screen.findByRole("button", {name: "Delete chat"}));
+        await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", {name: "Delete"}));
+
+        await waitFor(() => expect(router.state.location.pathname).toBe("/chat-history"));
     });
 
     it("clears a chosen date range of chats", async () => {

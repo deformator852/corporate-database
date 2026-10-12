@@ -9,18 +9,20 @@ import type {UserDetailLinkState} from "@/entities/user/model";
 import {useI18n} from "@/shared/i18n/I18nProvider";
 import {localeIntlTag} from "@/shared/i18n/messages";
 import {can} from "@/shared/lib/api/me";
-import {usePageParam} from "@/shared/lib/hooks/usePageParam";
+import {refreshAfterDelete, usePageParam} from "@/shared/lib/hooks/usePageParam";
 import {useRequest} from "@/shared/lib/hooks/useRequest";
 import {useUrlParams} from "@/shared/lib/hooks/useUrlParams";
 import {formatDateTime} from "@/shared/lib/time";
 import {ListPagination} from "@/shared/ui/ListPagination";
 import {DataTable} from "@/shared/ui/DataTable";
 import {PageHeader} from "@/shared/ui/PageHeader";
+import {DeleteButton} from "@/shared/ui/DeleteButton";
 import {StatusCard} from "@/shared/ui/StatusCard";
 import {ChatPurgeDialog} from "@/widgets/chat-purge/ui/ChatPurgeDialog";
 import {getReviewedChats} from "@pages/chat-history/api/chatHistory";
+import {ChatDeleteDialog} from "@pages/chat-history/ui/ChatDeleteDialog";
 
-/** Every user's saved chats (`?user=` narrows to one), read-only, with clearing. */
+/** Every user's saved chats (`?user=` narrows to one), read-only, with deleting one or clearing many. */
 export function ChatHistoryList() {
     const {t, locale} = useI18n();
     const location = useLocation();
@@ -35,6 +37,8 @@ export function ChatHistoryList() {
     );
     const [purging, setPurging] = useState(false);
     const [purged, setPurged] = useState<string | null>(null);
+    const [deleting, setDeleting] = useState<{id: number; userName: string} | null>(null);
+    const canDelete = can("chat.purge");
     const items = data?.items ?? [];
     const owner = items[0]?.user;
     const ownerName =
@@ -98,6 +102,7 @@ export function ChatHistoryList() {
                             {label: t("chatHistory.user")},
                             {label: t("chatHistory.messages"), className: "text-right"},
                             {label: t("chatHistory.lastActivity"), className: "px-4"},
+                            canDelete && {label: <span className="sr-only">{t("common.actions")}</span>, className: "px-4"},
                         ]}
                     >
                         {items.map((chat) => (
@@ -126,6 +131,14 @@ export function ChatHistoryList() {
                                 <TableCell className="px-4 text-muted-foreground tabular-nums">
                                     {formatDateTime(chat.updated_at, tag)}
                                 </TableCell>
+                                {canDelete ? (
+                                    <TableCell className="px-4 text-right">
+                                        <DeleteButton
+                                            aria-label={t("chatHistory.delete.aria", {title: chat.title})}
+                                            onClick={() => setDeleting({id: chat.id, userName: chat.user.name || chat.user.email})}
+                                        />
+                                    </TableCell>
+                                ) : null}
                             </TableRow>
                         ))}
                     </DataTable>
@@ -154,6 +167,11 @@ export function ChatHistoryList() {
                         reload();
                     }
                 }}
+            />
+            <ChatDeleteDialog
+                chat={deleting}
+                onClose={() => setDeleting(null)}
+                onDeleted={() => refreshAfterDelete(page, items.length, goToPage, reload)}
             />
         </div>
     );

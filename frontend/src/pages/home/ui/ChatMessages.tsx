@@ -20,9 +20,13 @@ type ChatMessagesProps = {
     onRegenerate?: () => void;
 };
 
+// Within this distance of the bottom, the conversation follows new text.
+const FOLLOW_MARGIN_PX = 40;
+
 function bubbleClass(role: ChatMessage["role"]) {
     if (role === "user") {
-        return "ml-auto max-w-[min(100%,36rem)] bg-primary text-primary-foreground";
+        // Selected text inverts the bubble's own colors, or it would not show.
+        return "ml-auto max-w-[min(100%,36rem)] bg-primary text-primary-foreground selection:bg-primary-foreground selection:text-primary";
     }
     return "mr-auto w-full max-w-[min(100%,48rem)] bg-muted text-foreground";
 }
@@ -38,14 +42,23 @@ export function ChatMessages({
 }: ChatMessagesProps) {
     const {t} = useI18n();
     const scrollerRef = useRef<HTMLDivElement>(null);
+    // Follows new text only while the reader is at the bottom: someone who
+    // scrolled up to read or select an earlier answer stays where they are.
+    const following = useRef(true);
 
     useEffect(() => {
         const scroller = scrollerRef.current;
-        if (!scroller) {
-            return;
+        if (scroller && following.current) {
+            scroller.scrollTop = scroller.scrollHeight;
         }
-        scroller.scrollTop = scroller.scrollHeight;
     }, [messages, streaming, status, error]);
+
+    const onScroll = () => {
+        const scroller = scrollerRef.current;
+        if (scroller) {
+            following.current = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= FOLLOW_MARGIN_PX;
+        }
+    };
 
     if (messages.length === 0 && status === "idle") {
         return (
@@ -66,13 +79,15 @@ export function ChatMessages({
             aria-relevant="additions"
             aria-label={t("chat.conversation")}
             className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4"
+            onScroll={onScroll}
         >
             {messages.map((message, index) => (
                 <div key={message.id} className="space-y-1.5">
                     <p
                         className={`rounded-2xl px-3.5 py-2.5 text-sm break-words whitespace-pre-wrap ${bubbleClass(message.role)}`}
                     >
-                        <span className="sr-only">
+                        {/* For screen readers; not part of a selection or a copy. */}
+                        <span className="sr-only select-none">
                             {message.role === "user" ? t("chat.you") : t("chat.assistant")}
                         </span>
                         {message.content}

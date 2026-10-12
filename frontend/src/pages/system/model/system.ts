@@ -16,7 +16,6 @@ export type SystemStatus = {
         embedding_model: string;
         chunk_size: number;
         chunk_overlap: number;
-        text_cleanup: string;
     };
     /** Completed documents cut with another chunk size or overlap. */
     outdated_chunks: number;

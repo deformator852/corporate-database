@@ -1,5 +1,5 @@
 import {useState} from "react";
-import {Ban, CircleCheck, Pencil, Plus, Trash2} from "lucide-react";
+import {Ban, CircleCheck, Pencil, Plus} from "lucide-react";
 import {Link, useLocation} from "react-router";
 
 import {Badge} from "@/components/ui/badge";
@@ -16,6 +16,7 @@ import {ConfirmDialog} from "@/shared/ui/ConfirmDialog";
 import {DataTable} from "@/shared/ui/DataTable";
 import {ListPagination} from "@/shared/ui/ListPagination";
 import {PageHeader} from "@/shared/ui/PageHeader";
+import {DeleteButton} from "@/shared/ui/DeleteButton";
 import {StatusCard} from "@/shared/ui/StatusCard";
 import {deleteUser, disableUser, enableUser, getUsersPage} from "@pages/users/list/api/users";
 import type {UserListItem} from "@pages/users/list/model/users";
@@ -277,18 +278,12 @@ function UserRowActions({user, actions}: {user: UserListItem; actions: UserActio
                     </Button>
                 ) : null}
                 {actions.canDelete ? (
-                    <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
+                    <DeleteButton
                         aria-label={self ? t("users.cannotDeleteSelf") : t("users.deleteAria", {name})}
                         title={self ? t("users.cannotDeleteSelf") : undefined}
                         disabled={self}
                         onClick={() => actions.remove(user)}
-                    >
-                        <Trash2 aria-hidden/>
-                        {t("common.delete")}
-                    </Button>
+                    />
                 ) : null}
             </div>
             {actions.enableError?.id === user.id ? (

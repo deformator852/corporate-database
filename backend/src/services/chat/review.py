@@ -86,6 +86,13 @@ class ChatReviewService:
         conversation, user = row.tuple()
         return ReviewedConversation(conversation, user, len(conversation.messages))
 
+    async def delete(self, actor_id: int, conversation_id: int) -> ReviewedConversation:
+        """Deletes one reachable chat, whole, with its messages and ratings;
+        returns what it was, for the audit log."""
+        found = await self.get(actor_id, conversation_id)
+        await self.session.execute(delete(ChatConversation).where(ChatConversation.id == conversation_id))
+        return found
+
     async def purge(self, actor_id: int, user_id: int | None, period: ChatPeriod) -> int:
         """Deletes the chats last active in `period`, whole, with their
         messages and ratings; of one user or of every reachable one."""

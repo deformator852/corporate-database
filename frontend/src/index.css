@@ -147,8 +147,11 @@
     text-decoration-skip-ink: auto;
   }
 
+  /* Inverted colors: plainly visible in every theme (a light tint over the
+     text barely showed). Coloured surfaces invert their own pair. */
   ::selection {
-    background-color: color-mix(in srgb, var(--foreground) 15%, transparent);
+    background-color: var(--foreground);
+    color: var(--background);
   }
   * {
     @apply border-border outline-ring/50;

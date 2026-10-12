@@ -25,6 +25,8 @@ export const AUDIT_ACTIONS = [
     "chat.answer",
     "chat.view",
     "chat.purge",
+    "chat.delete",
+    "chat.rating_delete",
     "system.rechunk",
 ] as const;
 

@@ -441,12 +441,30 @@ def test_rated_answers_reach_those_who_review_them(client, make_user, infra):
     _, reviewer_email, reviewer_password = make_user(["chat.feedback"])
     login(client, reviewer_email, reviewer_password)
     item = client.get("/api/v1/chat/feedback", params={"rating": "down"}).json()["items"][0]
+    assert item["conversation_id"] == conversation
     assert (item["question"], item["answer"], item["user"]["email"]) == (
         "What is the travel budget?",
         "The travel budget is 500 EUR.",
         email,
     )
     assert client.put(rating_url, headers=csrf(client), json={"rating": "up"}).status_code == 404  # not theirs
+    # Handled: off the page; the chat and the answer stay.
+    assert client.delete(f"/api/v1/chat/feedback/{message}", headers=csrf(client)).status_code == 204
+    listed = client.get("/api/v1/chat/feedback", params={"rating": "all", "per_page": 100}).json()["items"]
+    assert message not in [i["message_id"] for i in listed]
+    assert client.delete(f"/api/v1/chat/feedback/{message}", headers=csrf(client)).status_code == 404
+    client.post("/api/v1/auth/logout", headers=csrf(client))
+    login(client, email, password)
+    kept = client.get(f"/api/v1/chat/conversations/{conversation}").json()["messages"]
+    assert [m["rating"] for m in kept] == [None, None]
+    assert client.put(rating_url, headers=csrf(client), json={"rating": "down"}).status_code == 204
+    client.post("/api/v1/auth/logout", headers=csrf(client))
+    login(client, reviewer_email, reviewer_password)
+    # Every rated answer, each with its own rating; none of the good ones holds it.
+    everything = client.get("/api/v1/chat/feedback", params={"rating": "all", "per_page": 100}).json()["items"]
+    assert next(i["rating"] for i in everything if i["message_id"] == message) == "down"
+    good = client.get("/api/v1/chat/feedback", params={"rating": "up", "per_page": 100}).json()["items"]
+    assert message not in [i["message_id"] for i in good]
     client.post("/api/v1/auth/logout", headers=csrf(client))
 
     login(client, email, password)
@@ -779,3 +797,38 @@ def _collect(chat) -> tuple[list[str], dict]:
             continue
         assert message["type"] == "answer", message
         return deltas, message
+
+
+def test_a_deleted_chat_takes_its_ratings_along(client, make_user, infra):
+    """Chats are deleted after the retention period or by a purge: their
+    questions and answers must not live on in the ratings."""
+    from sqlalchemy import text
+
+    from database import AsyncSessionLocal
+    from services.chat.history import ChatHistoryService
+
+    _, email, password = make_user(WRITER)
+    login(client, email, password)
+    process(upload(client, "Travel policy", POLICY.encode(), "policy.txt").json()["id"])
+    with client.websocket_connect("/api/v1/chat/ws", headers=_ws(client)) as chat:
+        chat.send_json(_ask("What is the travel budget?"))
+        _, answer = _collect(chat)
+    conversation, message = answer["conversation_id"], answer["message_id"]
+    rating_url = f"/api/v1/chat/conversations/{conversation}/messages/{message}/rating"
+    assert client.put(rating_url, headers=csrf(client), json={"rating": "down"}).status_code == 204
+    client.post("/api/v1/auth/logout", headers=csrf(client))
+
+    async def expire() -> None:
+        async with AsyncSessionLocal() as session:
+            await session.execute(
+                text("UPDATE chat_conversations SET updated_at = now() - interval '400 days' WHERE id = :id"),
+                {"id": conversation},
+            )
+            await session.commit()
+            await ChatHistoryService(session).purge_older_than(365)
+
+    run(expire())
+    _, reviewer_email, reviewer_password = make_user(["chat.feedback"])
+    login(client, reviewer_email, reviewer_password)
+    listed = client.get("/api/v1/chat/feedback", params={"rating": "all", "per_page": 100}).json()["items"]
+    assert message not in [item["message_id"] for item in listed]

@@ -178,7 +178,6 @@ export function SystemStatusPage() {
                                             ["system.config.llm", `${data.config.llm_model} · ${data.config.llm_context}`],
                                             ["system.config.embedding", data.config.embedding_model],
                                             ["system.config.chunks", `${data.config.chunk_size} / ${data.config.chunk_overlap}`],
-                                            ["system.config.cleanup", data.config.text_cleanup],
                                         ] as [MessageKey, string][]
                                     ).map(([label, value]) => (
                                         <div key={label} className="flex justify-between gap-4 py-2 text-sm">

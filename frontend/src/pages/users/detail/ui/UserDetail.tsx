@@ -253,7 +253,7 @@ function UserDetailView({userId}: {userId: number}) {
                             </Link>
                         ) : null}
                         {can("chat.purge") ? (
-                            <Button type="button" variant="outline" size="sm" onClick={() => setPurging(true)}>
+                            <Button type="button" variant="destructive" size="sm" onClick={() => setPurging(true)}>
                                 <Eraser aria-hidden />
                                 {t("chatPurge.open")}
                             </Button>

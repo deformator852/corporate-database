@@ -28,6 +28,9 @@ class FakeProvider:
         # What the next sign-in returns; tests change it.
         self.claims: dict = {}
         self.dialed: list[tuple[str, str, object]] = []
+        # token_endpoint_auth_methods_supported; None: not stated (basic).
+        self.auth_methods: list[str] | None = None
+        self.secret_sent_in: list[str] = []
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         # The address it was sent to, the host it speaks to and the TLS name.
@@ -35,15 +38,15 @@ class FakeProvider:
         self.dialed.append((request.url.netloc.decode(), request.headers["host"], sni))
         url = f"https://{request.headers['host']}{request.url.raw_path.decode().split('?')[0]}"
         if url == f"{ISSUER}/.well-known/openid-configuration":
-            return httpx.Response(
-                200,
-                json={
-                    "issuer": ISSUER,
-                    "authorization_endpoint": f"{ISSUER}/auth",
-                    "token_endpoint": f"{ISSUER}/token",
-                    "jwks_uri": f"{ISSUER}/certs",
-                },
-            )
+            document = {
+                "issuer": ISSUER,
+                "authorization_endpoint": f"{ISSUER}/auth",
+                "token_endpoint": f"{ISSUER}/token",
+                "jwks_uri": f"{ISSUER}/certs",
+            }
+            if self.auth_methods is not None:
+                document["token_endpoint_auth_methods_supported"] = self.auth_methods
+            return httpx.Response(200, json=document)
         if url == f"{ISSUER}/certs":
             return httpx.Response(200, json=KeySet([self.key]).as_dict(private=False))
         if url == f"{ISSUER}/token":
@@ -51,10 +54,20 @@ class FakeProvider:
             grant = self.codes.pop(form["code"][0], None)
             verifier = form["code_verifier"][0].encode()
             challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier).digest()).rstrip(b"=").decode()
-            if grant is None or form["client_secret"][0] != SECRET or challenge != grant["challenge"]:
+            secret = self._client_secret(request, form)
+            if grant is None or secret != SECRET or challenge != grant["challenge"]:
                 return httpx.Response(400, json={"error": "invalid_grant"})
             return httpx.Response(200, json={"id_token": grant["id_token"]})
         return httpx.Response(404)
+
+    def _client_secret(self, request: httpx.Request, form: dict) -> str | None:
+        header = request.headers.get("authorization", "")
+        if header.startswith("Basic "):
+            client_id, _, secret = base64.b64decode(header[6:]).decode().partition(":")
+            self.secret_sent_in.append("header")
+            return secret if client_id == CLIENT_ID else None
+        self.secret_sent_in.append("form")
+        return form.get("client_secret", [None])[0]
 
     def approve(self, authorize_url: str, *, key: RSAKey | None = None, **overrides) -> str:
         """The user signed in at the provider: a code for the callback."""
@@ -308,3 +321,66 @@ def test_a_code_used_twice_asks_to_sign_in_again(client, provider):
     client.cookies.set("sso_state", started.cookies["sso_state"], path="/api/v1/auth/sso")
     again = client.get("/api/v1/auth/sso/callback", params={"code": code, "state": state}, follow_redirects=False)
     assert again.headers["location"] == "/login?sso_error=invalid"
+
+
+def test_the_client_secret_goes_where_the_provider_takes_it(client, provider):
+    provider.claims = _person()
+    _sign_in(client, provider)
+    provider.auth_methods = ["client_secret_post"]
+    from services import sso
+
+    sso._metadata.clear()
+    client.post("/api/v1/auth/logout", headers=csrf(client))
+    _sign_in(client, provider)
+    assert provider.secret_sent_in == ["header", "form"]
+
+
+def test_an_unverified_email_never_takes_over_an_account(client, provider, make_user, monkeypatch):
+    """Where people can type any email, one marked unverified, or a
+    preferred_username that looks like one, must not open someone's account."""
+    monkeypatch.setenv("OIDC_LINK_BY_EMAIL", "on")
+    _, victim_email, _ = make_user()
+    provider.claims = _person(email=victim_email, email_verified=False)
+    assert _sign_in(client, provider) == "/login?sso_error=sso_account_exists"
+    without_email = _person(preferred_username=victim_email)
+    del without_email["email"]
+    provider.claims = without_email
+    assert _sign_in(client, provider) == "/login?sso_error=sso_account_exists"
+
+
+def test_an_unverified_email_does_not_rename_the_account(client, provider):
+    provider.claims = _person()
+    _sign_in(client, provider)
+    me = client.get("/api/v1/auth/me").json()
+    client.post("/api/v1/auth/logout", headers=csrf(client))
+    _sign_in(client, provider, email=f"ceo-{uuid.uuid4().hex[:6]}@acme.io", email_verified=False)
+    assert client.get("/api/v1/auth/me").json()["email"] == me["email"]
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"aud": [CLIENT_ID, "another-app"]},  # several audiences and no azp
+        {"aud": [CLIENT_ID, "another-app"], "azp": "another-app"},
+        {"azp": "another-app"},
+    ],
+)
+def test_a_token_issued_to_another_application_is_refused(client, provider, change):
+    provider.claims = _person()
+    assert _sign_in(client, provider, **change) == "/login?sso_error=invalid"
+
+
+def test_a_broken_key_set_is_an_invalid_answer_not_a_crash(client, provider, monkeypatch):
+    provider.claims = _person()
+    original = provider.handler
+
+    def broken_keys(request):
+        if str(request.url).endswith("/certs"):
+            return httpx.Response(200, json={"keys": [{"kty": "nonsense"}]})
+        return original(request)
+
+    monkeypatch.setattr(provider, "handler", broken_keys)
+    from services import sso
+
+    monkeypatch.setattr(sso, "_client", lambda cacert="": httpx.AsyncClient(transport=httpx.MockTransport(broken_keys)))
+    assert _sign_in(client, provider) == "/login?sso_error=invalid"

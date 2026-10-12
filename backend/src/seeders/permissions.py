@@ -66,8 +66,8 @@ CHAT_PERMISSIONS = (
     ),
     (
         "chat.purge",
-        "Clear chat history",
-        "Delete saved chats of users with no more access than yours, all or for a period",
+        "Delete chats",
+        "Delete saved chats of users with no more access than yours: one chat, or all for a period",
     ),
 )
 
