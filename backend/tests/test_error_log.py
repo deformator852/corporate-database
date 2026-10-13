@@ -156,7 +156,7 @@ def test_a_flood_from_one_logger_is_capped(client):
     from services.error_log import _PER_LOGGER_PER_MINUTE
 
     marker = uuid.uuid4().hex
-    noisy = logging.getLogger(f"pypdf.test.{marker}")
+    noisy = logging.getLogger(f"services.documents.parser.{marker}")
     for n in range(_PER_LOGGER_PER_MINUTE * 3):
         noisy.warning("Object %s broken %s", n, marker)
     logging.getLogger("services.documents.processor").error("Real problem %s", marker)
@@ -172,7 +172,8 @@ def test_a_flood_from_one_logger_is_capped(client):
 def test_entries_say_whether_they_are_bugs_corpus_or_libraries(client, make_user):
     marker = uuid.uuid4().hex
     logging.getLogger("services.documents.processor").error("Corpus noticed %s", marker)
-    logging.getLogger("pypdf._reader").warning("Library warned %s", marker)
+    logging.getLogger("pypdf._reader").warning("Library warned %s", marker)  # console only
+    logging.getLogger("qdrant_client").error("Library failed %s", marker)
     logging.getLogger("uvicorn.error").error("Server caught %s", marker)
     logging.getLogger("services.chat").error("Said so %s", marker, extra={"category": "unhandled"})
     _stored()
@@ -181,7 +182,9 @@ def test_entries_say_whether_they_are_bugs_corpus_or_libraries(client, make_user
     login(client, email, password)
     items = client.get("/api/v1/system/errors", params={"per_page": 100}).json()["items"]
     kinds = {item["message"].split()[0]: item["category"] for item in items if marker in item["message"]}
+    # A library's warning is not kept; its error is.
     assert kinds == {"Corpus": "app", "Library": "library", "Server": "unhandled", "Said": "unhandled"}
+    assert not any(item["message"].startswith("Library warned") for item in items)
     bugs = client.get("/api/v1/system/errors", params={"category": "unhandled", "per_page": 100}).json()["items"]
     assert {item["category"] for item in bugs} == {"unhandled"}
     assert client.get("/api/v1/system/errors", params={"category": "other"}).status_code == 400

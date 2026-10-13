@@ -162,6 +162,9 @@ def _choose(console: Console, installed: set[str], languages: list[str]) -> str:
 class LlmStep:
     title = "LLM model"
 
+    def current(self) -> str | None:
+        return env_value(ENV_PATH, "LLM_MODEL")
+
     def run(self, console: Console) -> None:
         console.print(
             Panel(

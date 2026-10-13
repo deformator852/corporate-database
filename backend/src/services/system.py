@@ -24,7 +24,7 @@ from settings import (
     chunk_overlap,
     chunk_size,
     embedding_model,
-    language,
+    languages,
     llm_host,
     llm_model,
     llm_num_ctx,
@@ -155,7 +155,8 @@ async def system_status(session: AsyncSession) -> dict[str, Any]:
         "services": services,
         "documents": {str(status): count for status, count in documents.items()},
         "config": {
-            "language": language(),
+            # The default first; several when users switch in the header.
+            "languages": list(languages()),
             "llm_model": llm_model(),
             "llm_context": llm_num_ctx(),
             "embedding_model": spec.hf_id,

@@ -57,6 +57,14 @@ def _pick_several(console: Console, codes: list[str], current: list[str]) -> lis
 class LanguageStep:
     title = "System language"
 
+    def current(self) -> str | None:
+        if env_value(ENV_PATH, "APP_LANGUAGE") is None:
+            return None
+        codes = current_languages()
+        if len(codes) == 1:
+            return LANGUAGES[codes[0]]
+        return ", ".join([f"{LANGUAGES[codes[0]]} (default)", *(LANGUAGES[code] for code in codes[1:])])
+
     def run(self, console: Console) -> None:
         console.print(
             "Corpus works in one language or in several. With several, each user picks their language "

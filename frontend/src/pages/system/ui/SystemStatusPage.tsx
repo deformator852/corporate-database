@@ -20,7 +20,7 @@ import {cn} from "cn";
 import {useI18n} from "@/shared/i18n/I18nProvider";
 import {PageHeader} from "@/shared/ui/PageHeader";
 import {documentStatusKey} from "@/entities/document/model";
-import type {MessageKey} from "@/shared/i18n/messages";
+import {isLocale, LOCALE_NAMES, type MessageKey} from "@/shared/i18n/messages";
 import {getApiErrorMessage} from "@/shared/lib/api/errors";
 import type {DocumentStatus} from "@/entities/document/model";
 import {getSystemStatus} from "@pages/system/api/system";
@@ -174,7 +174,7 @@ export function SystemStatusPage() {
                                 <dl className="divide-y">
                                     {(
                                         [
-                                            ["system.config.language", data.config.language],
+                                            ["system.config.language", languageList(data.config.languages, t("system.config.defaultLanguage"))],
                                             ["system.config.llm", `${data.config.llm_model} · ${data.config.llm_context}`],
                                             ["system.config.embedding", data.config.embedding_model],
                                             ["system.config.chunks", `${data.config.chunk_size} / ${data.config.chunk_overlap}`],
@@ -195,4 +195,14 @@ export function SystemStatusPage() {
             ) : null}
         </div>
     );
+}
+
+/** "English (default), Español": each language in its own name. */
+function languageList(codes: string[], defaultMark: string): string {
+    return codes
+        .map((code, index) => {
+            const name = isLocale(code) ? LOCALE_NAMES[code] : code;
+            return index === 0 && codes.length > 1 ? `${name} (${defaultMark})` : name;
+        })
+        .join(", ");
 }

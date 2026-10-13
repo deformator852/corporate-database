@@ -47,7 +47,7 @@ def admin_token(console: Console) -> str:
     """A Vault token that may write the secret; used once, never saved.
     The app's AppRole only needs to read it."""
     console.print("A Vault token that may write the secret is needed once; it is not saved.")
-    return Prompt.ask("Vault token", password=True, console=console).strip()
+    return Prompt.ask("Vault token (hidden while you type or paste; not saved)", password=True, console=console).strip()
 
 
 def write_keys(console: Console, keys: dict[str, str]) -> None:

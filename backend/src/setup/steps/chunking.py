@@ -145,6 +145,12 @@ def _ask_custom(console: Console, size: int, overlap: int) -> tuple[int, int]:
 class ChunkingStep:
     title = "Chunk size"
 
+    def current(self) -> str | None:
+        size = env_value(ENV_PATH, "CHUNK_SIZE")
+        if size is None:
+            return None
+        return f"{size} characters, overlap {env_value(ENV_PATH, 'CHUNK_OVERLAP') or DEFAULT_CHUNK_OVERLAP}"
+
     def run(self, console: Console) -> None:
         current_size = int(env_value(ENV_PATH, "CHUNK_SIZE") or DEFAULT_CHUNK_SIZE)
         current_overlap = int(env_value(ENV_PATH, "CHUNK_OVERLAP") or DEFAULT_CHUNK_OVERLAP)

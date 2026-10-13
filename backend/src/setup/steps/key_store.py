@@ -28,6 +28,11 @@ def _setting(name: str) -> str | None:
 class KeyStoreStep:
     title = "Encryption key storage"
 
+    def current(self) -> str | None:
+        if _setting("KEY_STORE") is None:
+            return None
+        return where() if _setting("KEY_STORE") == "vault" else f"the .env file ({where()})"
+
     def run(self, console: Console) -> None:
         try:
             current = key_store(_setting)

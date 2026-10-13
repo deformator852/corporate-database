@@ -29,6 +29,13 @@ def _on(value: str | None, default: bool) -> bool:
 class SsoStep:
     title = "Sign-in"
 
+    def current(self) -> str | None:
+        """None while SSO is off: its first question already defaults to off."""
+        issuer = env_value(ENV_PATH, "OIDC_ISSUER")
+        if not issuer:
+            return None
+        return f"single sign-on with {env_value(ENV_PATH, 'OIDC_NAME') or 'SSO'} ({issuer})"
+
     def run(self, console: Console) -> None:
         console.print(
             "Users can sign in with their company account (single sign-on through Microsoft Entra ID, "

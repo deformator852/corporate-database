@@ -171,6 +171,9 @@ def _lock(console: Console, message: str, current: str | None) -> None:
 class EmbeddingStep:
     title = "Embedding model"
 
+    def current(self) -> str | None:
+        return env_value(ENV_PATH, "EMBEDDING_MODEL")
+
     def run(self, console: Console) -> None:
         points = _rag_points()
         current = env_value(ENV_PATH, "EMBEDDING_MODEL")

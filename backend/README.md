@@ -148,5 +148,48 @@ To stop it, run `docker compose -f docker-compose.local.yml --profile sso
 stop keycloak`. To turn single sign-on off, run `uv run configure` and answer
 no at the Sign-in step.
 
+## Testing the Vault key store locally
+
+A test HashiCorp Vault starts with the other development services, set up as a
+company's Vault administrator would (`dev/vault/start.sh`): KV v2 at
+`secret`, an AppRole `corpus` that may only read `secret/data/corpus`, and a
+token that may write it. These are test values; never use them anywhere else.
+
+Its data is on the `vault_data` Docker volume: a key moved there survives
+restarts, and is lost with the volume. Back up the key first:
+
+```sh
+cd backend && uv run setup key --show
+```
+
+1. Start the development services from the repository root, Vault included:
+
+   ```sh
+   docker compose --env-file backend/.env -f docker-compose.local.yml up -d
+   ```
+
+2. In `backend/`, run `uv run configure`. At the Encryption key storage step
+   choose HashiCorp Vault and enter:
+
+   | Question | Answer |
+   |---|---|
+   | CA file | Enter (none: the test Vault uses plain HTTP) |
+   | Vault address | `http://localhost:8200` |
+   | AppRole role_id | `corpus-local-role-id` |
+   | AppRole secret_id | `corpus-local-secret-id` (hidden while you type) |
+   | KV v2 mount | Enter (`secret`) |
+   | Secret path | Enter (`corpus`) |
+   | Vault token | `corpus-local-admin-token` (hidden while you type) |
+
+   It writes the key to Vault, checks the AppRole reads it back and removes
+   it from `.env`.
+
+3. Restart the backend and the worker: they now read the key from Vault.
+
+The production stack on the same machine reads the same `backend/.env`; it
+cannot reach a Vault at `localhost` from its containers, so it does not
+start while the key is there. To move the key back, run `uv run configure`
+and choose the `.env` file. The Vault UI is at `http://localhost:8200`.
+
 To deploy to a server, see
 [Deploying Corpus on a company server](../documentations/deployment.md).

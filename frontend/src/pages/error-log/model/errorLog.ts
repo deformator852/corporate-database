@@ -3,7 +3,8 @@ import type {MessageKey} from "@/shared/i18n/messages";
 export const ERROR_LOG_PER_PAGE = 25;
 export const ERROR_LEVELS = ["warning", "error", "critical"] as const;
 /** unhandled: a bug nothing caught ("Unhandled (bug)"); app: Corpus logged
- * it ("Handled"); library: a component Corpus uses warned ("System").
+ * it ("Handled"); library: a component Corpus uses failed ("System"; its warnings are
+ * not kept).
  * Backend services/error_log.py. */
 export const ERROR_CATEGORIES = ["unhandled", "app", "library"] as const;
 

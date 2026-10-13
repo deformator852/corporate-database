@@ -37,9 +37,10 @@ os.environ.update(
         "QDRANT_PORT": "6333",
         "QDRANT_API_KEY": "test-qdrant-key-" + "z" * 32,
         "HF_HUB_OFFLINE": "1",
-        # Off unless a test turns it on: the developer's backend/.env may set
-        # it, and with SSO on no password signs in. Empty values win over the
-        # file (load_dotenv never overrides what is set).
+        # Off unless a test turns them on: the developer's backend/.env may
+        # set them (SSO on refuses passwords; a Vault would hold their real
+        # key). Empty values win over the file (load_dotenv never overrides
+        # what is set).
         **dict.fromkeys(
             [
                 "OIDC_ISSUER",
@@ -53,6 +54,17 @@ os.environ.update(
                 "OIDC_CACERT",
                 "OIDC_CONNECT",
                 "APP_LANGUAGES",
+                # The key comes from DATA_ENCRYPTION_KEY above, never from
+                # the developer's Vault.
+                "KEY_STORE",
+                "VAULT_ADDR",
+                "VAULT_ROLE_ID",
+                "VAULT_SECRET_ID",
+                "VAULT_KV_MOUNT",
+                "VAULT_KV_PATH",
+                "VAULT_CACERT",
+                "VAULT_CONNECT",
+                "DATA_ENCRYPTION_KEY_PREVIOUS",
             ],
             "",
         ),

@@ -182,6 +182,15 @@ def test_the_key_moves_into_vault_rotates_there_and_moves_back(env, answers, vau
         "https://vault.test:8200",
         "corpus",
     )
+    # Run again (configure): "Change it?" defaults to no and skips the step.
+    import setup.app as app
+
+    assert KeyStoreStep().current() == "Vault https://vault.test:8200, secret/corpus"
+    before, calls = env.read_text(), len(vault.requests)
+    answers.extend([None])
+    app.run([KeyStoreStep()], "Done.")
+    assert env.read_text() == before and len(vault.requests) == calls and answers == []
+
     console = _console()
     SecretsStep().run(console)  # must not make a second key in .env
     assert "DATA_ENCRYPTION_KEY" not in _values(env)
@@ -434,3 +443,39 @@ def test_env_values_with_spaces_are_quoted_and_read_back(tmp_path):
     for bad in ("", "two\nlines", "it's mine"):
         with pytest.raises(ValueError):
             upsert_env(path, "OIDC_NAME", bad)
+
+
+def test_configure_offers_each_set_step_as_keep_or_change(env, answers, monkeypatch):
+    """Every step already set says what it is, and Enter keeps it: running
+    configure again changes nothing unless asked. A step never set runs."""
+    import setup.app as app
+    from setup.steps.chat import ChatStep
+    from setup.steps.chunking import ChunkingStep
+    from setup.steps.key_store import KeyStoreStep
+    from setup.steps.language import LanguageStep
+    from setup.steps.llm import LlmStep
+    from setup.steps.sso import SsoStep
+
+    env.write_text(
+        "APP_LANGUAGE=en\nAPP_LANGUAGES=en,es\nLLM_MODEL=llama3.1:8b\nCHAT_QUESTIONS_PER_10_MIN=20\n"
+        "LLM_PARALLEL=2\nCHUNK_SIZE=800\nCHUNK_OVERLAP=150\nKEY_STORE=env\nDATA_ENCRYPTION_KEY="
+        + "k" * 40
+        + "\nOIDC_ISSUER=https://idp.acme.io\nOIDC_NAME=Acme\n"
+    )
+    steps = [LanguageStep(), LlmStep(), ChatStep(), ChunkingStep(), SsoStep(), KeyStoreStep()]
+    assert [step.current() for step in steps] == [
+        "English (default), Spanish",
+        "llama3.1:8b",
+        "20 questions per user in 10 minutes, 2 answers at once",
+        "800 characters, overlap 150",
+        "single sign-on with Acme (https://idp.acme.io)",
+        f"the .env file ({env})",
+    ]
+    before = env.read_text()
+    answers.extend([None] * len(steps))  # Enter at every "Change it?"
+    app.run(steps, "Done.")
+    assert env.read_text() == before and answers == []
+
+    # Never set: no question, the step itself runs.
+    env.write_text("")
+    assert LlmStep().current() is None and KeyStoreStep().current() is None and SsoStep().current() is None

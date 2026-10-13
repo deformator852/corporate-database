@@ -10,7 +10,8 @@ export type SystemStatus = {
     services: ServiceCheck[];
     documents: Record<string, number>;
     config: {
-        language: string;
+        /** The default first; more when users switch in the header. */
+        languages: string[];
         llm_model: string;
         llm_context: number;
         embedding_model: string;

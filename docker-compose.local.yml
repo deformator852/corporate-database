@@ -224,9 +224,32 @@ services:
       - ./dev/keycloak/corpus-realm.json:/opt/keycloak/data/import/corpus-realm.json:ro
       - ./dev/keycloak/certs:/certs
 
+  # Key storage test server (HashiCorp Vault); starts with the rest.
+  # http://localhost:8200, KV v2 at "secret", AppRole "corpus" reading
+  # secret/data/corpus (role_id corpus-local-role-id, secret_id
+  # corpus-local-secret-id), a token that may write it (corpus-local-admin-token).
+  # Data on the vault_data volume: a key moved here survives restarts, and is
+  # lost with the volume. Test values only: never use them anywhere else.
+  vault:
+    image: hashicorp/vault:1.17
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8200:8200"
+    entrypoint: ["/bin/sh", "/start.sh"]
+    volumes:
+      - ./dev/vault/start.sh:/start.sh:ro
+      - vault_data:/vault/file
+    healthcheck:
+      # Exits 0 only once Vault is unsealed and serving.
+      test: ["CMD-SHELL", "VAULT_ADDR=http://127.0.0.1:8200 vault status >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
 volumes:
   postgres_data:
   qdrant_data:
   rabbitmq_data:
   minio_data:
   ollama_data:
+  vault_data:

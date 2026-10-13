@@ -358,7 +358,7 @@ def test_system_page_reports_every_service(client, make_user, infra, monkeypatch
     assert all(s["status"] in {"ok", "warning"} for s in services.values()), services
     assert services["search_index"]["chunks"] >= 1 and services["llm"]["status"] == "ok"
     assert status["documents"]["completed"] >= 1
-    assert status["config"]["llm_model"] == "llama3.1:8b" and status["config"]["language"] == "en"
+    assert status["config"]["llm_model"] == "llama3.1:8b" and status["config"]["languages"] == ["en"]
 
 
 def test_system_page_shows_what_is_broken(client, make_user, infra, monkeypatch):

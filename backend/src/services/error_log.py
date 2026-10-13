@@ -30,7 +30,7 @@ from models.error_log import ErrorLog
 
 LEVELS = ("warning", "error", "critical")
 # unhandled: an error nothing caught (a bug); app: Corpus logged it itself;
-# library: a package Corpus uses warned.
+# library: a package Corpus uses failed (its warnings are not kept).
 CATEGORIES = ("unhandled", "app", "library")
 # Loggers that report errors nothing else caught: the web server's, and
 # Celery's for a task that raised.
@@ -67,6 +67,11 @@ class DatabaseLogHandler(logging.Handler):
         exception = record.exc_info[1] if record.exc_info else None
         if record.name.startswith("uvicorn") and getattr(exception, LOGGED, False):
             return
+        category = category_of(record)
+        if category == "library" and record.levelno < logging.ERROR:
+            # A package's warnings are its own housekeeping (a deprecation, a
+            # damaged PDF object): console only. Its errors are kept.
+            return
         if not self._allow(record):
             return
         try:
@@ -75,7 +80,7 @@ class DatabaseLogHandler(logging.Handler):
                 "level": record.levelname.lower()[:16],
                 "source": self.source,
                 "logger": record.name[:128],
-                "category": category_of(record),
+                "category": category,
                 "message": record.getMessage(),
                 "traceback": _FORMATTER.formatException(record.exc_info) if record.exc_info else None,
             }

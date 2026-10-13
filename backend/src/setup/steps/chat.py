@@ -38,6 +38,13 @@ def _int_env(key: str, default: int) -> int:
 class ChatStep:
     title = "Chat capacity"
 
+    def current(self) -> str | None:
+        if env_value(ENV_PATH, "CHAT_QUESTIONS_PER_10_MIN") is None and env_value(ENV_PATH, "LLM_PARALLEL") is None:
+            return None
+        questions = _int_env("CHAT_QUESTIONS_PER_10_MIN", DEFAULT_CHAT_QUESTIONS)
+        limit = f"{questions} questions per user in 10 minutes" if questions else "no question limit"
+        return f"{limit}, {_int_env('LLM_PARALLEL', DEFAULT_LLM_PARALLEL)} answers at once"
+
     def run(self, console: Console) -> None:
         console.print(Panel(NOTES, title="Sharing the assistant", expand=False))
         model = env_value(ENV_PATH, "LLM_MODEL") or ""
