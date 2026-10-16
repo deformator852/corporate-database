@@ -1,0 +1,154 @@
+CORPUS COMMERCIAL LICENSE
+Version 1.0
+
+Copyright (c) 2026 Nikita Andreevich Kostenko. All rights reserved.
+
+Corpus is proprietary software. It is licensed, not sold. Installing,
+copying or using any part of it means you accept this License. If you do not
+accept it, do not install or use the Software.
+
+
+1. DEFINITIONS
+
+"Licensor" means Nikita Andreevich Kostenko, the author and owner of Corpus,
+reachable at kostneko30@gmail.com.
+
+"Software" means Corpus in every form: source code, compiled code, container
+images, configuration files, scripts, documentation, and every Update.
+
+"Licensee" means the one company or other legal entity that bought a license
+from the Licensor, as named on the order or invoice.
+
+"Authorized Users" means the Licensee's employees, and individual contractors
+who work for the Licensee, while they use the Software on the Licensee's
+behalf.
+
+"Extension" means code written by or for the Licensee in the folders
+backend/src/custom/ and frontend/src/custom/, as the Software's customization
+guide describes.
+
+"Update" means a new version of the Software that the Licensor releases.
+
+"Update Period" means the 12 months after the purchase, extended by each paid
+renewal.
+
+
+2. OWNERSHIP
+
+The Licensor owns the Software and all intellectual property rights in it.
+This License gives the Licensee only the rights written in section 3. Every
+other right is reserved by the Licensor.
+
+
+3. WHAT THE LICENSEE MAY DO
+
+While the Licensee complies with this License and has paid for it, the
+Licensor grants the Licensee a non-exclusive, non-transferable,
+non-sublicensable license to:
+
+  a) install and run the Software on servers that the Licensee owns or
+     controls (its own hardware, or a private cloud account in the Licensee's
+     name), for the Licensee's own internal business;
+
+  b) let Authorized Users use it;
+
+  c) configure the Software, write Extensions, and change the Software where
+     needed to adapt it to the Licensee's own internal use;
+
+  d) make the copies these uses need: one production installation, plus
+     copies for testing, staging, backups and disaster recovery that only the
+     Licensee uses.
+
+The license is perpetual for the versions the Licensee received during the
+Update Period.
+
+ONE LICENSE COVERS ONE COMPANY. A parent company, a subsidiary or any other
+affiliate of the Licensee is a separate company and needs its own license. A
+second production installation needs a second license.
+
+
+4. WHAT THE LICENSEE MAY NOT DO
+
+The Licensee must not, and must not let anyone else:
+
+  a) install, run or use the Software for any person or company other than
+     the Licensee, including the Licensee's clients, for example as an IT
+     integrator, consultant or managed service provider;
+
+  b) copy, publish, distribute, sell, resell, rent, lease, lend or
+     sublicense the Software or any part of it, changed or unchanged,
+     including Extensions that contain parts of the Software;
+
+  c) offer the Software to others as a hosted service, as software as a
+     service, or under another name or brand;
+
+  d) present the Software, or a product based on it, as their own work, or
+     use it or its source code to build a product for sale or for others;
+
+  e) remove or change copyright notices, license notices or the Licensor's
+     name in the Software;
+
+  f) get around any license check that the Software contains, or share a
+     license key or license file with anyone else;
+
+  g) transfer this License, or the Software, to another company without the
+     Licensor's prior written consent.
+
+
+5. CONFIDENTIALITY
+
+The source code of the Software is the Licensor's confidential information.
+The Licensee keeps it confidential and gives access to it only to Authorized
+Users who need it for the uses in section 3 and who are bound to keep it
+confidential.
+
+
+6. UPDATES
+
+The License includes the Updates released during the Update Period. When the
+Update Period ends, the Software keeps working: the Licensee may keep using
+the last version it received. Later Updates need a paid renewal. Support is
+included only when a separate written agreement says so.
+
+
+7. THIRD-PARTY SOFTWARE AND AI MODELS
+
+The Software uses open-source libraries and runs other software and AI
+models, for example PostgreSQL, Qdrant, RabbitMQ, Ollama, Caddy,
+LibreOffice, large language models (such as Llama, Gemma and Qwen) and
+embedding models. Each comes under its own license, which this License does
+not change. The Licensee downloads the AI models and is responsible for
+following their licenses and use policies.
+
+
+8. TERMINATION
+
+This License ends automatically when the Licensee breaks any of its terms.
+The Licensee must then stop using the Software and delete every copy of it.
+Sections 2, 4, 5, 8, 9 and 10 stay in force after the License ends.
+
+
+9. NO WARRANTY
+
+To the extent the law allows, the Software is provided "as is", without any
+warranty, express or implied, including warranties of merchantability,
+fitness for a particular purpose and non-infringement. The Licensee is
+responsible for its own backups and for checking the answers the Software
+gives: answers written by an AI model can be wrong.
+
+
+10. LIMITATION OF LIABILITY
+
+To the extent the law allows, the Licensor is not liable for any indirect,
+incidental, special or consequential damages, or for lost data, profits or
+business, arising from the Software or this License. The Licensor's total
+liability is limited to the amount the Licensee paid for the License in the
+12 months before the claim.
+
+
+11. GENERAL
+
+A separate agreement signed by the Licensor and the Licensee takes precedence
+over this License where they differ. If a court finds a part of this License
+unenforceable, the rest stays in force. To buy a license, renew updates or
+ask about this License, write to kostneko30@gmail.com.

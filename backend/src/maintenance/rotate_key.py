@@ -5,8 +5,8 @@
 
 Rotation: `uv run setup key rotate` moves the key to
 DATA_ENCRYPTION_KEY_PREVIOUS and generates a new one; this command then
-re-encrypts documents (MinIO), document text and chats (Postgres) and chunk
-text (Qdrant), and records the new key's fingerprint. DATA_ENCRYPTION_KEY_PREVIOUS
+re-encrypts document files (disk or S3), every encrypted column in Postgres (document
+text, chats, the error log) and chunk text (Qdrant), and records the new key's fingerprint. DATA_ENCRYPTION_KEY_PREVIOUS
 is then no longer needed: deploy.sh removes it from .env; in development
 remove it by hand.
 
@@ -16,14 +16,14 @@ they would keep writing while it runs.
 """
 
 import asyncio
-import io
 from collections.abc import Callable
 
-from minio.error import S3Error
 from sqlalchemy import select, text
 
-from database import AsyncSessionLocal, engine
+import models  # noqa: F401 - every table, for encrypted_columns
+from database import AsyncSessionLocal, Base, engine
 from encryption import (
+    EncryptedText,
     current_fingerprint,
     current_text_prefix,
     is_current_bytes,
@@ -32,18 +32,26 @@ from encryption import (
     reencrypt_text,
 )
 from exceptions import AppError
+from extensions import plugins
 from models.document import Document
 from services.encryption_key import save_fingerprint, stored_fingerprint
 from services.search.rag import COLLECTION_NAME, Rag, _chunk_context
 from services.storage import ObjectStorage
 
-# (table, primary key, encrypted column); all sealed without a context.
-_COLUMNS = (
-    ("document_texts", "document_id", "text"),
-    ("chat_conversations", "id", "title"),
-    ("chat_messages", "id", "content"),
-)
 _BATCH = 500
+
+
+def encrypted_columns() -> list[tuple[str, str, str]]:
+    """(table, primary key, column) of every EncryptedText column, those of
+    extensions too; EncryptedText seals without a context."""
+    plugins()  # registers the models of custom/ packages
+    found = []
+    for table in Base.metadata.sorted_tables:
+        for column in table.columns:
+            if isinstance(column.type, EncryptedText):
+                (key,) = table.primary_key.columns
+                found.append((table.name, key.name, column.name))
+    return found
 
 
 async def _check_keys() -> None:
@@ -70,18 +78,14 @@ async def _files(report: Callable[[str], None]) -> int:
         keys = list(await session.scalars(select(Document.object_key)))
     for key in keys:
         try:
-            response = storage.client.get_object(storage.bucket, key)
-            try:
-                raw = response.read()
-            finally:
-                response.close()
-                response.release_conn()
-        except S3Error:
-            continue  # missing file: nothing to protect
+            raw = storage.read_sealed(key)
+        except AppError as exc:
+            if exc.code == "not_found":
+                continue  # missing file: nothing to protect
+            raise
         if is_current_bytes(raw):
             continue
-        sealed = reencrypt_bytes(raw, key)
-        storage.client.put_object(storage.bucket, key, io.BytesIO(sealed), len(sealed))
+        storage.write_sealed(key, reencrypt_bytes(raw, key))
         done += 1
         if done % 100 == 0:
             report(f"  {done} files...")
@@ -149,7 +153,7 @@ async def reencrypt_all(report: Callable[[str], None] = print) -> None:
     await _check_keys()
     report(f"Key fingerprint: {current_fingerprint()}")
     report(f"Files: {await _files(report)} re-encrypted")
-    for table, key, column in _COLUMNS:
+    for table, key, column in encrypted_columns():
         report(f"{table}.{column}: {await _column(table, key, column)} re-encrypted")
     report(f"Search chunks: {await _chunks()} re-encrypted")
     async with AsyncSessionLocal() as session:

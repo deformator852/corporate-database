@@ -369,17 +369,14 @@ def test_system_page_shows_what_is_broken(client, make_user, infra, monkeypatch)
 
     monkeypatch.setattr(system, "_queue", queue_down)
     monkeypatch.setenv("LLM_MODEL", "missing:model")
-    infra.minio.fail_with = "AccessDenied"
+    infra.files.fail()
     _, email, password = make_user(["system.view"])
     login(client, email, password)
 
     services = {s["name"]: s for s in client.get("/api/v1/system/status").json()["services"]}
 
-    assert services["storage"] == {
-        "name": "storage",
-        "status": "down",
-        "detail": "MinIO refused the app user: AccessDenied",
-    }
+    assert services["storage"]["status"] == "down"
+    assert services["storage"]["detail"].startswith("Cannot create the folder")
     assert services["queue"]["status"] == "down" and "broker unreachable" in services["queue"]["detail"]
     assert services["llm"] == {
         "name": "llm",

@@ -95,3 +95,54 @@ def test_re_chunking_needs_its_permission(client, make_user):
     _, email, password = make_user(["system.view"])
     login(client, email, password)
     assert client.post("/api/v1/system/rechunk", headers=csrf(client)).status_code == 403
+
+
+def test_a_change_made_while_a_document_is_re_chunked_wins(client, make_user, infra, monkeypatch):
+    """The worker embeds for a while before it writes the new chunks: a new
+    classification set meanwhile stays, and a document deleted meanwhile
+    leaves no chunks behind."""
+    from qdrant_client.http.models import FieldCondition, Filter, MatchValue
+    from sqlalchemy import delete, update
+
+    from database import AsyncSessionLocal
+    from models.document import Document
+    from services.documents.processor import DocumentProcessor, rechunk_document_job
+    from services.search.rag import COLLECTION_NAME, Rag
+
+    _, email, password = make_user(["documents.list", "documents.create", "documents.secret"])
+    login(client, email, password)
+    kept = upload(client, "Supply terms", _TEXT, "terms.txt").json()["id"]
+    deleted = upload(client, "Old terms", _TEXT + b" Old.", "old.txt").json()["id"]
+    process(kept)
+    process(deleted)
+    monkeypatch.setenv("CHUNK_SIZE", "300")
+    monkeypatch.setenv("CHUNK_OVERLAP", "50")
+    embed = DocumentProcessor._embed
+
+    def change_meanwhile(change, *, unindex: bool = False):
+        async def embedding(self, document, texts, **kwargs):
+            vectors = await embed(self, document, texts, **kwargs)
+            async with AsyncSessionLocal() as session:  # another request
+                if unindex:  # as deleting a document does
+                    await Rag().delete_document(document.id)
+                await session.execute(change.where(Document.id == document.id))
+                await session.commit()
+            return vectors
+
+        monkeypatch.setattr(DocumentProcessor, "_embed", embedding)
+
+    async def classifications(document_id: int) -> set[str]:
+        records, _ = await Rag().client.scroll(
+            COLLECTION_NAME,
+            scroll_filter=Filter(must=[FieldCondition(key="document_id", match=MatchValue(value=document_id))]),
+            limit=1000,
+        )
+        return {record.payload["classification"] for record in records if record.payload}
+
+    change_meanwhile(update(Document).values(classification="secret"))
+    run(rechunk_document_job(kept))
+    assert run(classifications(kept)) == {"secret"}
+
+    change_meanwhile(delete(Document), unindex=True)
+    run(rechunk_document_job(deleted))
+    assert _chunk_indexes(deleted) == []

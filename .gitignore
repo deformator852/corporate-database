@@ -4,6 +4,10 @@ venv
 .env
 node_modules
 .skills
+# Instructions for AI coding assistants: kept locally, not shipped.
+/.cursor/skills/
+/AGENTS.md
+/CLAUDE.md
 # deploy/deploy.sh backup
 /backups/
 # pytest --cov data
@@ -13,3 +17,5 @@ node_modules
 /deploy/vault/ca.pem
 # CA of the company's SSO provider, copied by uv run configure.
 /deploy/sso/ca.pem
+# CA of the company's S3 storage, copied by uv run configure.
+/deploy/s3/ca.pem

@@ -8,18 +8,23 @@ rotation.
 
 Corpus runs entirely inside the company network. After installation, no
 container can reach the internet. Only the model download job reaches it, and
-only when you run it.
+only when you run it. If you connect HashiCorp Vault, single sign-on or S3
+storage, a tunnel container forwards to that one address and nowhere else.
 
 All settings and secrets live in one file, `backend/.env`. Documents and chats
 are encrypted with `DATA_ENCRYPTION_KEY` from that file, so the data cannot be
-read without the key.
+read without the key. Uploaded files stay on the server, in a Docker volume,
+unless you keep them in the company's S3 storage.
 
 ## Prerequisites
 
 * A Linux server with Docker and Docker Compose v2
 * `git` and [uv](https://docs.astral.sh/uv/) on the server, to run the setup
   command
-* 16 GB of RAM or more. The AI model uses most of it. A GPU is optional.
+* 16 GB of RAM or more for the default 8B model, about 80 GB of disk, and an
+  x86-64 CPU with AVX2. The AI model uses most of the memory. A GPU is
+  optional. Larger models need more: see
+  [System requirements](../README.md#system-requirements).
 * A host name that users will open, for example `corpus.company.local`
 * Either a company TLS certificate, or Caddy's internal certificate
   (`TLS=internal`)
@@ -27,8 +32,11 @@ read without the key.
 
 ## Installing Corpus
 
-1. Get the code and run the setup. It generates the secrets and asks for the
-   system language, the AI models and the chat limits.
+1. Get the code and run the setup. It generates the secrets and asks where
+   to keep the document files, the system language, the AI models and the
+   chat limits. Files stay on the server unless you choose the company's S3
+   storage; see
+   [Keeping document files in S3 storage](#keeping-document-files-in-s3-storage).
 
    ```sh
    git clone REPOSITORY-URL corpus && cd corpus
@@ -86,6 +94,49 @@ Caddy's root certificate on the users' computers. Print it with:
 docker compose -f docker-compose.prod.yml exec proxy \
   cat /data/caddy/pki/authorities/local/root.crt
 ```
+
+## Giving people access
+
+After installation, only the administrator from step 6 can sign in, and only
+the **Admin** role exists. It always has every permission and cannot be
+deleted.
+
+1. On the **Roles** page, create a role for each group of people, for example
+   "Employees" and "Legal", and select its permissions. See the table below.
+2. On the **Users** page, create an account for each person: name, email, a
+   first password and roles. Give the person the password; they change it
+   under **My account**. With single sign-on, accounts are created at the
+   first sign-in instead; assign their roles on the **Users** page, or from
+   the provider's groups. See
+   [Signing in with the company account](#signing-in-with-the-company-account-sso).
+
+Every document has an access level. A user reads the documents of the levels
+their roles allow, and the assistant answers only from those:
+
+| Permission | Document levels the user reads |
+|---|---|
+| List documents | Standard |
+| Restricted documents | Standard, restricted |
+| Confidential documents | Standard, restricted, confidential |
+| Secret documents | All |
+
+A user with none of these can still use the chat, but the assistant answers
+that no document matches.
+
+The other permissions:
+
+| Area | Permissions |
+|---|---|
+| Documents | Create document (upload, process a failed one again), Update document (rename, change the level), Delete document |
+| Users | List users, View user (profile and history of actions), Create user, Update user, Disable user, Delete user |
+| Roles | List roles, Create role, Update role, Delete role, List permissions |
+| Chats | View chat history, Delete chats, View answer ratings. See [Managing chat history](#managing-chat-history). |
+| Audit | View audit log |
+| System | View system status, View error log, Update documents for search |
+
+Nobody can give permissions they do not have, or change a user or role with
+more access than their own. Disable a user who leaves the company: they can
+no longer sign in, and their documents and history stay.
 
 ## Protecting the key and the data
 
@@ -155,7 +206,13 @@ again, run `uv run configure`, answer no to **Use single sign-on?** and run
 `deploy/deploy.sh up`.
 
 A user's first SSO sign-in creates their Corpus account. Corpus recognizes
-the person by the provider's own ID, not by email. Disable a user on the
+the person by the provider's own ID, not by email.
+
+If a Corpus account with the same email already exists and linking by email
+is off, the sign-in is refused with "An account with your email already
+exists". To let the person in, delete that account or change its email on the
+**Users** page; their next SSO sign-in creates a new account. The chats of
+the old account do not move to the new one. Disable a user on the
 **Users** page to stop them signing in; disabling them at the provider stops
 new sign-ins too.
 
@@ -168,6 +225,98 @@ To turn SSO off, run `uv run configure`, answer no, and run
 `deploy/deploy.sh up`. Users created by SSO have no password: set one for
 them on the **Users** page.
 
+## Keeping document files in S3 storage
+
+By default, Corpus keeps uploaded files on the server, in the
+`documents_data` Docker volume. A company with its own S3-compatible object
+storage, such as Ceph, NetApp StorageGRID, Dell ECS or AWS S3, can keep them
+there instead, under its replication, versioning and retention rules. Corpus
+encrypts each file before it leaves the server: the storage holds only
+encrypted objects named `documents/UUID`, without document names.
+
+> [!IMPORTANT]
+> Choose before the first upload. Switching later moves no files: copy them
+> as [Moving files between the server and S3](#moving-files-between-the-server-and-s3)
+> shows.
+
+You need:
+
+* A bucket for Corpus, for example `corpus-documents`.
+* An access key and a secret key of an account allowed only to read, write
+  and delete objects in that bucket. For example, as an S3 policy:
+
+  ```json
+  {"Version": "2012-10-17", "Statement": [{"Effect": "Allow",
+    "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+    "Resource": ["arn:aws:s3:::corpus-documents/*"]}]}
+  ```
+
+* The storage's address, `https://HOST` or `https://HOST:PORT` without a
+  path, reachable from the Corpus server. For Amazon S3, use the address of
+  the bucket's region, for example `https://s3.eu-central-1.amazonaws.com`,
+  and enter that region (`eu-central-1`) when the step asks.
+
+1. Run the storage step:
+
+   ```sh
+   cd backend && uv run configure && cd ..
+   ```
+
+   At **Document storage**, answer yes to **Keep the files in the company's
+   S3 storage?** and enter the address, the bucket, the keys and the region.
+   If a company CA signed the storage's certificate, give its file when the
+   step asks for the CA. The step writes, reads back and deletes a test
+   object. If that fails, it shows the storage's reason and saves the
+   settings only if you confirm.
+
+2. Apply it:
+
+   ```sh
+   deploy/deploy.sh up
+   ```
+
+   The containers have no route out of the server, so `deploy.sh` starts an
+   `s3-tunnel` container that forwards only to the storage's address. TLS
+   runs from Corpus to the storage and is checked against the storage's
+   name.
+
+`deploy/deploy.sh backup` then copies the database and the search index, not
+the files. Back the bucket up with the storage's versioning or replication,
+and restore the bucket and a Corpus backup from the same point in time.
+
+The **System status** page shows the bucket under **File storage**, or the
+storage's reason when it refuses Corpus.
+
+### Moving files between the server and S3
+
+The files keep their names and are encrypted already, so moving them is
+copying them. These steps use the AWS command-line tool, which works with any
+S3-compatible storage. Replace BUCKET with the bucket and HOST with the
+storage's address.
+
+To move the files from the server to S3:
+
+1. Stop Corpus: `deploy/deploy.sh down`.
+2. Copy the files:
+
+   ```sh
+   files=$(docker volume inspect corpus_documents_data --format '{{.Mountpoint}}')
+   sudo -E aws s3 sync "$files" s3://BUCKET --endpoint-url https://HOST
+   ```
+
+3. Choose the S3 storage with `uv run configure` as above, then run
+   `deploy/deploy.sh up`.
+
+To move them back, stop Corpus, copy them into the volume and give them to
+the Corpus user (uid 10001), then answer no at **Document storage** and run
+`deploy/deploy.sh up`:
+
+```sh
+files=$(docker volume inspect corpus_documents_data --format '{{.Mountpoint}}')
+sudo -E aws s3 sync s3://BUCKET/documents "$files/documents" --endpoint-url https://HOST
+sudo chown -R 10001:10001 "$files"
+```
+
 ## Using several languages
 
 Corpus can serve documents and users in several languages: English, Spanish
@@ -175,9 +324,10 @@ and French. Each user picks the interface language in the header (the
 **Language** button), and reads the interface, error messages, notices and
 the assistant's answers in it. The choice is saved on the account.
 
-1. In `backend/`, run `uv run configure`. Answer yes to **Multilingual**,
-   enter the numbers of the languages (for example `1,2,3`), then choose the
-   default language. Users who have not chosen see the default one.
+1. In `backend/`, run `uv run configure`. At the **System language** step,
+   answer yes to **Use more than one language?**, enter the numbers of the
+   languages (for example `1,2,3`), then choose the default language. Users
+   who have not chosen see the default one.
 2. Search must match a question with documents in any of these languages, so
    the embedding model must be multilingual: `multilingual-e5-small`,
    `multilingual-e5-base` or `bge-m3`. If the current model is for one
@@ -199,8 +349,8 @@ A new chunk size or overlap (`uv run configure`) applies to documents
 uploaded afterwards. Documents processed before keep their chunks and keep
 working. To cut them again with the new size, open **System**: it shows how
 many documents use another size. Select **Update documents** (permission
-`system.rechunk`, "Update documents for search"). The worker cuts them one at a time, between new uploads,
-from the text saved at processing time. They stay searchable meanwhile, and
+**Update documents for search**). The worker cuts them one at a time, between
+new uploads, from the text saved at processing time. They stay searchable meanwhile, and
 the progress shows in the banner. The action is recorded in the audit log.
 
 ## Configuring the chat capacity
@@ -230,11 +380,19 @@ Every user gets one answer at a time, whatever the settings.
 
 ## Viewing errors
 
-Corpus keeps every warning and error of the backend and the worker, with its
-traceback, encrypted in the database. To see them, open **Error log** in the
-sidebar; you need the `system.errors` permission (View error log), which the
-administrator role has. Filter by level (warning, error, critical) and by
-source (server or worker).
+Corpus keeps the warnings and errors of the backend and the worker, with
+their tracebacks, encrypted in the database. To see them, open **Error log**
+in the sidebar; you need the **View error log** permission, which the Admin
+role has. Filter by level (warning, error, critical) and by type:
+
+| Type | What it means |
+|---|---|
+| Unhandled (bug) | An error nothing in Corpus caught. Report these. |
+| Handled | Corpus noticed the problem and logged it, for example a document it could not process |
+| System | A component Corpus uses failed, for example the database or the AI model. Only its errors are kept, not its warnings. |
+
+Each part of the code keeps at most 30 entries a minute, so a failing
+component cannot fill the database.
 
 Entries are deleted after 30 days. To change that, set
 `ERROR_LOG_RETENTION_DAYS` in `backend/.env` (`0` keeps them forever) and run
@@ -254,22 +412,36 @@ Three permissions give access to other users' chats. Assign them on the
 | Permission | What it allows |
 |---|---|
 | View chat history | Read users' chats on the **Chat history** page and from a user's page |
-| Clear chat history | Delete chats: all of them, those of the last day, 3 days, week, month or year, or those between two dates. Each chat is deleted whole, with its messages and ratings |
-| View answer ratings | Read the answers users rated good or bad, with their questions |
+| Delete chats | Delete one chat, from its row or its page, or all chats: those of the last day, 3 days, week, month or year, or those between two dates. Each chat is deleted whole, with its messages and ratings |
+| View answer ratings | Read the answers users rated good or bad, with their questions, and remove a rating once it is dealt with. With **View chat history** too, open the chat of an answer |
 
-These permissions reach only users who hold no permission the reviewer lacks:
-someone without access to secret documents cannot read or delete the chats of
-someone who has it. Every chat a reviewer opens and every deletion is recorded
-in the **Audit log**.
+An answer quotes the documents its author can read, so these permissions reach
+only some users:
+
+* **View chat history** and **Delete chats** reach users who hold no
+  permission the reviewer lacks.
+* **View answer ratings** shows the answers of users who can read no document
+  the reviewer cannot. Someone without access to secret documents never sees
+  the rated answers of someone who has it.
+
+Every chat a reviewer opens, every deletion and every removed rating is
+recorded in the **Audit log**.
 
 > Deleted chats cannot be restored, except from a backup.
 
 ## Backing up
 
-A backup copies the database, the document files and the search index into
-`BACKUP-DIR/corpus-YYYYMMDD-HHMMSS/`. Every file in it is encrypted with
-`DATA_ENCRYPTION_KEY`, so a stolen backup reveals nothing, and a backup is
-useless without that key. The `manifest` file names the key's fingerprint.
+A backup goes into `BACKUP-DIR/corpus-YYYYMMDD-HHMMSS/`:
+
+| File | What it holds |
+|---|---|
+| `postgres.dump.enc` | The database: users, roles, document records, chats, audit log |
+| `documents_data.tar.gz.enc` | The document files. Only when they are on the server: with S3 storage they stay in the bucket, which the storage backs up |
+| `qdrant_data.tar.gz.enc` | The search index |
+| `manifest` | The date, the version and the fingerprint of the key |
+
+Every part is encrypted with `DATA_ENCRYPTION_KEY`, so a stolen backup reveals
+nothing, and a backup is useless without that key.
 
 1. Run the backup. Replace BACKUP-DIR with the folder for backups; without it,
    the backup goes to `backups/` in the repository. Corpus stops while the
@@ -419,15 +591,16 @@ Rotate the key when it may have leaked, or when your policy requires it.
    cd backend && uv run setup key rotate && cd ..
    ```
 
-2. Re-encrypt the data. The command stops Corpus, re-encrypts every file, text
-   and chat, removes the old key from `.env`, and starts Corpus again.
+2. Re-encrypt the data. The command stops Corpus, re-encrypts every file,
+   document text, chat and error log entry, and the search index text,
+   removes the old key from `.env`, and starts Corpus again.
 
    ```sh
    deploy/deploy.sh rotate-key
    ```
 
-3. With the key in Vault, remove the old key from Vault yourself; the command
-   asks for a Vault token that may write the secret:
+3. With the key in Vault, remove the old key from Vault. The command asks for
+   a Vault token that may write the secret:
 
    ```sh
    cd backend && uv run setup key finish && cd ..
@@ -435,7 +608,9 @@ Rotate the key when it may have leaked, or when your policy requires it.
 
 If `rotate-key` stops halfway, fix the cause and run it again. It continues
 where it stopped. Until it finishes, keep the old key: part of the data is
-still encrypted with it.
+still encrypted with it. With S3 storage, the files in the bucket are
+re-encrypted too; if the bucket keeps versions, the older versions still need
+the old key, like older backups.
 
 ## Keeping the key in HashiCorp Vault
 
@@ -517,6 +692,12 @@ not start; `deploy/deploy.sh logs backend` shows why.
 
 A backup made by an older version of Corpus is migrated when Corpus starts.
 
+With S3 storage the backup holds no files: Corpus reads them from the bucket
+as it is now. Files of documents uploaded after the backup stay there unused.
+Files of documents deleted after the backup are gone, unless the bucket's
+versioning brings them back; restore the bucket to the backup's time if it
+can.
+
 ## Troubleshooting
 
 **Corpus does not start, and the log says "is not the key the stored data is
@@ -533,7 +714,18 @@ deploy/deploy.sh logs SERVICE
 ```
 
 Replace SERVICE with `backend`, `worker`, `ollama`, `postgres`, `qdrant`,
-`minio`, `rabbitmq` or `proxy`.
+`rabbitmq` or `proxy`, or with `vault-tunnel`, `sso-tunnel` or `s3-tunnel`
+when you use Vault, single sign-on or S3 storage.
+
+**Single sign-on fails.** The sign-in page names the problem, and the
+**Error log** page shows the cause as a **Handled** warning:
+
+| Message on the sign-in page | Usual cause |
+|---|---|
+| The sign-in service cannot be reached | The provider is down, or its certificate is not signed by a public CA or by the CA file you gave. Check `deploy/deploy.sh logs sso-tunnel` too. |
+| Single sign-on failed | The issuer address does not match the provider's discovery document, or the provider's token and key addresses are on another host than the issuer. |
+| The sign-in could not be completed | A wrong client ID or client secret (the log says `invalid_client`), or a sign-in left open too long. |
+| An account with your email already exists | See [Signing in with the company account](#signing-in-with-the-company-account-sso). |
 
 **Ports 80 or 443 are taken.** Set `HTTP_PORT` and `HTTPS_PORT` in
 `backend/.env`, then run `deploy/deploy.sh up`.

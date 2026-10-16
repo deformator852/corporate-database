@@ -186,8 +186,8 @@ def test_rotate_key_reencrypts_the_database(keys, make_user):
     from sqlalchemy import select
 
     from database import AsyncSessionLocal
-    from maintenance.rotate_key import _column
-    from models import ChatConversation, ChatMessageRecord
+    from maintenance.rotate_key import _column, encrypted_columns
+    from models import ChatConversation, ChatMessageRecord, ErrorLog
     from services.encryption_key import save_fingerprint
 
     owner, _, _ = make_user()
@@ -199,12 +199,22 @@ def test_rotate_key_reencrypts_the_database(keys, make_user):
             session.add(chat)
             await session.flush()
             session.add(ChatMessageRecord(conversation_id=chat.id, role="user", content="Who earns most?"))
+            session.add(ErrorLog(level="error", source="backend", logger="test", message="Payroll failed"))
             await session.commit()
             return chat.id
 
     async def rotate() -> None:
-        for table, key, column in (("chat_conversations", "id", "title"), ("chat_messages", "id", "content")):
+        for table, key, column in encrypted_columns():
             await _column(table, key, column)
+
+    # Every encrypted column, the error log too: unreadable after the old key goes.
+    assert {(t, c) for t, _, c in encrypted_columns()} >= {
+        ("document_texts", "text"),
+        ("chat_conversations", "title"),
+        ("chat_messages", "content"),
+        ("error_logs", "message"),
+        ("error_logs", "traceback"),
+    }
 
     async def read(chat_id: int) -> tuple[str, str, str]:
         async with AsyncSessionLocal() as session:
@@ -224,6 +234,15 @@ def test_rotate_key_reencrypts_the_database(keys, make_user):
     raw, title, content = run(read(chat_id))
     assert is_current_text(raw)
     assert (title, content) == ("Payroll question", "Who earns most?")
+
+    async def error_messages() -> list[str]:
+        async with AsyncSessionLocal() as session:
+            return list(await session.scalars(select(ErrorLog.message).where(ErrorLog.logger == "test")))
+
+    assert run(error_messages()) == ["Payroll failed"]
+    # Back to the old key: other tests read rows this rotation sealed.
+    keys(OLD_KEY, previous=NEW_KEY)
+    run(rotate())
     run(rotate())  # nothing left: a second run is a no-op
 
 

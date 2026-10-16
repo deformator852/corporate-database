@@ -1,5 +1,5 @@
 """Stand-ins for the services around Corpus, so tests run the real code up to
-the network boundary: MinIO (a dict), Qdrant (its own in-memory mode, real
+the network boundary: an S3 storage (a dict), Qdrant (its own in-memory mode, real
 filters and search), the embedding model (word-hash vectors: shared words =
 similar), Ollama (scripted answers), RabbitMQ (in-process fanout that also
 reaches the TestClient's event loop) and Celery (records queued jobs)."""
@@ -11,6 +11,7 @@ import re
 import zlib
 from collections import defaultdict
 from contextlib import asynccontextmanager
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -23,10 +24,42 @@ def s3_error(code: str) -> S3Error:
     return S3Error(None, code, code, "resource", "request", "host")
 
 
+class StoredFiles:
+    """The document files folder of a test (STORAGE=disk)."""
+
+    def __init__(self, root: Path, monkeypatch) -> None:
+        self.root = root
+        self._monkeypatch = monkeypatch
+        monkeypatch.setenv("STORAGE_DIR", str(root))
+
+    def get(self, key: str) -> bytes | None:
+        path = self.root / key
+        return path.read_bytes() if path.exists() else None
+
+    def remove(self, key: str) -> None:
+        (self.root / key).unlink()
+
+    def all(self) -> list[bytes]:
+        return [path.read_bytes() for path in self.root.rglob("*") if path.is_file()]
+
+    def fail(self) -> None:
+        """Every write fails from now on: the folder lies under a plain file."""
+        blocker = self.root.parent / "not-a-folder"
+        blocker.write_text("")
+        self._monkeypatch.setenv("STORAGE_DIR", str(blocker / "files"))
+
+    def recover(self) -> None:
+        self._monkeypatch.setenv("STORAGE_DIR", str(self.root))
+
+
 class FakeMinio:
+    """An S3 storage (STORAGE=s3), answering as the minio client would."""
+
     def __init__(self) -> None:
         self.objects: dict[str, bytes] = {}
         self.fail_with: str | None = None  # S3 error code for every call
+        # Amazon S3 without s3:ListBucket: a missing object is AccessDenied.
+        self.missing_code = "NoSuchKey"
 
     def _check(self) -> None:
         if self.fail_with:
@@ -39,7 +72,7 @@ class FakeMinio:
     def get_object(self, bucket, key):
         self._check()
         if key not in self.objects:
-            raise s3_error("NoSuchKey")
+            raise s3_error(self.missing_code)
         body = io.BytesIO(self.objects[key])
         return SimpleNamespace(read=body.read, close=lambda: None, release_conn=lambda: None)
 
@@ -52,7 +85,7 @@ class FakeMinio:
     def stat_object(self, bucket, key):
         self._check()
         if key not in self.objects:
-            raise s3_error("NoSuchKey")
+            raise s3_error(self.missing_code)
 
 
 class SharedQdrant:

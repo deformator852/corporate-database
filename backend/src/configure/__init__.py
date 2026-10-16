@@ -5,12 +5,13 @@ from setup.steps.key_store import KeyStoreStep
 from setup.steps.language import LanguageStep
 from setup.steps.llm import LlmStep
 from setup.steps.sso import SsoStep
+from setup.steps.storage import StorageStep
 
 
 def main() -> None:
     try:
         run(
-            [LanguageStep(), LlmStep(), ChatStep(), ChunkingStep(), SsoStep(), KeyStoreStep()],
+            [LanguageStep(), LlmStep(), ChatStep(), ChunkingStep(), SsoStep(), KeyStoreStep(), StorageStep()],
             "Configure complete.",
             footer=(
                 "Restart to apply: production `deploy/deploy.sh up` (after a language "

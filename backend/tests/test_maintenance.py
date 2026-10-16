@@ -33,7 +33,8 @@ def test_rotation_reencrypts_files_texts_and_search_chunks(client, make_user, in
     try:
         run(reencrypt_all(report.append))
 
-        assert all(is_current_bytes(blob) for blob in infra.minio.objects.values())
+        files = infra.files.all()
+        assert files and all(is_current_bytes(blob) for blob in files)
         points, _ = run(infra.qdrant.scroll("documents", limit=1000, with_payload=True))
         assert points and all(is_current_text(p.payload["text"]) for p in points)
         assert report[-1] == "Done: all data is encrypted with the current key."

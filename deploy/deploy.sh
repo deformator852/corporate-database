@@ -42,17 +42,33 @@ if [[ -n $oidc_issuer ]]; then
   export SSO_UPSTREAM=$upstream
   profiles+=(--profile sso)
 fi
+storage=$(setting STORAGE)
+if [[ $storage == s3 ]]; then
+  # Files in the company's S3 storage: start s3-tunnel, aimed at S3_ENDPOINT's host:port.
+  s3_endpoint=$(setting S3_ENDPOINT)
+  upstream=${s3_endpoint#*://}
+  upstream=${upstream%%/*}
+  [[ $upstream == *:* ]] || upstream+=$([[ $s3_endpoint == https:* ]] && echo :443 || echo :80)
+  export S3_UPSTREAM=$upstream
+  profiles+=(--profile s3)
+fi
 compose() { docker compose --env-file "$ENV_FILE" -f docker-compose.prod.yml ${profiles[@]+"${profiles[@]}"} "$@"; }
 language=$(setting APP_LANGUAGE)
 languages=$(setting APP_LANGUAGES)
 project=${COMPOSE_PROJECT_NAME:-corpus}
 # Data volumes in a backup. Models (hf_models, ollama_data) are downloaded
-# again by `up` when missing.
-VOLUMES=(minio_data qdrant_data)
+# again by `up` when missing. With STORAGE=s3 the files are in the company's
+# bucket, backed up by the storage itself.
+VOLUMES=(documents_data qdrant_data)
+[[ $storage == s3 ]] && VOLUMES=(qdrant_data)
 
 # Encrypts/decrypts a stream with DATA_ENCRYPTION_KEY inside the backend
 # image: nothing is written to disk unencrypted.
 crypt() { compose run --rm --no-deps -T backend python -m maintenance.backup_crypt "$@"; }
+# `run --no-deps` starts no tunnel: start the ones a command needs first (a
+# restore on a new server has none running yet).
+key_reachable() { [[ $key_store != vault ]] || compose up -d vault-tunnel; }
+files_reachable() { [[ $storage != s3 ]] || compose up -d s3-tunnel; }
 # Raw volume contents as a gzip tar stream (compressed before encryption:
 # Qdrant preallocates zero-filled files), read (or replaced) by a throwaway
 # container without network.
@@ -111,7 +127,9 @@ case "${1:-up}" in
       echo "No rotation started: run 'uv run setup key rotate' in backend/ first." >&2; exit 1; }
     # Nothing may write with a key while the data is re-encrypted.
     compose stop backend worker
-    compose up -d postgres qdrant minio
+    compose up -d postgres qdrant
+    key_reachable
+    files_reachable
     compose run --rm --no-deps backend python -m maintenance.rotate_key
     if [[ $key_store == vault ]]; then
       compose up -d --remove-orphans
@@ -130,9 +148,10 @@ case "${1:-up}" in
     compose stop proxy backend worker
     trap restart_app EXIT
     compose up -d postgres
+    key_reachable
     compose exec -T postgres sh -c 'pg_dump -Fc -U "$POSTGRES_USER" "$POSTGRES_DB"' |
       crypt encrypt > "$dir/postgres.dump.enc"
-    compose stop qdrant minio
+    compose stop qdrant
     for volume in "${VOLUMES[@]}"; do
       volume_out "$volume" | crypt encrypt > "$dir/$volume.tar.gz.enc"
     done
@@ -142,6 +161,7 @@ case "${1:-up}" in
       echo "commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
     } > "$dir/manifest"
     echo "Backup written to $dir ($(du -sh "$dir" | cut -f1))."
+    [[ $storage != s3 ]] || echo "Document files are in the S3 bucket $(setting S3_BUCKET), not in this backup: back the bucket up with the storage's own tools."
     echo "It is encrypted: restoring it needs the key with fingerprint $(grep key_fingerprint "$dir/manifest" | cut -d= -f2)."
     ;;
   restore)
@@ -152,11 +172,12 @@ case "${1:-up}" in
     cat "$dir/manifest" 2>/dev/null || true
     read -rp "Replace ALL current documents, users and chats with this backup? Type 'restore': " answer
     [[ $answer == restore ]] || { echo "Cancelled."; exit 1; }
+    key_reachable
     # Check key and integrity of every part before anything is deleted.
     for part in postgres.dump "${VOLUMES[@]/%/.tar.gz}"; do
       crypt decrypt < "$dir/$part.enc" > /dev/null
     done
-    compose stop proxy backend worker qdrant minio
+    compose stop proxy backend worker qdrant
     trap restart_app EXIT
     compose up -d --wait postgres
     compose exec -T postgres sh -c 'PGOPTIONS=--client-min-messages=warning psql -q -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"'

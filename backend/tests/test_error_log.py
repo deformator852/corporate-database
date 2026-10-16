@@ -176,6 +176,7 @@ def test_entries_say_whether_they_are_bugs_corpus_or_libraries(client, make_user
     logging.getLogger("qdrant_client").error("Library failed %s", marker)
     logging.getLogger("uvicorn.error").error("Server caught %s", marker)
     logging.getLogger("services.chat").error("Said so %s", marker, extra={"category": "unhandled"})
+    logging.getLogger("src.main").warning("Started from src %s", marker)
     _stored()
 
     _, email, password = make_user(["system.errors"])
@@ -183,7 +184,13 @@ def test_entries_say_whether_they_are_bugs_corpus_or_libraries(client, make_user
     items = client.get("/api/v1/system/errors", params={"per_page": 100}).json()["items"]
     kinds = {item["message"].split()[0]: item["category"] for item in items if marker in item["message"]}
     # A library's warning is not kept; its error is.
-    assert kinds == {"Corpus": "app", "Library": "library", "Server": "unhandled", "Said": "unhandled"}
+    assert kinds == {
+        "Corpus": "app",
+        "Library": "library",
+        "Server": "unhandled",
+        "Said": "unhandled",
+        "Started": "app",
+    }
     assert not any(item["message"].startswith("Library warned") for item in items)
     bugs = client.get("/api/v1/system/errors", params={"category": "unhandled", "per_page": 100}).json()["items"]
     assert {item["category"] for item in bugs} == {"unhandled"}
@@ -216,3 +223,25 @@ def test_a_socket_error_is_logged_with_its_path_not_as_an_asgi_exception(infra, 
     assert [(item["message"], item["category"]) for item in ours] == [
         ("Unhandled error on socket /api/v1/notifications/ws", "unhandled")
     ]
+
+
+def test_a_socket_with_an_ended_session_is_told_to_refresh_not_logged(client, make_user):
+    """Accepted and closed with 4401, which makes the client refresh its
+    session and reconnect; a refused handshake would reach a browser as 1006
+    and it would retry with the same expired token forever."""
+    import pytest
+    from starlette.websockets import WebSocketDisconnect
+
+    marker = uuid.uuid4().hex
+    for cookie in ("", f"my_token=not-a-token-{marker}"):
+        headers = {"origin": "https://testserver", "cookie": cookie}
+        with client.websocket_connect("/api/v1/notifications/ws", headers=headers) as socket:
+            with pytest.raises(WebSocketDisconnect) as closed:
+                socket.receive_text()
+        assert closed.value.code == 4401
+    _stored()
+
+    _, email, password = make_user(["system.errors"])
+    login(client, email, password)
+    latest = client.get("/api/v1/system/errors", params={"per_page": 5}).json()["items"]
+    assert not any("handshake" in item["message"] or marker in (item["traceback"] or "") for item in latest)

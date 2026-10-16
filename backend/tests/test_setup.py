@@ -104,14 +104,61 @@ def test_secrets_are_generated_and_the_key_backup_is_confirmed(env, answers):
     assert _values(env) == values and "already set" in console.export_text()
 
 
-def test_minio_gets_a_root_and_a_separate_app_user(env):
-    from setup.steps.storage import StorageStep
+def test_storage_step_keeps_files_on_disk_or_in_the_companys_s3(env, answers, monkeypatch):
+    import setup.steps.storage as storage_step
+    from exceptions import AppError
 
-    env.write_text("MINIO_ROOT_USER=minioadmin\nMINIO_ROOT_PASSWORD=minioadmin\n")
-    StorageStep().run(_console())
+    checked: list = []
+    monkeypatch.setattr(storage_step, "check_access", checked.append)
+    env.write_text("STORAGE=disk\n")
+    assert storage_step.StorageStep().current() == "files on this server"
+    answers.extend([True, "s3.acme.io", "https://s3.acme.io:9443", "corpus", "corpus-app", "s3cret-key", None, ""])
+    console = _console()
+    storage_step.StorageStep().run(console)
+
     values = _values(env)
-    assert values["MINIO_ROOT_USER"] == "minio-root" and values["MINIO_ACCESS_KEY"] == "corporate-app"
-    assert values["MINIO_SECRET_KEY"] != values["MINIO_ROOT_PASSWORD"]
+    assert values["STORAGE"] == "s3" and values["S3_ENDPOINT"] == "https://s3.acme.io:9443"  # asked again
+    assert values["S3_SECRET_KEY"] == "s3cret-key" and "s3cret-key" not in console.export_text()
+    assert values["S3_REGION"] == "us-east-1" and "S3_CACERT" not in values
+    assert [config.bucket for config in checked] == ["corpus"]  # checked before it was saved
+    assert storage_step.StorageStep().current() == (
+        "the company's S3 storage: bucket corpus at https://s3.acme.io:9443"
+    )
+
+    def refuse(config) -> None:
+        raise AppError("unavailable", "Could not store the document. NoSuchBucket")
+
+    # A storage that refuses: nothing changes unless saved anyway.
+    monkeypatch.setattr(storage_step, "check_access", refuse)
+    before = env.read_text()
+    answers.extend([True, None, "other-bucket", None, None, None, None, False])
+    console = _console()
+    storage_step.StorageStep().run(console)
+    assert env.read_text() == before and "NoSuchBucket" in console.export_text()
+
+    answers.extend([False])  # back to this server
+    storage_step.StorageStep().run(_console())
+    values = _values(env)
+    assert values["STORAGE"] == "disk" and not [key for key in values if key.startswith("S3_")]
+
+
+def test_storage_check_writes_reads_and_deletes_a_test_object(monkeypatch):
+    from fakes import FakeMinio
+
+    import services.storage as storage
+    from exceptions import AppError
+    from settings import S3Config
+    from setup.steps.storage import check_access
+
+    fake = FakeMinio()
+    monkeypatch.setattr(storage, "Minio", lambda *args, **kwargs: fake)
+    config = S3Config("https://s3.acme.io", "corpus", "corpus-app", "secret")
+    check_access(config)
+    assert fake.objects == {}  # cleaned up
+    fake.fail_with = "NoSuchBucket"
+    with pytest.raises(AppError) as refused:
+        check_access(config)
+    assert "NoSuchBucket" in refused.value.message  # the storage's reason
 
 
 def test_key_command_shows_rotates_and_refuses_a_second_rotation(env, answers, capsys):
@@ -360,7 +407,17 @@ def test_setup_and_configure_run_their_steps(env, answers, monkeypatch, capsys):
     ran: list[list[str]] = []
     monkeypatch.setattr(configure, "run", lambda steps, *a, **k: ran.append([s.title for s in steps]))
     configure.main()
-    assert ran == [["System language", "LLM model", "Chat capacity", "Chunk size", "Sign-in", "Encryption key storage"]]
+    assert ran == [
+        [
+            "System language",
+            "LLM model",
+            "Chat capacity",
+            "Chunk size",
+            "Sign-in",
+            "Encryption key storage",
+            "Document storage",
+        ]
+    ]
 
     env.write_text("DATA_ENCRYPTION_KEY=" + "k" * 40 + "\n")
     monkeypatch.setattr(sys, "argv", ["setup", "key"])

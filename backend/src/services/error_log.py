@@ -143,7 +143,9 @@ def category_of(record: logging.LogRecord) -> str:
         return stated
     if record.name.startswith(_UNHANDLED_LOGGERS):
         return "unhandled"
-    return "app" if record.name.split(".")[0] in _OWN_MODULES else "library"
+    # "src.main" when the server runs as `uvicorn src.main:app`.
+    name = record.name.removeprefix("src.")
+    return "app" if name.split(".")[0] in _OWN_MODULES else "library"
 
 
 async def _insert(rows: list[dict]) -> None:

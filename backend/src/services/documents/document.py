@@ -223,12 +223,7 @@ class DocumentService:
         await self.session.commit()
         await self.session.refresh(document)
         try:
-            await asyncio.to_thread(
-                self.storage.put,
-                key=document.object_key,
-                content=content,
-                content_type=document.content_type,
-            )
+            await asyncio.to_thread(self.storage.put, document.object_key, content)
         except Exception:
             await self._delete_row(document)
             try:
@@ -257,7 +252,8 @@ class DocumentService:
         """Renames the document or changes its classification, in Postgres and
         on its search chunks in Qdrant. Returns the document and what it was."""
         allowed = await self._allowed(user_id)
-        document = await self._visible(document_id, allowed)
+        # Locked: a re-chunk of it finishes first, or waits for this change.
+        document = await self._visible(document_id, allowed, lock=True)
         previous = DocumentRevision(document.name, document.classification)
         if document.status not in DONE_STATUSES:
             # The worker writes the chunks with the values it read at the start.
@@ -283,7 +279,8 @@ class DocumentService:
         return document, previous
 
     async def delete_document(self, document_id: int, user_id: int) -> Document:
-        document = await self._visible(document_id, await self._allowed(user_id))
+        # Locked: a re-chunk of it finishes first, or finds it gone.
+        document = await self._visible(document_id, await self._allowed(user_id), lock=True)
         rag = Rag()
         try:
             await rag.delete_document(document.id)
@@ -341,8 +338,8 @@ class DocumentService:
     async def _allowed(self, user_id: int) -> tuple[str, ...]:
         return await classifications_for_user(self.session, user_id)
 
-    async def _visible(self, document_id: int, allowed: tuple[str, ...]) -> Document:
-        document = await self.session.get(Document, document_id)
+    async def _visible(self, document_id: int, allowed: tuple[str, ...], *, lock: bool = False) -> Document:
+        document = await self.session.get(Document, document_id, with_for_update=lock or None)
         # 404 for both missing and forbidden: do not reveal what exists.
         if document is None or document.classification not in allowed:
             raise AppError("not_found", "Document not found", status_code=404)

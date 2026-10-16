@@ -10,11 +10,11 @@ import shutil
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from minio.error import S3Error
 from ollama import AsyncClient
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from exceptions import AppError
 from models.document import Document
 from services.documents.rechunk import outdated_count
 from services.search.embedding import get_embedding_model
@@ -67,16 +67,11 @@ async def _search_index() -> Check:
         await rag.client.close()
 
 
-def _storage() -> Check:
-    storage = ObjectStorage()
+def _storage(sample: str | None) -> Check:
     try:
-        # A missing object proves the server answers and accepts the app user.
-        storage.client.stat_object(storage.bucket, "health-check/none")
-    except S3Error as exc:
-        if exc.code in {"NoSuchKey", "NoSuchObject"}:
-            return _ok(f"Bucket {storage.bucket}")
-        return _down(f"MinIO refused the app user: {exc.code}")
-    return _ok(f"Bucket {storage.bucket}")
+        return _ok(ObjectStorage().check(sample))
+    except AppError as exc:
+        return _down(exc.message)
 
 
 def _queue() -> Check:
@@ -138,11 +133,22 @@ def _thread(check: Callable[[], Check]) -> Callable[[], Awaitable[Check]]:
     return lambda: asyncio.to_thread(check)
 
 
+async def _sample_file(session: AsyncSession) -> str | None:
+    """The newest document's file key, for the storage check; None without
+    documents, or with the database down (its own check says so)."""
+    try:
+        return await session.scalar(select(Document.object_key).order_by(Document.id.desc()).limit(1))
+    except Exception:  # noqa: BLE001 - the database check reports it
+        await session.rollback()
+        return None
+
+
 async def system_status(session: AsyncSession) -> dict[str, Any]:
+    sample = await _sample_file(session)
     services = await asyncio.gather(
         _run("database", lambda: _database(session)),
         _run("search_index", _search_index),
-        _run("storage", _thread(_storage)),
+        _run("storage", _thread(lambda: _storage(sample))),
         _run("queue", _thread(_queue)),
         _run("llm", _llm),
         _run("embedding", _thread(_embedder)),

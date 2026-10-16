@@ -52,7 +52,7 @@ def test_upload_is_stored_encrypted_and_queued(client, make_user, infra):
     body = response.json()
     assert body["status"] == "queued" and body["filename"] == "policy.txt" and body["converted"] is False
     assert infra.queue.ids == [body["id"]]
-    stored = infra.minio.objects[_document(body["id"]).object_key]
+    stored = infra.files.get(_document(body["id"]).object_key)
     assert b"travel budget" not in stored  # encrypted at rest
     listed = client.get("/api/v1/documents").json()
     assert [item["id"] for item in listed["items"]][0] == body["id"]
@@ -438,7 +438,7 @@ def test_rated_answers_reach_those_who_review_them(client, make_user, infra):
     assert client.get("/api/v1/chat/feedback").status_code == 403
     client.post("/api/v1/auth/logout", headers=csrf(client))
 
-    _, reviewer_email, reviewer_password = make_user(["chat.feedback"])
+    _, reviewer_email, reviewer_password = make_user(["chat.feedback", "documents.list"])
     login(client, reviewer_email, reviewer_password)
     item = client.get("/api/v1/chat/feedback", params={"rating": "down"}).json()["items"][0]
     assert item["conversation_id"] == conversation
@@ -473,6 +473,32 @@ def test_rated_answers_reach_those_who_review_them(client, make_user, infra):
     login(client, reviewer_email, reviewer_password)
     listed = client.get("/api/v1/chat/feedback", params={"rating": "down"}).json()["items"]
     assert message not in [i["message_id"] for i in listed]
+
+
+def test_rated_answers_stay_within_the_reviewers_clearance(client, make_user, infra):
+    """An answer quotes its owner's documents: a reviewer without access to
+    secret documents never reads the rated answers of someone with it."""
+    _, email, password = make_user([*WRITER, "documents.secret"])
+    login(client, email, password)
+    process(upload(client, "Travel policy", POLICY.encode(), "policy.txt", "secret").json()["id"])
+    with client.websocket_connect("/api/v1/chat/ws", headers=_ws(client)) as chat:
+        chat.send_json(_ask("What is the travel budget?"))
+        _, answer = _collect(chat)
+    rating_url = f"/api/v1/chat/conversations/{answer['conversation_id']}/messages/{answer['message_id']}/rating"
+    assert client.put(rating_url, headers=csrf(client), json={"rating": "down"}).status_code == 204
+    client.post("/api/v1/auth/logout", headers=csrf(client))
+
+    def listed(permissions: list[str]) -> list[int]:
+        _, reviewer_email, reviewer_password = make_user(permissions)
+        login(client, reviewer_email, reviewer_password)
+        page = client.get("/api/v1/chat/feedback", params={"rating": "all", "per_page": 100}).json()
+        return [item["message_id"] for item in page["items"]]
+
+    assert answer["message_id"] not in listed(["chat.feedback", "documents.confidential"])
+    removed = client.delete(f"/api/v1/chat/feedback/{answer['message_id']}", headers=csrf(client))
+    assert removed.status_code == 404
+    client.post("/api/v1/auth/logout", headers=csrf(client))
+    assert answer["message_id"] in listed(["chat.feedback", "documents.secret"])
 
 
 def test_chat_answers_only_from_the_chosen_documents(client, make_user, infra, monkeypatch):
@@ -688,7 +714,7 @@ def test_delete_removes_file_chunks_and_row(client, make_user, infra):
     assert client.delete(f"/api/v1/documents/{document_id}", headers=csrf(client)).status_code == 204
 
     assert _document(document_id) is None
-    assert key not in infra.minio.objects and _points(infra, document_id) == []
+    assert infra.files.get(key) is None and _points(infra, document_id) == []
     assert client.delete(f"/api/v1/documents/{document_id}", headers=csrf(client)).status_code == 404
 
 
@@ -704,12 +730,12 @@ def test_upload_rejects_what_it_cannot_take(client, make_user, infra):
 def test_upload_rolls_back_when_storage_is_down(client, make_user, infra):
     _, email, password = make_user(WRITER)
     login(client, email, password)
-    infra.minio.fail_with = "InternalError"
+    infra.files.fail()
 
     response = upload(client, "Never stored", b"text", "p.txt")
 
     assert response.status_code == 503 and response.json()["message"] == "Could not store the document."
-    infra.minio.fail_with = None
+    infra.files.recover()
     items = client.get("/api/v1/documents", params={"per_page": 100}).json()["items"]
     assert all(item["name"] != "Never stored" for item in items)  # no row without a file
     assert infra.queue.ids == []
@@ -828,7 +854,7 @@ def test_a_deleted_chat_takes_its_ratings_along(client, make_user, infra):
             await ChatHistoryService(session).purge_older_than(365)
 
     run(expire())
-    _, reviewer_email, reviewer_password = make_user(["chat.feedback"])
+    _, reviewer_email, reviewer_password = make_user(["chat.feedback", "documents.list"])
     login(client, reviewer_email, reviewer_password)
     listed = client.get("/api/v1/chat/feedback", params={"rating": "all", "per_page": 100}).json()["items"]
     assert message not in [item["message_id"] for item in listed]

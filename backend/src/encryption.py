@@ -2,8 +2,8 @@
 
 AES-256-GCM with DATA_ENCRYPTION_KEY (`uv run setup` generates it), from .env
 or HashiCorp Vault (key_store.py).
-Encrypted: files in MinIO, document text in Postgres (`EncryptedText`), chunk
-text in the Qdrant payload, chat messages. Not encrypted: document names (the
+Encrypted: document files (on disk or in S3, services/storage.py), document
+text and chats in Postgres (`EncryptedText`), chunk text in the Qdrant payload. Not encrypted: document names (the
 chat matches them in SQL) and vectors (search needs them) - keep the Qdrant
 and Postgres volumes on an encrypted disk for those.
 
@@ -12,7 +12,7 @@ old and new values side by side: DATA_ENCRYPTION_KEY_PREVIOUS holds the old
 key until `python -m maintenance.rotate_key` has re-encrypted everything.
 
 Strict: a value without the marker is an error, never read as plain text.
-Otherwise anyone able to write to the database, MinIO or Qdrant could plant
+Otherwise anyone able to write to the database, the files or Qdrant could plant
 text that users and the LLM would take for a real document.
 
 Losing the key loses the data: back it up separately from the database.

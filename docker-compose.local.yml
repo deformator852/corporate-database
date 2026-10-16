@@ -21,7 +21,7 @@ services:
         export POSTGRES_DB="$$DB_NAME"
         # Drop the rest of backend/.env (encryption key, other passwords);
         # the image's own variables stay.
-        unset $$(compgen -e | grep -xE 'DB_.*|JWT_.*|DATA_.*|QDRANT_.*|MINIO_.*|LLM_.*|EMBEDDING_MODEL|APP_LANGUAGES?|CHUNK_.*|TEXT_.*|API_DOCS|SITE_ADDRESS|TLS|CHAT_.*|RABBITMQ_(USER|PASSWORD|HOST|PORT)')
+        unset $$(compgen -e | grep -xE 'DB_.*|JWT_.*|DATA_.*|QDRANT_.*|S3_.*|STORAGE.*|VAULT_.*|OIDC_.*|KEY_STORE|LLM_.*|EMBEDDING_MODEL|APP_LANGUAGES?|CHUNK_.*|TEXT_.*|API_DOCS|SITE_ADDRESS|TLS|CHAT_.*|RABBITMQ_(USER|PASSWORD|HOST|PORT)')
         # POSTGRES_PASSWORD only applies to a new volume. Re-apply it on every
         # start (local socket, trusted) so a password rotated in .env works.
         (
@@ -85,7 +85,7 @@ services:
         export RABBITMQ_DEFAULT_PASS="$$RABBITMQ_PASSWORD"
         # Drop the rest of backend/.env (encryption key, other passwords);
         # the image's own variables stay.
-        unset $$(compgen -e | grep -xE 'DB_.*|JWT_.*|DATA_.*|QDRANT_.*|MINIO_.*|LLM_.*|EMBEDDING_MODEL|APP_LANGUAGES?|CHUNK_.*|TEXT_.*|API_DOCS|SITE_ADDRESS|TLS|CHAT_.*|RABBITMQ_(USER|PASSWORD|HOST|PORT)')
+        unset $$(compgen -e | grep -xE 'DB_.*|JWT_.*|DATA_.*|QDRANT_.*|S3_.*|STORAGE.*|VAULT_.*|OIDC_.*|KEY_STORE|LLM_.*|EMBEDDING_MODEL|APP_LANGUAGES?|CHUNK_.*|TEXT_.*|API_DOCS|SITE_ADDRESS|TLS|CHAT_.*|RABBITMQ_(USER|PASSWORD|HOST|PORT)')
         (
           until rabbitmqctl -q await_startup >/dev/null 2>&1; do sleep 2; done
           rabbitmqctl -q add_user "$$RABBITMQ_DEFAULT_USER" "$$RABBITMQ_DEFAULT_PASS" >/dev/null 2>&1 ||
@@ -101,68 +101,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-
-  minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
-    restart: unless-stopped
-    # Loopback only: the API is for the local backend, the console for you.
-    ports:
-      - "127.0.0.1:9000:9000"
-      - "127.0.0.1:9001:9001"
-    env_file:
-      - ./backend/.env
-    # Pass only the root credentials; MINIO_ACCESS_KEY/MINIO_SECRET_KEY in .env
-    # belong to the app user and MinIO would read them as legacy root keys.
-    entrypoint:
-      - /bin/bash
-      - -c
-      - |
-        : "$${MINIO_ROOT_PASSWORD:?is empty; run uv run setup in backend/}"
-        exec env -i PATH="$$PATH" \
-          MINIO_ROOT_USER="$$MINIO_ROOT_USER" \
-          MINIO_ROOT_PASSWORD="$$MINIO_ROOT_PASSWORD" \
-          minio server /data --console-address ":9001"
-    volumes:
-      - minio_data:/data
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9000'",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
-  # Creates the bucket and the least-privilege app user from backend/.env.
-  # Idempotent; runs on every `docker compose up`.
-  minio-init:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
-    restart: "no"
-    depends_on:
-      minio:
-        condition: service_healthy
-    env_file:
-      - ./backend/.env
-    entrypoint:
-      - /bin/bash
-      - -c
-      - |
-        set -euo pipefail
-        : "$${MINIO_SECRET_KEY:?is empty; run uv run setup in backend/}"
-        export MC_CONFIG_DIR=/tmp/mc
-        mc alias set -- local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null
-        mc mb --ignore-existing "local/$$MINIO_BUCKET" >/dev/null
-        mc anonymous set none "local/$$MINIO_BUCKET" >/dev/null
-        cat > /tmp/policy.json <<POLICY
-        {"Version": "2012-10-17", "Statement": [{"Effect": "Allow",
-          "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
-          "Resource": ["arn:aws:s3:::$$MINIO_BUCKET/*"]}]}
-        POLICY
-        mc admin policy create local corporate-app /tmp/policy.json >/dev/null
-        mc admin user add -- local "$$MINIO_ACCESS_KEY" "$$MINIO_SECRET_KEY" >/dev/null
-        mc admin policy attach local corporate-app --user="$$MINIO_ACCESS_KEY" >/dev/null
-        echo "MinIO ready: bucket $$MINIO_BUCKET, app user $$MINIO_ACCESS_KEY"
 
   ollama:
     image: ollama/ollama:0.34.3
@@ -224,6 +162,28 @@ services:
       - ./dev/keycloak/corpus-realm.json:/opt/keycloak/data/import/corpus-realm.json:ro
       - ./dev/keycloak/certs:/certs
 
+  # S3 storage test server (VersityGW), for STORAGE=s3; only when asked:
+  #   docker compose --env-file backend/.env -f docker-compose.local.yml --profile s3 up -d s3
+  # http://localhost:7070, bucket corpus-documents, access key
+  # corpus-local-access-key, secret key corpus-local-secret-key-0123456789.
+  # Files on the s3_data volume (a bucket is a folder there). Test values
+  # only: never use them anywhere else.
+  s3:
+    image: versity/versitygw:v1.8.0
+    restart: unless-stopped
+    profiles: [s3]
+    ports:
+      - "127.0.0.1:7070:7070"
+    environment:
+      ROOT_ACCESS_KEY: corpus-local-access-key
+      ROOT_SECRET_KEY: corpus-local-secret-key-0123456789
+    entrypoint:
+      - /bin/sh
+      - -c
+      - mkdir -p /data/corpus-documents && exec versitygw --port :7070 posix /data
+    volumes:
+      - s3_data:/data
+
   # Key storage test server (HashiCorp Vault); starts with the rest.
   # http://localhost:8200, KV v2 at "secret", AppRole "corpus" reading
   # secret/data/corpus (role_id corpus-local-role-id, secret_id
@@ -250,6 +210,6 @@ volumes:
   postgres_data:
   qdrant_data:
   rabbitmq_data:
-  minio_data:
+  s3_data:
   ollama_data:
   vault_data:

@@ -143,11 +143,12 @@ def test_websocket_rejects_other_origins(client, make_user):
             ):
                 return "open"
         except Exception as exc:  # noqa: BLE001
-            return str(getattr(exc, "status_code", exc))
+            # A browser sees HTTP 403; the test client reports the close code.
+            return str(getattr(exc, "status_code", None) or getattr(exc, "code", exc))
 
     assert connect("https://testserver") == "open"
-    assert connect("https://evil.example") == "403"
-    assert connect("https://testserver.evil.example") == "403"
+    assert connect("https://evil.example") in {"403", "4403"}
+    assert connect("https://testserver.evil.example") in {"403", "4403"}
 
 
 def test_disabled_user_is_signed_out_and_cannot_sign_in(client, make_user):

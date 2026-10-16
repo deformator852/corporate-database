@@ -19,7 +19,7 @@ from exceptions import AppError
 from extensions import plugins
 from i18n import t, use_language
 from schemas.error import ErrorSchema, validation_message
-from security import check_jwt_secret
+from security import SocketRefused, check_jwt_secret
 from services import error_log
 from services.chat.generator import OllamaGenerator
 from services.chat.history import ChatHistoryService
@@ -132,7 +132,7 @@ async def lifespan(_app: FastAPI):
 _DOCS = (os.getenv("API_DOCS") or "").strip().lower() in {"1", "true", "yes"}
 
 app = FastAPI(
-    title="My API",
+    title="Corpus",
     version="1.0.0",
     lifespan=lifespan,
     docs_url="/docs" if _DOCS else None,
@@ -186,6 +186,8 @@ class SocketErrors:
             return
         try:
             await self.app(scope, receive, send)
+        except SocketRefused:
+            return  # closed with its code already: a refusal, not an error
         except Exception as exc:
             refused = isinstance(exc, AppError) and exc.status_code < 500
             if not refused and not getattr(exc, error_log.LOGGED, False):

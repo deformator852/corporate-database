@@ -170,7 +170,22 @@ class DocumentProcessor:
         if not chunks:
             return
         searchable = await self._searchable(document, saved.text, chunks, starts)
+        # The lines just recorded hold a key lock on the document row: freed
+        # here, or deleting it would wait for the whole embedding.
+        await self.session.commit()
         vectors = await self._embed(document, searchable, report=False)
+        # Locked until the commit: a rename, a new classification or a
+        # delete made meanwhile waits, and the chunks carry the current
+        # values. Without the lock they could bring back the old
+        # classification, or outlive the deleted document.
+        document = await self.session.scalar(
+            select(Document)
+            .where(Document.id == document_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if document is None or document.status != DocumentStatus.COMPLETED:
+            return
         await self.rag.upsert_chunks(
             document_id=document.id,
             name=document.name,

@@ -51,6 +51,7 @@ de estos:
 | `setup(app)` | Una función que se llama una vez con la app de FastAPI al arrancar |
 | Modelos | Alembic ve cualquier modelo de SQLAlchemy que importe el paquete |
 | `tasks.py` | Un módulo que carga el worker de Celery, si existe |
+| `CORE_API` | La versión de la API de extensiones para la que se escribió el paquete, ahora `1`. Un paquete escrito para otra versión se omite, con un error en el registro |
 
 ## Añadir endpoints de API
 
@@ -267,6 +268,7 @@ Un archivo `frontend/src/custom/EXTENSION/index.tsx` exporta por defecto una
 | `messages` | Traducciones por idioma |
 | `themes` | Temas adicionales en el selector de temas |
 | `defaultTheme` | El tema para los usuarios que no han elegido ninguno |
+| `coreApi` | La versión de la API de extensiones para la que se escribió el módulo, ahora `1`. Un módulo escrito para otra versión se omite, con un error en la consola del navegador |
 
 ## Añadir una página
 

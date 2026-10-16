@@ -3,14 +3,16 @@
 Needs only Postgres: start it with
     docker compose -f docker-compose.local.yml up -d postgres
 Tests create a throwaway database next to the one in backend/.env, migrate
-it, and drop it at the end. Qdrant, MinIO, RabbitMQ, Ollama, Celery and the
-embedding model are replaced by the fakes in tests/fakes.py (`infra`).
+it, and drop it at the end. Qdrant, RabbitMQ, Ollama, Celery and the
+embedding model are replaced by the fakes in tests/fakes.py (`infra`);
+document files go to a temporary folder (STORAGE=disk).
 
     cd backend && uv run pytest
 """
 
 import asyncio
 import os
+import tempfile
 import uuid
 from collections.abc import Iterator
 from types import SimpleNamespace
@@ -37,6 +39,10 @@ os.environ.update(
         "QDRANT_PORT": "6333",
         "QDRANT_API_KEY": "test-qdrant-key-" + "z" * 32,
         "HF_HUB_OFFLINE": "1",
+        # Files on disk, in a folder per test (`infra`); S3 tests set S3_*.
+        # Never the developer's backend/storage, even without `infra`.
+        "STORAGE": "disk",
+        "STORAGE_DIR": tempfile.mkdtemp(prefix="corpus-test-files-"),
         # Off unless a test turns them on: the developer's backend/.env may
         # set them (SSO on refuses passwords; a Vault would hold their real
         # key). Empty values win over the file (load_dotenv never overrides
@@ -65,6 +71,13 @@ os.environ.update(
                 "VAULT_CACERT",
                 "VAULT_CONNECT",
                 "DATA_ENCRYPTION_KEY_PREVIOUS",
+                "S3_ENDPOINT",
+                "S3_BUCKET",
+                "S3_ACCESS_KEY",
+                "S3_SECRET_KEY",
+                "S3_REGION",
+                "S3_CACERT",
+                "S3_CONNECT",
             ],
             "",
         ),
@@ -177,37 +190,35 @@ async def _clear_documents() -> None:
 
 
 @pytest.fixture
-def infra(monkeypatch):
-    """Fakes for MinIO, Qdrant, embeddings, Ollama, RabbitMQ and Celery
-    (tests/fakes.py), wired in where the app creates its clients. Every test
-    gets fresh fakes, so documents of earlier tests are cleared too: their
-    files and vectors are gone (and they would look like duplicates)."""
+def infra(monkeypatch, tmp_path):
+    """Fakes for Qdrant, embeddings, Ollama, RabbitMQ and Celery
+    (tests/fakes.py), wired in where the app creates its clients, and a fresh
+    folder for document files. Documents of earlier tests are cleared too:
+    their files and vectors are gone (and they would look like duplicates)."""
     run(_clear_documents())
     import aio_pika
     from fakes import (
         FakeBroker,
-        FakeMinio,
         FakeOllama,
         FakeSentenceTransformer,
         RecordingQueue,
         SharedQdrant,
+        StoredFiles,
     )
 
     import services.chat.generator as generator
     import services.search.embedding as embedding
     import services.search.rag as rag
-    import services.storage as storage
     import services.system as system
     from services.documents.document import CeleryDocumentQueue
 
     stack = SimpleNamespace(
-        minio=FakeMinio(),
+        files=StoredFiles(tmp_path / "files", monkeypatch),
         qdrant=SharedQdrant(),
         llm=FakeOllama(),
         broker=FakeBroker(),
         queue=RecordingQueue(),
     )
-    monkeypatch.setattr(storage, "Minio", lambda *a, **k: stack.minio)
     monkeypatch.setattr(rag, "_qdrant_client", lambda: stack.qdrant)
     monkeypatch.setattr(rag, "_indexes_ready", False)
     monkeypatch.setattr(embedding, "SentenceTransformer", FakeSentenceTransformer)

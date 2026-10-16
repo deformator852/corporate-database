@@ -49,6 +49,7 @@ A package `backend/src/custom/EXTENSION/__init__.py` can define any of these:
 | `setup(app)` | A function called once with the FastAPI app at startup |
 | Models | Any SQLAlchemy model the package imports is visible to Alembic |
 | `tasks.py` | A module the Celery worker loads, if it exists |
+| `CORE_API` | The extension API version the package was written for, now `1`. A package written for another version is skipped, with an error in the log |
 
 ## Adding API endpoints
 
@@ -264,6 +265,7 @@ A file `frontend/src/custom/EXTENSION/index.tsx` default-exports an
 | `messages` | Translations per language |
 | `themes` | Extra themes in the theme picker |
 | `defaultTheme` | The theme for users who have not picked one |
+| `coreApi` | The extension API version the module was written for, now `1`. A module written for another version is skipped, with an error in the browser console |
 
 ## Adding a page
 

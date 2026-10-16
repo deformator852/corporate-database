@@ -1,6 +1,6 @@
 """Rejects uploads whose bytes do not match their extension, and zip bombs.
 
-Runs before the file reaches LibreOffice, MinIO, or the parsers.
+Runs before the file reaches LibreOffice, the storage, or the parsers.
 """
 
 import io

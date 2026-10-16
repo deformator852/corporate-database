@@ -5,12 +5,9 @@ from datetime import UTC, datetime
 from authx.schema import TokenPayload
 from fastapi import WebSocket, WebSocketDisconnect
 
-from security import session_active
+from security import CLOSE_FORBIDDEN, CLOSE_SESSION_ENDED, session_active
 
 RECHECK_SECONDS = 60
-# Client refreshes its session and reconnects on this code.
-CLOSE_SESSION_ENDED = 4401
-CLOSE_FORBIDDEN = 4403
 
 
 def seconds_left(payload: TokenPayload) -> float:

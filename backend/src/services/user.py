@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
@@ -46,7 +47,8 @@ class UserService:
             first_name=data.first_name,
             last_name=data.last_name,
             email=data.email,
-            password=hash_password(data.password),
+            # bcrypt in a thread: it would stall every other request.
+            password=await asyncio.to_thread(hash_password, data.password),
             roles=roles,
         )
         self.session.add(user)
@@ -66,7 +68,7 @@ class UserService:
         user.email = data.email
         user.roles = next_roles
         if data.password is not None:
-            user.password = hash_password(data.password)
+            user.password = await asyncio.to_thread(hash_password, data.password)
             # Signs the user out everywhere, e.g. after a lost laptop.
             user.sessions_valid_after = sessions_cutoff()
         await self._flush_user(user)

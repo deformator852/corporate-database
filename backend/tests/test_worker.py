@@ -53,7 +53,7 @@ def test_a_file_missing_from_storage_is_dropped_after_retries(client, make_user,
     async def lose_file() -> None:
         async with AsyncSessionLocal() as session:
             key = await session.scalar(select(Document.object_key).where(Document.id == document_id))
-        infra.minio.objects.pop(key)
+        infra.files.remove(key)
 
     run(lose_file())
     process_document.apply(args=[document_id])

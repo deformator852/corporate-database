@@ -227,10 +227,11 @@ async def list_feedback(
     rating: RatingFilter = "down",
     page: Annotated[int, Query(ge=1)] = 1,
     per_page: Annotated[int, Query(ge=1, le=100)] = 20,
-    _user: User = Depends(require_permission("chat.feedback")),
+    actor: User = Depends(require_permission("chat.feedback")),
     feedback: FeedbackService = Depends(get_feedback_service),
 ) -> ChatFeedbackListSchema:
-    items, total = await feedback.rated(None if rating == "all" else RATING_VALUES[rating], page, per_page)
+    """Rated answers of users whose documents the actor may read too."""
+    items, total = await feedback.rated(actor.id, None if rating == "all" else RATING_VALUES[rating], page, per_page)
     return ChatFeedbackListSchema.from_page(items, page=page, per_page=per_page, total=total)
 
 
@@ -246,7 +247,7 @@ async def remove_rating(
     audit: AuditService = Depends(get_audit_service),
 ) -> None:
     """Takes a rated answer off the ratings page; the chat stays."""
-    message, owner = await feedback.remove_rating(message_id)
+    message, owner = await feedback.remove_rating(actor.id, message_id)
     audit.record(
         AuditAction.RATING_DELETE,
         actor=actor,

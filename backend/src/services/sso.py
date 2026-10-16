@@ -12,6 +12,7 @@ the request chooses where this server connects.
 import base64
 import hashlib
 import json
+import logging
 import secrets
 import time
 from dataclasses import dataclass
@@ -25,6 +26,8 @@ from joserfc.jwk import KeySet, OctKey
 
 from exceptions import AppError
 from settings import OidcConfig
+
+logger = logging.getLogger(__name__)
 
 STATE_COOKIE = "sso_state"
 STATE_COOKIE_PATH = "/api/v1/auth/sso"
@@ -91,7 +94,11 @@ async def _get_json(config: OidcConfig, url: str, *, method: str = "GET", **kwar
             response = await client.request(method, url, headers=headers, extensions=extensions, **kwargs)
             if 400 <= response.status_code < 500:
                 # Reached, but refused: a code used twice or too late (a
-                # double click, a slow return). Signing in again works.
+                # double click, a slow return), and signing in again works;
+                # or a wrong client secret (invalid_client), for the log.
+                logger.warning(
+                    "The SSO provider refused a request: HTTP %s %s", response.status_code, _oauth_error(response)
+                )
                 raise AppError("invalid", "The sign-in expired. Try again.", status_code=400)
             response.raise_for_status()
             return response.json()
@@ -172,8 +179,19 @@ async def finish(config: OidcConfig, secret: str, *, code: str, state: str, cook
         ).validate(token.claims)
         _check_authorized_party(token.claims, config.client_id)
     except (JoseError, ValueError, TypeError, KeyError) as exc:
+        # Which check failed (a claim, the signature); the token is not logged.
+        logger.warning("The SSO provider's ID token was refused: %s: %s", type(exc).__name__, exc)
         raise AppError("invalid", "The SSO provider's answer could not be verified.", status_code=400) from exc
     return _identity(config, token.claims)
+
+
+def _oauth_error(response: httpx.Response) -> str:
+    """The OAuth error code of a refusal (invalid_client, invalid_grant…)."""
+    try:
+        error = response.json().get("error")
+    except ValueError, AttributeError:
+        return ""
+    return str(error)[:64] if error else ""
 
 
 def _client_authentication(config: OidcConfig, provider: dict, form: dict) -> dict:

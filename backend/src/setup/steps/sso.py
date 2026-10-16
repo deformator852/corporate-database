@@ -18,7 +18,6 @@ _KEYS = (
     "OIDC_ROLE_MAP",
     "OIDC_LINK_BY_EMAIL",
     "OIDC_CACERT",
-    "PASSWORD_SIGN_IN",  # an older setting: passwords are now off whenever SSO is on
 )
 
 

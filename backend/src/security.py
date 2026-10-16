@@ -1,6 +1,7 @@
 import hashlib
 import os
 from datetime import UTC, datetime, timedelta
+from typing import NoReturn
 from urllib.parse import urlsplit
 
 from authx import AuthX, AuthXConfig
@@ -11,7 +12,6 @@ from sqlalchemy import delete
 from starlette.responses import Response
 
 from database import AsyncSessionLocal
-from exceptions import AppError
 from models.revoked_token import RevokedToken
 from models.user import User
 
@@ -130,15 +130,37 @@ def _same_origin(websocket: WebSocket) -> bool:
     return urlsplit(origin).netloc == websocket.headers.get("host")
 
 
+# Socket close codes the client acts on: 4401 refreshes the session and
+# reconnects; 4403 waits longer before trying again (shared/lib/ws.ts).
+CLOSE_SESSION_ENDED = 4401
+CLOSE_FORBIDDEN = 4403
+
+
+class SocketRefused(Exception):  # noqa: N818 - a refusal, not a failure
+    """A socket refused at its handshake, already closed with its code; not
+    an error (main.SocketErrors lets it go unlogged)."""
+
+
+async def _session_ended(websocket: WebSocket) -> NoReturn:
+    # Accepted, then closed: a browser sees 4401 only on an accepted socket.
+    # A refused handshake reaches it as 1006, and it would retry with the
+    # same expired token instead of refreshing the session.
+    await websocket.accept()
+    await websocket.close(code=CLOSE_SESSION_ENDED)
+    raise SocketRefused
+
+
 async def get_ws_payload(
     websocket: WebSocket,
     my_token: str | None = Cookie(default=None),
 ) -> TokenPayload:
     if not _same_origin(websocket):
-        raise AppError("forbidden", "Cross-origin socket", status_code=403)
+        # Before the handshake: the browser gets a plain 403.
+        await websocket.close(code=CLOSE_FORBIDDEN)
+        raise SocketRefused
     token = my_token or websocket.cookies.get(config.JWT_ACCESS_COOKIE_NAME)
     if not token:
-        raise AppError("unauthorized", "Not authenticated", status_code=401)
+        await _session_ended(websocket)
     request_token = RequestToken(
         token=token,
         csrf=None,
@@ -152,10 +174,10 @@ async def get_ws_payload(
             verify_fresh=False,
             verify_csrf=False,
         )
-    except Exception as exc:
-        raise AppError("unauthorized", "Not authenticated", status_code=401) from exc
+    except Exception:
+        await _session_ended(websocket)
     if not await session_active(payload, token):
-        raise AppError("unauthorized", "Not authenticated", status_code=401)
+        await _session_ended(websocket)
     # Kept for periodic re-checks while the socket stays open.
     websocket.state.access_token = token
     return payload

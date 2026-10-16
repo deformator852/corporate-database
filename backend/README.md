@@ -7,13 +7,14 @@ machine.
 ## Prerequisites
 
 * [uv](https://docs.astral.sh/uv/)
-* Docker with Docker Compose v2, for Postgres, Qdrant, RabbitMQ, MinIO and
-  Ollama
+* Docker with Docker Compose v2, for Postgres, Qdrant, RabbitMQ, Ollama and
+  a test Vault
 
 ## Running the backend
 
-1. Generate `backend/.env`. The setup creates the secrets and asks for the
-   system language, the AI models and the chat limits.
+1. Generate `backend/.env`. The setup creates the secrets and asks where to
+   keep the encryption key and the document files, the languages, the AI
+   models, the chat limits, the chunk size and single sign-on.
 
    ```sh
    cd backend
@@ -51,9 +52,10 @@ machine.
    uv run celery -A worker worker --loglevel=info
    ```
 
-The API listens on `http://127.0.0.1:8000`. Settings are read when a process
-starts: after you change `.env` or run `uv run configure`, restart the API and
-the worker.
+The API listens on `http://127.0.0.1:8000`. Uploaded files are kept,
+encrypted, in `backend/storage/` (`STORAGE=disk`, `STORAGE_DIR`). Settings are
+read when a process starts: after you change `.env` or run `uv run configure`,
+restart the API and the worker.
 
 ## Running the tests
 
@@ -63,6 +65,13 @@ its own database, and the other services are replaced by fakes.
 ```sh
 cd backend
 uv run pytest
+```
+
+Check the code before you send a change:
+
+```sh
+cd backend
+uv run ruff check && uv run ruff format --check && uv run ty check src
 ```
 
 ## Evaluating search and sources
@@ -87,7 +96,7 @@ Put the `min_score` it prints into the model's entry in `src/settings.py`.
 
 ```sh
 cd backend
-uv run configure        # AI model, chat limits, chunk size
+uv run configure        # languages, AI model, chat limits, chunk size, SSO, key and file storage
 uv run setup key        # fingerprint of the encryption key
 ```
 
@@ -147,6 +156,40 @@ until its container is removed; then the realm loads from the file again.
 To stop it, run `docker compose -f docker-compose.local.yml --profile sso
 stop keycloak`. To turn single sign-on off, run `uv run configure` and answer
 no at the Sign-in step.
+
+## Testing S3 storage locally
+
+A test S3 storage (VersityGW) runs in Docker when you ask for it, with the
+bucket `corpus-documents`. These are test values; never use them anywhere
+else.
+
+1. Start it from the repository root:
+
+   ```sh
+   docker compose --env-file backend/.env -f docker-compose.local.yml --profile s3 up -d s3
+   ```
+
+2. In `backend/`, run `uv run configure`. At the Document storage step answer
+   yes and enter:
+
+   | Question | Answer |
+   |---|---|
+   | Storage address | `http://localhost:7070` |
+   | Bucket | `corpus-documents` |
+   | Access key | `corpus-local-access-key` |
+   | Secret key | `corpus-local-secret-key-0123456789` (hidden while you type) |
+   | Region | Enter (`us-east-1`) |
+   | CA file | Enter (none: the test storage uses plain HTTP) |
+
+   The step writes, reads back and deletes a test object before it saves the
+   settings.
+
+3. Restart the backend and the worker.
+
+Files already uploaded stay in `backend/storage/`: switch before uploading,
+or copy them as
+[Keeping document files in S3 storage](../documentations/deployment.md#keeping-document-files-in-s3-storage)
+shows. To go back, run `uv run configure` and answer no.
 
 ## Testing the Vault key store locally
 

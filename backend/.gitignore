@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Document files in development (STORAGE=disk, STORAGE_DIR)
+/storage/

@@ -128,35 +128,62 @@ def rabbitmq_url() -> str:
     return f"amqp://{user}:{password}@{host}:{port}//"
 
 
-def minio_endpoint() -> str:
-    return _require("MINIO_ENDPOINT")
+# Where document files are kept (services/storage.py).
+STORAGES = ("disk", "s3")
 
 
-def minio_access_key() -> str:
-    return _require("MINIO_ACCESS_KEY")
+def storage() -> str:
+    """disk (default): on this server. s3: the company's own S3 storage."""
+    kind = (os.getenv("STORAGE") or "disk").strip().lower()
+    if kind not in STORAGES:
+        raise AppError("misconfigured", "STORAGE must be disk or s3.", status_code=500)
+    return kind
 
 
-def minio_secret_key() -> str:
-    return _require("MINIO_SECRET_KEY")
+def storage_dir() -> Path:
+    """STORAGE=disk: the folder of the files. Production sets it to the
+    documents_data volume; development keeps them in backend/storage."""
+    folder = Path((os.getenv("STORAGE_DIR") or "storage").strip())
+    return folder if folder.is_absolute() else ENV_FILE.parent / folder
 
 
-def minio_bucket() -> str:
-    return os.getenv("MINIO_BUCKET") or "documents"
+@dataclass(frozen=True, slots=True)
+class S3Config:
+    """STORAGE=s3: the company's S3-compatible object storage (Ceph, NetApp
+    StorageGRID, Dell ECS, AWS S3 and the like). The bucket is the company's:
+    Corpus only reads, writes and deletes objects in it."""
+
+    # http(s)://host[:port], no path.
+    endpoint: str
+    bucket: str
+    access_key: str
+    secret_key: str
+    # Passed on every call: otherwise the client asks for the bucket's
+    # location first, which a least-privilege account may not do.
+    region: str = "us-east-1"
+    # CA file of the storage's certificate when a company CA signed it.
+    cacert: str = ""
+    # host:port to dial instead of the endpoint's host, with TLS still
+    # checked against the endpoint's name: production's s3-tunnel, the only
+    # way out of the internal network.
+    connect: str = ""
 
 
-def minio_region() -> str:
-    """Passing the region stops the client from asking the server for the
-    bucket location before every call, which the least-privilege app user is
-    not allowed to do (AccessDenied)."""
-    return (os.getenv("MINIO_REGION") or "us-east-1").strip()
-
-
-def minio_secure() -> bool:
-    return (os.getenv("MINIO_SECURE") or "false").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-    }
+def s3_config() -> S3Config:
+    endpoint = _require("S3_ENDPOINT").rstrip("/")
+    if not endpoint.startswith(("https://", "http://")) or endpoint.count("/") > 2:
+        raise AppError(
+            "misconfigured", "S3_ENDPOINT must be an http(s)://host[:port] address, no path.", status_code=500
+        )
+    return S3Config(
+        endpoint=endpoint,
+        bucket=_require("S3_BUCKET"),
+        access_key=_require("S3_ACCESS_KEY"),
+        secret_key=_require("S3_SECRET_KEY"),
+        region=(os.getenv("S3_REGION") or "us-east-1").strip(),
+        cacert=(os.getenv("S3_CACERT") or "").strip(),
+        connect=(os.getenv("S3_CONNECT") or "").strip(),
+    )
 
 
 def llm_host() -> str:

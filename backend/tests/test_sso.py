@@ -128,7 +128,23 @@ def test_the_sign_in_page_offers_what_is_set_up(client, provider, monkeypatch):
     assert client.get("/api/v1/auth/methods").json() == {"password": False, "sso": {"name": "Acme"}}
     monkeypatch.delenv("OIDC_ISSUER")
     assert client.get("/api/v1/auth/methods").json() == {"password": True, "sso": None}
-    assert client.get("/api/v1/auth/sso/start", follow_redirects=False).status_code == 404
+    started = client.get("/api/v1/auth/sso/start", follow_redirects=False)
+    assert started.headers["location"] == "/login?sso_error=not_found"
+
+
+def test_a_provider_that_cannot_be_reached_sends_back_to_the_sign_in_page(client, provider, monkeypatch, caplog):
+    """The browser follows the sign-in link itself: it must land on the
+    sign-in page with the reason, not on a raw error. The cause goes to the
+    log for the administrators."""
+    from services import sso
+
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("certificate verify failed", request=request)
+
+    monkeypatch.setattr(sso, "_client", lambda cacert="": httpx.AsyncClient(transport=httpx.MockTransport(refuse)))
+    started = client.get("/api/v1/auth/sso/start", follow_redirects=False)
+    assert (started.status_code, started.headers["location"]) == (302, "/login?sso_error=unavailable")
+    assert "certificate verify failed" in caplog.text
 
 
 def test_a_first_sign_in_creates_the_account_and_starts_a_session(client, provider):
@@ -309,7 +325,7 @@ def test_the_last_admin_keeps_the_role_when_the_group_drops_them(client, provide
         run(set_other_admins(others))
 
 
-def test_a_code_used_twice_asks_to_sign_in_again(client, provider):
+def test_a_code_used_twice_asks_to_sign_in_again(client, provider, caplog):
     """The provider refuses a used code: that is an expired sign-in, not a
     provider that cannot be reached."""
     provider.claims = _person()
@@ -321,6 +337,8 @@ def test_a_code_used_twice_asks_to_sign_in_again(client, provider):
     client.cookies.set("sso_state", started.cookies["sso_state"], path="/api/v1/auth/sso")
     again = client.get("/api/v1/auth/sso/callback", params={"code": code, "state": state}, follow_redirects=False)
     assert again.headers["location"] == "/login?sso_error=invalid"
+    # The provider's reason, for an administrator (a wrong secret: invalid_client).
+    assert "HTTP 400 invalid_grant" in caplog.text
 
 
 def test_the_client_secret_goes_where_the_provider_takes_it(client, provider):

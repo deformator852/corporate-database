@@ -57,7 +57,8 @@ CHAT_PERMISSIONS = (
     (
         "chat.feedback",
         "View answer ratings",
-        "See answers users rated, with their questions, to find where the assistant goes wrong",
+        "See answers users with no more document access than yours rated, with their questions, "
+        "to find where the assistant goes wrong",
     ),
     (
         "chat.history",

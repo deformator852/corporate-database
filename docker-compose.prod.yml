@@ -6,15 +6,17 @@ name: corpus
 #   edge      - only the HTTPS proxy, the one published port
 #   egress    - only the `models` job (profile "setup"), run on purpose to
 #               download AI models, vault-tunnel (KEY_STORE=vault), which
-#               forwards to Vault alone, and sso-tunnel (OIDC_ISSUER), which
-#               forwards to the SSO provider alone; nothing else can reach out.
+#               forwards to Vault alone, sso-tunnel (OIDC_ISSUER), which
+#               forwards to the SSO provider alone, and s3-tunnel (STORAGE=s3),
+#               which forwards to the company's S3 storage alone; nothing
+#               else can reach out.
 
 # Each container gets only the variables it needs (never the whole .env): a
 # compromised proxy or database container must not see the encryption key,
 # the JWT secret or other services' passwords. An empty optional value means
 # the backend default (settings.py).
 #   migrate  - database and search index only
-#   worker   - + queue, file storage, encryption key, LLM
+#   worker   - + queue, document files, encryption key, LLM
 #   backend  - + JWT secret (sessions) and chat settings
 x-db-env: &db-env
   DB_HOST: postgres
@@ -35,13 +37,17 @@ x-worker-env: &worker-env
   RABBITMQ_PORT: "5672"
   RABBITMQ_USER: ${RABBITMQ_USER:?is empty; run uv run setup in backend/}
   RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?is empty; run uv run setup in backend/}
-  # The least-privilege app user only; MinIO root stays with minio/minio-init.
-  MINIO_ENDPOINT: minio:9000
-  MINIO_SECURE: "false"
-  MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?is empty; run uv run setup in backend/}
-  MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?is empty; run uv run setup in backend/}
-  MINIO_BUCKET: ${MINIO_BUCKET:-}
-  MINIO_REGION: ${MINIO_REGION:-}
+  # Document files: the documents_data volume (STORAGE=disk), or the
+  # company's S3 storage through s3-tunnel (STORAGE=s3).
+  STORAGE: ${STORAGE:-disk}
+  STORAGE_DIR: /data/documents
+  S3_ENDPOINT: ${S3_ENDPOINT:-}
+  S3_BUCKET: ${S3_BUCKET:-}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+  S3_REGION: ${S3_REGION:-}
+  S3_CACERT: ${S3_CACERT:+/etc/corpus-s3/ca.pem}
+  S3_CONNECT: ${S3_ENDPOINT:+s3-tunnel:9000}
   # KEY_STORE=env: the key below (and the previous one while rotating).
   # KEY_STORE=vault: read from HashiCorp Vault through vault-tunnel instead
   # (backend/src/key_store.py); the two key variables are then empty.
@@ -75,6 +81,8 @@ x-app: &app
     - ./deploy/vault:/etc/corpus-vault:ro
     # CA of the SSO provider's certificate, copied by `uv run configure`.
     - ./deploy/sso:/etc/corpus-sso:ro
+    # CA of the company's S3 storage, copied by `uv run configure`.
+    - ./deploy/s3:/etc/corpus-s3:ro
   networks: [internal]
 
 services:
@@ -151,55 +159,6 @@ services:
       timeout: 5s
       retries: 20
 
-  minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
-    restart: unless-stopped
-    command: ["server", "/data"]
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?is empty; run uv run setup in backend/}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?is empty; run uv run setup in backend/}
-      MINIO_UPDATE: "off"
-    volumes:
-      - minio_data:/data
-    networks: [internal]
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9000'"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-
-  minio-init:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
-    restart: "no"
-    depends_on:
-      minio:
-        condition: service_healthy
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?is empty; run uv run setup in backend/}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?is empty; run uv run setup in backend/}
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?is empty; run uv run setup in backend/}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?is empty; run uv run setup in backend/}
-      MINIO_BUCKET: ${MINIO_BUCKET:-documents}
-    networks: [internal]
-    entrypoint:
-      - /bin/bash
-      - -c
-      - |
-        set -euo pipefail
-        export MC_CONFIG_DIR=/tmp/mc
-        mc alias set -- local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null
-        mc mb --ignore-existing "local/$$MINIO_BUCKET" >/dev/null
-        mc anonymous set none "local/$$MINIO_BUCKET" >/dev/null
-        cat > /tmp/policy.json <<POLICY
-        {"Version": "2012-10-17", "Statement": [{"Effect": "Allow",
-          "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
-          "Resource": ["arn:aws:s3:::$$MINIO_BUCKET/*"]}]}
-        POLICY
-        mc admin policy create local corporate-app /tmp/policy.json >/dev/null
-        mc admin user add -- local "$$MINIO_ACCESS_KEY" "$$MINIO_SECRET_KEY" >/dev/null
-        mc admin policy attach local corporate-app --user="$$MINIO_ACCESS_KEY" >/dev/null
-        echo "MinIO ready: bucket $$MINIO_BUCKET, app user $$MINIO_ACCESS_KEY"
-
   ollama:
     image: ollama/ollama:0.34.3
     restart: unless-stopped
@@ -253,24 +212,33 @@ services:
       OIDC_CONNECT: ${OIDC_ISSUER:+sso-tunnel:443}
       CHAT_QUESTIONS_PER_10_MIN: ${CHAT_QUESTIONS_PER_10_MIN:-}
       API_DOCS: "false"
+    # The app's mounts plus the document files (STORAGE=disk): only the
+    # backend and the worker see them, never the internet-facing models job.
+    volumes: &documents-volumes
+      - hf_models:/models/hf
+      - ./deploy/vault:/etc/corpus-vault:ro
+      - ./deploy/sso:/etc/corpus-sso:ro
+      - ./deploy/s3:/etc/corpus-s3:ro
+      - documents_data:/data/documents
     depends_on:
       migrate: {condition: service_completed_successfully}
       rabbitmq: {condition: service_healthy}
-      minio-init: {condition: service_completed_successfully}
       ollama: {condition: service_healthy}
       vault-tunnel: {condition: service_started, required: false}
       sso-tunnel: {condition: service_started, required: false}
+      s3-tunnel: {condition: service_started, required: false}
 
   worker:
     <<: *app
     environment:
       <<: *worker-env
     command: ["celery", "-A", "worker", "worker", "--loglevel=info"]
+    volumes: *documents-volumes
     depends_on:
       migrate: {condition: service_completed_successfully}
       rabbitmq: {condition: service_healthy}
-      minio-init: {condition: service_completed_successfully}
       vault-tunnel: {condition: service_started, required: false}
+      s3-tunnel: {condition: service_started, required: false}
 
   # KEY_STORE=vault only (profile "vault", set by deploy.sh): the one way
   # from the internal network to Vault, and only to Vault. Plain TCP: TLS
@@ -290,6 +258,16 @@ services:
     restart: unless-stopped
     profiles: [sso]
     command: ["TCP-LISTEN:443,fork,reuseaddr", "TCP:${SSO_UPSTREAM:-sso:443}"]
+    networks: [internal, egress]
+
+  # STORAGE=s3 only (profile "s3", set by deploy.sh): the backend's and the
+  # worker's one way to the company's S3 storage, and only to it. Plain TCP:
+  # TLS runs from Corpus to the storage itself, checked against its name.
+  s3-tunnel:
+    image: alpine/socat:1.8.0.3
+    restart: unless-stopped
+    profiles: [s3]
+    command: ["TCP-LISTEN:9000,fork,reuseaddr", "TCP:${S3_UPSTREAM:-s3:443}"]
     networks: [internal, egress]
 
   proxy:
@@ -355,7 +333,8 @@ volumes:
   postgres_data:
   qdrant_data:
   rabbitmq_data:
-  minio_data:
+  # Document files (STORAGE=disk), encrypted by the app.
+  documents_data:
   ollama_data:
   hf_models:
   caddy_data:

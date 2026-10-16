@@ -3,7 +3,7 @@ import {refreshSession} from "@/shared/lib/api/client";
 import {API_PREFIX} from "@/shared/lib/api/config";
 import {isUnauthorized} from "@/shared/lib/api/errors";
 
-// Server close codes (backend/src/api/ws.py).
+// Server close codes (backend/src/security.py).
 const CLOSE_SESSION_ENDED = 4401;
 const CLOSE_FORBIDDEN = 4403;
 const RETRY_MS = 2000;

@@ -40,9 +40,12 @@ ENV PATH=/app/.venv/bin:$PATH \
     TRANSFORMERS_OFFLINE=1 \
     HF_HUB_DISABLE_TELEMETRY=1
 
+# /data/documents: owned here, so a new documents_data volume mounted on it
+# starts owned by corpus too (STORAGE=disk).
 RUN useradd --create-home --uid 10001 corpus \
-    && mkdir -p /models/hf \
-    && chown -R corpus /models /app
+    && mkdir -p /models/hf /data/documents \
+    && chown -R corpus /models /app /data \
+    && chmod 700 /data/documents
 USER corpus
 WORKDIR /app/src
 

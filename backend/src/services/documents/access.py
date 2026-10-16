@@ -39,6 +39,14 @@ def retrieval_classifications(permission_keys: Iterable[str]) -> tuple[str, ...]
     return allowed_classifications(keys)
 
 
+def clearance_beyond(permission_keys: Iterable[str]) -> list[str]:
+    """Document permissions that open a classification the holder of
+    `permission_keys` cannot retrieve: whoever holds one may have chat
+    answers quoting documents this holder must not read."""
+    allowed = set(retrieval_classifications(permission_keys))
+    return sorted(key for key in RETRIEVE_PERMISSIONS if not set(retrieval_classifications({key})) <= allowed)
+
+
 async def user_permission_keys(session: AsyncSession, user_id: int) -> set[str]:
     keys = await session.scalars(
         select(Permission.key)

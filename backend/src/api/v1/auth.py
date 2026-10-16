@@ -1,3 +1,5 @@
+import logging
+
 from authx.schema import TokenPayload
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import RedirectResponse
@@ -14,6 +16,8 @@ from services import sso
 from services.audit import AuditService
 from services.auth import AuthService
 from settings import languages, oidc_config
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/auth",
@@ -139,13 +143,17 @@ async def sign_in_methods() -> dict[str, object]:
     }
 
 
-@router.get("/sso/start", responses=error_responses(404, 503))
+@router.get("/sso/start")
 async def sso_start() -> RedirectResponse:
-    """Sends the browser to the company's sign-in page."""
+    """Sends the browser to the company's sign-in page; on a problem, back
+    to the sign-in page with its code."""
     oidc = oidc_config()
-    if oidc is None:
-        raise AppError("not_found", "Single sign-on is not set up.", status_code=404)
-    url, cookie = await sso.start(oidc, _state_secret())
+    try:
+        if oidc is None:
+            raise AppError("not_found", "Single sign-on is not set up.", status_code=404)
+        url, cookie = await sso.start(oidc, _state_secret())
+    except AppError as exc:
+        return _sso_failed(exc)
     response = RedirectResponse(url, status_code=302)
     response.set_cookie(
         sso.STATE_COOKIE,
@@ -184,9 +192,19 @@ async def sso_callback(
         response = RedirectResponse("/", status_code=302)
         set_auth_cookies(response, str(user.id), fresh=True)
     except AppError as exc:
-        response = RedirectResponse(f"/login?sso_error={exc.code}", status_code=302)
+        response = _sso_failed(exc)
     response.delete_cookie(sso.STATE_COOKIE, path=sso.STATE_COOKIE_PATH, secure=True, httponly=True, samesite="lax")
     return response
+
+
+def _sso_failed(exc: AppError) -> RedirectResponse:
+    """The sign-in page with the problem's code. The provider unreachable or
+    misconfigured is logged for the administrators: the user sees the code
+    only."""
+    if exc.status_code >= 500:
+        # The cause names what failed (a refused certificate, say); never a secret.
+        logger.warning("Single sign-on failed: %s (%s)", exc.message, exc.__cause__ or "no details")
+    return RedirectResponse(f"/login?sso_error={exc.code}", status_code=302)
 
 
 def _state_secret() -> str:

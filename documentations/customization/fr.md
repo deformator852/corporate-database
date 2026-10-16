@@ -51,6 +51,7 @@ Un paquet `backend/src/custom/EXTENSION/__init__.py` peut définir l'un des
 | `setup(app)` | Une fonction appelée une fois avec l'application FastAPI au démarrage |
 | Modèles | Alembic voit tout modèle SQLAlchemy importé par le paquet |
 | `tasks.py` | Un module chargé par le worker Celery, s'il existe |
+| `CORE_API` | La version de l'API d'extensions pour laquelle le paquet a été écrit, actuellement `1`. Un paquet écrit pour une autre version est ignoré, avec une erreur dans le journal |
 
 ## Ajouter des endpoints d'API
 
@@ -267,6 +268,7 @@ Un fichier `frontend/src/custom/EXTENSION/index.tsx` exporte par défaut une
 | `messages` | Traductions par langue |
 | `themes` | Thèmes supplémentaires dans le sélecteur de thème |
 | `defaultTheme` | Le thème des utilisateurs qui n'en ont pas choisi |
+| `coreApi` | La version de l'API d'extensions pour laquelle le module a été écrit, actuellement `1`. Un module écrit pour une autre version est ignoré, avec une erreur dans la console du navigateur |
 
 ## Ajouter une page
 
