@@ -22,6 +22,18 @@ cd "$(dirname "$0")/.."
 ENV_FILE=${CORPUS_ENV_FILE:-backend/.env}
 [[ -f $ENV_FILE ]] || { echo "Missing $ENV_FILE: run 'uv run setup' in backend/ first." >&2; exit 1; }
 setting() { grep -E "^$1=" "$ENV_FILE" | tail -1 | cut -d= -f2- | sed -e 's/^["'\'']//' -e 's/["'\'']$//' || true; }
+# A tunnel runs in its own container, where localhost is the tunnel itself:
+# a service on this server is reached by an address the containers can use.
+reachable() {
+  case ${2%:*} in
+    localhost | 127.* | 0.0.0.0 | "[::1]")
+      [[ $action == down || $action == logs ]] && return
+      echo "$1 points to this server's loopback address (${2%:*}), which the containers cannot reach." >&2
+      echo "Use the server's network address or host name instead, then run: cd backend && uv run configure" >&2
+      exit 1 ;;
+  esac
+}
+action=${1:-}
 key_store=$(setting KEY_STORE)
 profiles=()
 if [[ $key_store == vault ]]; then
@@ -30,6 +42,7 @@ if [[ $key_store == vault ]]; then
   upstream=${vault_addr#*://}
   upstream=${upstream%%/*}
   [[ $upstream == *:* ]] || upstream+=$([[ $vault_addr == https:* ]] && echo :443 || echo :80)
+  reachable VAULT_ADDR "$upstream"
   export VAULT_UPSTREAM=$upstream
   profiles=(--profile vault)
 fi
@@ -39,6 +52,7 @@ if [[ -n $oidc_issuer ]]; then
   upstream=${oidc_issuer#*://}
   upstream=${upstream%%/*}
   [[ $upstream == *:* ]] || upstream+=:443
+  reachable OIDC_ISSUER "$upstream"
   export SSO_UPSTREAM=$upstream
   profiles+=(--profile sso)
 fi
@@ -49,6 +63,7 @@ if [[ $storage == s3 ]]; then
   upstream=${s3_endpoint#*://}
   upstream=${upstream%%/*}
   [[ $upstream == *:* ]] || upstream+=$([[ $s3_endpoint == https:* ]] && echo :443 || echo :80)
+  reachable S3_ENDPOINT "$upstream"
   export S3_UPSTREAM=$upstream
   profiles+=(--profile s3)
 fi
@@ -157,6 +172,7 @@ case "${1:-up}" in
     done
     {
       echo "created=$(date -Iseconds)"
+      echo "version=$(grep -m1 '^version' backend/pyproject.toml | cut -d'"' -f2)"
       echo "key_fingerprint=$(crypt fingerprint < "$dir/postgres.dump.enc")"
       echo "commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
     } > "$dir/manifest"

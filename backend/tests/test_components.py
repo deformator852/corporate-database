@@ -359,6 +359,7 @@ def test_system_page_reports_every_service(client, make_user, infra, monkeypatch
     assert services["search_index"]["chunks"] >= 1 and services["llm"]["status"] == "ok"
     assert status["documents"]["completed"] >= 1
     assert status["config"]["llm_model"] == "llama3.1:8b" and status["config"]["languages"] == ["en"]
+    assert status["config"]["version"] == "1.0.0"  # backend/pyproject.toml
 
 
 def test_system_page_shows_what_is_broken(client, make_user, infra, monkeypatch):

@@ -22,6 +22,7 @@ from services.search.index_model import outdated_index_model
 from services.search.rag import COLLECTION_NAME, Rag
 from services.storage import ObjectStorage
 from settings import (
+    app_version,
     chunk_overlap,
     chunk_size,
     embedding_model,
@@ -162,6 +163,7 @@ async def system_status(session: AsyncSession) -> dict[str, Any]:
         "services": services,
         "documents": {str(status): count for status, count in documents.items()},
         "config": {
+            "version": app_version(),
             # The default first; several when users switch in the header.
             "languages": list(languages()),
             "llm_model": llm_model(),

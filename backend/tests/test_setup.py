@@ -10,6 +10,9 @@ from rich.prompt import PromptBase
 
 import setup.env as env_module
 
+# Before the `env` fixture moves ENV_PATH: it reads its folders on import.
+import switch_embedding_model
+
 MODULES = (
     "setup.env",
     "setup.key",
@@ -119,12 +122,13 @@ def test_storage_step_keeps_files_on_disk_or_in_the_companys_s3(env, answers, mo
 
     values = _values(env)
     assert values["STORAGE"] == "s3" and values["S3_ENDPOINT"] == "https://s3.acme.io:9443"  # asked again
-    assert values["S3_SECRET_KEY"] == "s3cret-key" and "s3cret-key" not in console.export_text()
+    assert values["S3_SECRET_KEY"] == "s3cret-key" and "s3cret-key" not in console.export_text(clear=False)
     assert values["S3_REGION"] == "us-east-1" and "S3_CACERT" not in values
     assert [config.bucket for config in checked] == ["corpus"]  # checked before it was saved
     assert storage_step.StorageStep().current() == (
         "the company's S3 storage: bucket corpus at https://s3.acme.io:9443"
     )
+    assert "Restart Corpus to use the new storage" in console.export_text()
 
     def refuse(config) -> None:
         raise AppError("unavailable", "Could not store the document. NoSuchBucket")
@@ -138,7 +142,9 @@ def test_storage_step_keeps_files_on_disk_or_in_the_companys_s3(env, answers, mo
     assert env.read_text() == before and "NoSuchBucket" in console.export_text()
 
     answers.extend([False])  # back to this server
-    storage_step.StorageStep().run(_console())
+    console = _console()
+    storage_step.StorageStep().run(console)
+    assert "Restart Corpus to use the new storage" in console.export_text()
     values = _values(env)
     assert values["STORAGE"] == "disk" and not [key for key in values if key.startswith("S3_")]
 
@@ -149,7 +155,6 @@ def test_switching_storage_offers_to_move_the_files(env, answers, monkeypatch, c
 
     import services.storage as storage
     import setup.steps.storage as storage_step
-    import switch_embedding_model
 
     fake = FakeMinio()
     monkeypatch.setattr(storage, "Minio", lambda *args, **kwargs: fake)
@@ -192,7 +197,6 @@ def test_switching_storage_in_production_moves_the_files_in_the_backend_image(en
     import os
 
     import setup.steps.storage as storage_step
-    import switch_embedding_model
 
     steps: list[tuple[str, ...]] = []
     restarted: list[bool] = []
@@ -208,9 +212,11 @@ def test_switching_storage_in_production_moves_the_files_in_the_backend_image(en
     env.write_text("STORAGE=disk\n")
     answers.extend([True, "https://s3.acme.io", "corpus", "corpus-app", "s3cret-key", None, "", True])
 
-    storage_step.StorageStep().run(_console())
+    console = _console()
+    storage_step.StorageStep().run(console)
 
     assert [step[:2] for step in steps] == [("stop", "backend"), ("--profile", "s3"), ("run", "--rm")]
+    assert "Restart Corpus" not in console.export_text()  # started by the step itself
     assert steps[2][-3:] == ("python", "-m", "maintenance.move_files")
     assert "s3cret-key" not in " ".join(steps[2])  # passed through the environment
     assert steps[2][steps[2].index("TARGET_S3_SECRET_KEY") - 1] == "-e"

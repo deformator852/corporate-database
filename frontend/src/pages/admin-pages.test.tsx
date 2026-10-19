@@ -103,7 +103,7 @@ describe("System status", () => {
                     {name: "embedding", status: "warning", detail: "not loaded yet"},
                 ],
                 documents: {completed: 12, failed: 1},
-                config: {languages: ["en", "es"], llm_model: "llama3.1:8b", llm_context: 16384, embedding_model: "intfloat/multilingual-e5-base", chunk_size: 800, chunk_overlap: 150},
+                config: {version: "1.0.0", languages: ["en", "es"], llm_model: "llama3.1:8b", llm_context: 16384, embedding_model: "intfloat/multilingual-e5-base", chunk_size: 800, chunk_overlap: 150},
             }),
         );
 
@@ -112,6 +112,7 @@ describe("System status", () => {
         expect(within(llm).getByText("Down")).toBeInTheDocument();
         expect(screen.getByText("Model llama3.1:8b is not downloaded in Ollama.")).toBeInTheDocument();
         expect(screen.getByText("800 / 150")).toBeInTheDocument();
+        expect(screen.getByText("1.0.0")).toBeInTheDocument();
         expect(screen.getByText("English (default), Español")).toBeInTheDocument();
 
         await user.click(screen.getByRole("button", {name: "Refresh"}));

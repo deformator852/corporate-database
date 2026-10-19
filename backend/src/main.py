@@ -35,7 +35,7 @@ from services.search.embedding import get_embedding_model
 from services.search.index_model import record_index_model
 from services.search.reindex_hub import reindex_hub
 from services.storage import file_store
-from settings import chat_retention_days, error_log_retention_days
+from settings import app_version, chat_retention_days, error_log_retention_days
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +146,7 @@ _DOCS = (os.getenv("API_DOCS") or "").strip().lower() in {"1", "true", "yes"}
 
 app = FastAPI(
     title="Corpus",
-    version="1.0.0",
+    version=app_version(),
     lifespan=lifespan,
     docs_url="/docs" if _DOCS else None,
     redoc_url="/redoc" if _DOCS else None,

@@ -7,6 +7,7 @@ from schemas.email import Email
 from schemas.model_config import MODEL_CONFIG, ORM_MODEL_CONFIG
 from schemas.user import check_password_fits
 from services.password import uses_password
+from settings import built_with_llama
 
 
 class LoginSchema(BaseModel):
@@ -50,6 +51,8 @@ class SessionUserSchema(BaseModel):
     # Signs in with a Corpus password, which they may change. False for SSO
     # users, and, while single sign-on is on, for all but administrators.
     uses_password: bool
+    # Shown as "Built with Llama" in the interface, as the model's license asks.
+    built_with_llama: bool
 
     @classmethod
     def from_user(cls, user: User) -> Self:
@@ -60,5 +63,6 @@ class SessionUserSchema(BaseModel):
             email=user.email,
             language=user.language,
             uses_password=uses_password(user),
+            built_with_llama=built_with_llama(),
             permissions=sorted({permission.key for role in user.roles for permission in role.permissions}),
         )

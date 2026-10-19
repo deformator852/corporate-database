@@ -419,3 +419,33 @@ def test_seeders_prepare_permissions_roles_and_the_search_collection(infra):
     run(seed())
     run(seed())  # idempotent
     assert run(infra.qdrant.collection_exists("documents"))
+
+
+@pytest.mark.parametrize(
+    ("settings", "named"),
+    [
+        ("KEY_STORE=vault\nVAULT_ADDR=http://localhost:8200\n", "VAULT_ADDR"),
+        ("OIDC_ISSUER=https://127.0.0.1:8443/realms/corpus\n", "OIDC_ISSUER"),
+        ("STORAGE=s3\nS3_ENDPOINT=http://[::1]:7070\n", "S3_ENDPOINT"),
+    ],
+)
+def test_deploy_refuses_a_tunnel_to_the_servers_loopback(tmp_path, settings, named):
+    """The tunnels run in containers, where localhost is the tunnel itself:
+    such an address would only time out later, so deploy.sh stops first."""
+    deploy = SRC.parents[1] / "deploy" / "deploy.sh"
+    env_file = tmp_path / ".env"
+    env_file.write_text(settings)
+    calls = tmp_path / "docker-calls"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "docker").write_text(f'#!/bin/sh\necho "$@" >> {calls}\n')
+    (bin_dir / "docker").chmod(0o755)
+    env = {**os.environ, "CORPUS_ENV_FILE": str(env_file), "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+    up = subprocess.run([str(deploy), "up"], env=env, capture_output=True, text=True)
+
+    assert up.returncode == 1 and named in up.stderr and "network address" in up.stderr
+    assert not calls.exists()  # nothing started
+    # Stopping still works with such a setting.
+    assert subprocess.run([str(deploy), "down"], env=env, capture_output=True).returncode == 0
+    assert "down" in calls.read_text()

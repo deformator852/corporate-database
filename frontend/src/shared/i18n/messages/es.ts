@@ -506,6 +506,7 @@ export const es: Record<MessageKey, string> = {
     "system.status.ok": "Funcionando",
     "system.status.warning": "Atención",
     "system.status.down": "Caído",
+    "system.config.version": "Versión de Corpus",
     "system.config.language": "Idiomas",
     "system.config.defaultLanguage": "predeterminado",
     "system.config.llm": "Modelo del asistente · contexto",

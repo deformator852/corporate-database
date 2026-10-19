@@ -529,6 +529,7 @@ export const en = {
     "system.status.ok": "Running",
     "system.status.warning": "Attention",
     "system.status.down": "Down",
+    "system.config.version": "Corpus version",
     "system.config.language": "Languages",
     "system.config.defaultLanguage": "default",
     "system.config.llm": "Assistant model · context",

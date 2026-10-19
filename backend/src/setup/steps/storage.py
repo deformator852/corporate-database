@@ -98,13 +98,17 @@ Move = Literal["moved", "moved in production", "not moved", "failed"]
 def offer_move(console: Console, source: S3Config | None, target: S3Config | None) -> Move:
     """Offers to copy the document files from the current storage to the
     new one (None: this server), before the new one is saved."""
-    if (source and (source.endpoint, source.bucket)) == (target and (target.endpoint, target.bucket)):
+    if _same(source, target):
         return "not moved"
     from switch_embedding_model import production_running
 
     if production_running():
         return _move_in_production(console, source, target)
     return _move_here(console, source, target)
+
+
+def _same(source: S3Config | None, target: S3Config | None) -> bool:
+    return (source and (source.endpoint, source.bucket)) == (target and (target.endpoint, target.bucket))
 
 
 def _ask_to_move(console: Console, what: str) -> bool:
@@ -238,7 +242,7 @@ class StorageStep:
             for name in _S3_SETTINGS:
                 remove_env(ENV_PATH, name)
             console.print("Document files are kept on this server.")
-            _restart(console, moved)
+            _restart(console, moved, changed=not _same(source, None))
             return
         config = _ask_s3(console)
         console.print("Checking that Corpus can write, read and delete in the bucket…")
@@ -268,13 +272,12 @@ class StorageStep:
             Panel(
                 f"At the storage, give this account only s3:GetObject, s3:PutObject and s3:DeleteObject "
                 f"on {config.bucket}/*. Back the bucket up with the storage's own versioning or replication: "
-                "deploy/deploy.sh backup does not copy it.\n"
-                "Restart the backend and the worker (production: deploy/deploy.sh up).",
+                "deploy/deploy.sh backup does not copy it.",
                 title="Files in S3",
                 style="green",
             )
         )
-        _restart(console, moved)
+        _restart(console, moved, changed=not _same(source, config))
 
 
 def _move(console: Console, source: S3Config | None, target: S3Config | None) -> Move:
@@ -284,6 +287,12 @@ def _move(console: Console, source: S3Config | None, target: S3Config | None) ->
     return moved
 
 
-def _restart(console: Console, moved: Move) -> None:
+def _restart(console: Console, moved: Move, *, changed: bool) -> None:
+    """Corpus reads the storage settings when it starts."""
     if moved == "moved in production":
-        restart_production(console)
+        restart_production(console)  # stopped for the move
+    elif changed:
+        console.print(
+            "[yellow]Restart Corpus to use the new storage: production deploy/deploy.sh up; "
+            "development: restart the backend and the worker.[/]"
+        )

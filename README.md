@@ -433,7 +433,8 @@ deploy/deploy.sh build && deploy/deploy.sh up
 ```
 
 Database migrations run automatically on start. Extensions in `custom/`
-stay as they are.
+stay as they are. [CHANGELOG.md](CHANGELOG.md) lists what each version
+changes; the **System status** page shows the version installed.
 
 ## Documentation
 
@@ -457,6 +458,9 @@ The AI models are downloaded from Ollama and Hugging Face during
 installation, and each has its own license and use policy, for example the
 Llama 3.1 Community License, the Gemma Terms of Use, and Apache 2.0 for
 Qwen. Check the license of the models you choose.
+
+Built with Llama: with a Llama model, the default, Corpus shows "Built with
+Llama" at the bottom of the menu, as the Llama license asks.
 
 ## License
 

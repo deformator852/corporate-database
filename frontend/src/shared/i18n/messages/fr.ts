@@ -506,6 +506,7 @@ export const fr: Record<MessageKey, string> = {
     "system.status.ok": "En service",
     "system.status.warning": "Attention",
     "system.status.down": "Hors service",
+    "system.config.version": "Version de Corpus",
     "system.config.language": "Langues",
     "system.config.defaultLanguage": "par défaut",
     "system.config.llm": "Modèle de l’assistant · contexte",

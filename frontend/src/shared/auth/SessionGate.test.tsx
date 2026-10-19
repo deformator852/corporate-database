@@ -36,6 +36,17 @@ describe("Session", () => {
         expect(links).toEqual(["Home", "Documents", "Audit log"]);
     });
 
+    it("shows Built with Llama while the AI model is a Llama model", async () => {
+        renderApp("/", sessionUser([], {built_with_llama: true}));
+        expect(await screen.findByText("Built with Llama")).toBeInTheDocument();
+    });
+
+    it("does not show Built with Llama with another AI model", async () => {
+        renderApp("/", sessionUser([], {built_with_llama: false}));
+        await screen.findByRole("navigation");
+        expect(screen.queryByText("Built with Llama")).not.toBeInTheDocument();
+    });
+
     it("signs out", async () => {
         const {user, server, router} = renderApp("/", sessionUser(), (s) => s.on("POST", "/auth/logout"));
         await user.click(await screen.findByRole("button", {name: "Sign out"}));

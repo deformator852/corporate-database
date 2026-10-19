@@ -11,6 +11,15 @@ def test_login_and_me(client, make_user):
     assert client.get("/api/v1/auth/me").json()["email"] == email
 
 
+def test_the_session_says_when_the_interface_must_show_built_with_llama(client, make_user, monkeypatch):
+    # The Llama license asks products built with it to show "Built with Llama".
+    _, email, password = make_user(["documents.list"])
+    login(client, email, password)
+    for model, shown in (("llama3.1:8b", True), ("llama3.3:70b", True), ("qwen3:8b", False), ("gemma3:12b", False)):
+        monkeypatch.setenv("LLM_MODEL", model)
+        assert client.get("/api/v1/auth/me").json()["built_with_llama"] is shown
+
+
 def test_wrong_password_is_401_and_long_password_is_not_500(client, make_user):
     _, email, _ = make_user()
     assert login(client, email, "wrong-password").status_code == 401

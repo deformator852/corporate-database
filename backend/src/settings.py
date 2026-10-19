@@ -2,6 +2,7 @@ import logging
 import os
 from dataclasses import dataclass
 from functools import partial
+from importlib.metadata import version
 from pathlib import Path
 from urllib.parse import quote
 
@@ -285,6 +286,18 @@ def text_cleanup_mode() -> str:
             status_code=500,
         )
     return value
+
+
+def app_version() -> str:
+    """Corpus's version: `version` in backend/pyproject.toml, the one place
+    it is set (see CHANGELOG.md)."""
+    return version("backend")
+
+
+def built_with_llama() -> bool:
+    """LLM_MODEL is a Meta Llama model, whose license asks a product built
+    with it to show "Built with Llama"."""
+    return (os.getenv("LLM_MODEL") or "").strip().lower().rsplit("/", 1)[-1].startswith("llama")
 
 
 def llm_model() -> str:

@@ -5,6 +5,7 @@ import {NavLink} from "react-router";
 import {Button} from "@/components/ui/button";
 import {Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger} from "@/components/ui/sheet";
 import {extensions, mergeByKey} from "@/extensions";
+import {useSessionStore} from "@/shared/auth/session-store";
 import {useI18n} from "@/shared/i18n/I18nProvider";
 import {can} from "@/shared/lib/api/me.ts";
 import {CORE_NAV} from "@/widgets/sidebar/model/nav";
@@ -40,12 +41,20 @@ function NavLinks({className, onNavigate}: {className: string; onNavigate?: () =
     );
 }
 
+/** "Built with Llama", as the Llama license asks of products built with it.
+ * Its exact wording: not translated. */
+function ModelNotice({className}: {className: string}) {
+    const builtWithLlama = useSessionStore((state) => state.user?.built_with_llama);
+    return builtWithLlama ? <p className={`text-xs text-muted-foreground ${className}`}>Built with Llama</p> : null;
+}
+
 /** Desktop: a column next to the page. Hidden on phones (see MobileNav). */
 export function Sidebar() {
     const {t} = useI18n();
     return (
         <aside className="app-layout__sidebar" aria-label={t("nav.label")}>
             <NavLinks className="app-layout__nav"/>
+            <ModelNotice className="mt-auto px-3 pt-4"/>
         </aside>
     );
 }
@@ -71,6 +80,7 @@ export function MobileNav() {
                     </SheetClose>
                 </div>
                 <NavLinks className="flex flex-col gap-1 p-3" onNavigate={() => setOpen(false)}/>
+                <ModelNotice className="mt-auto p-4"/>
             </SheetContent>
         </Sheet>
     );

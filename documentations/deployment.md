@@ -760,6 +760,13 @@ when you use Vault, single sign-on or S3 storage.
 **Ports 80 or 443 are taken.** Set `HTTP_PORT` and `HTTPS_PORT` in
 `backend/.env`, then run `deploy/deploy.sh up`.
 
+**`deploy.sh` says an address points to this server's loopback address.**
+Vault, the SSO provider and the S3 storage are reached through tunnel
+containers, and inside a container `localhost` or `127.0.0.1` is the
+container itself. If the service runs on the Corpus server, make it listen on
+the server's network address and enter that address or the server's host
+name instead, with `cd backend && uv run configure`.
+
 **Answers are slow.** The AI model runs on the CPU unless you give it a GPU.
 In `docker-compose.prod.yml`, uncomment the lines under `ollama` that match
 your GPU, then run `deploy/deploy.sh up`. For an Intel or AMD integrated GPU

@@ -10,6 +10,8 @@ export type SystemStatus = {
     services: ServiceCheck[];
     documents: Record<string, number>;
     config: {
+        /** Corpus's version, e.g. 1.0.0. */
+        version: string;
         /** The default first; more when users switch in the header. */
         languages: string[];
         llm_model: string;

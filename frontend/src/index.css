@@ -336,7 +336,8 @@
     }
 
     .app-layout__sidebar {
-      display: block;
+      display: flex;
+      flex-direction: column;
       flex-shrink: 0;
       width: var(--sidebar-width);
       background-color: var(--sidebar, var(--background));

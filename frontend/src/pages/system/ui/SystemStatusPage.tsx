@@ -182,6 +182,7 @@ export function SystemStatusPage() {
                                 <dl className="divide-y">
                                     {(
                                         [
+                                            ["system.config.version", data.config.version],
                                             ["system.config.language", languageList(data.config.languages, t("system.config.defaultLanguage"))],
                                             ["system.config.llm", `${data.config.llm_model} · ${data.config.llm_context}`],
                                             ["system.config.embedding", data.config.embedding_model],
