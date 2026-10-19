@@ -34,6 +34,7 @@ class AuditAction(StrEnum):
     CHAT_DELETE = "chat.delete"
     RATING_DELETE = "chat.rating_delete"
     SYSTEM_RECHUNK = "system.rechunk"
+    SYSTEM_REINDEX = "system.reindex"
 
 
 class AuditLog(Base):

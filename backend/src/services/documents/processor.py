@@ -22,6 +22,7 @@ from services.documents.parser import DocumentParser
 from services.notifications.events import NotificationEventPublisher
 from services.notifications.notification import NotificationService
 from services.search.embedding import EmbeddingModel
+from services.search.index_model import outdated_index_model
 from services.search.rag import Rag
 from services.storage import ObjectStorage
 from settings import (
@@ -110,6 +111,8 @@ class DocumentProcessor:
         document = await self._require(document_id)
         if document is None or document.status in DONE_STATUSES:
             return
+        if await outdated_index_model(self.session) is not None:
+            return  # stays queued: rebuilding the index queues it again
         try:
             text = await self._parse(document)
             await self._set(document, DocumentStatus.CHUNKING, 25)
@@ -163,6 +166,8 @@ class DocumentProcessor:
         document = await self._require(document_id)
         if document is None or document.status != DocumentStatus.COMPLETED:
             return  # deleted, or queued again (a model switch) meanwhile
+        if await outdated_index_model(self.session) is not None:
+            return  # rebuilding the index embeds it again anyway
         saved = await self.session.get(DocumentText, document.id)
         if saved is None:
             return

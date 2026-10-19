@@ -25,6 +25,7 @@ import {getApiErrorMessage} from "@/shared/lib/api/errors";
 import type {DocumentStatus} from "@/entities/document/model";
 import {getSystemStatus} from "@pages/system/api/system";
 import {RechunkNotice} from "@pages/system/ui/RechunkNotice";
+import {ReindexNotice} from "@pages/system/ui/ReindexNotice";
 import {SYSTEM_REFRESH_MS, type ServiceStatus, type SystemStatus} from "@pages/system/model/system";
 
 const SERVICE_ICONS: Record<string, LucideIcon> = {
@@ -148,6 +149,7 @@ export function SystemStatusPage() {
                         </div>
                     </section>
 
+                    <ReindexNotice outdated={data.outdated_index_model !== null} onStarted={load} />
                     <RechunkNotice outdated={data.outdated_chunks} onStarted={load} />
 
                     <div className="grid gap-4 lg:grid-cols-2">

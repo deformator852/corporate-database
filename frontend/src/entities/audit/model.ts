@@ -28,6 +28,7 @@ export const AUDIT_ACTIONS = [
     "chat.delete",
     "chat.rating_delete",
     "system.rechunk",
+    "system.reindex",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

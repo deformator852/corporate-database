@@ -58,8 +58,10 @@ def compose(*args: str, capture: bool = False) -> str:
 
 
 def production_running() -> bool:
+    """By the stack's database, not the backend: a backend whose model does
+    not match the index restarts in a loop, and switching is the way out."""
     try:
-        return bool(compose("ps", "--status", "running", "-q", "backend", capture=True).strip())
+        return bool(compose("ps", "--status", "running", "-q", "postgres", capture=True).strip())
     except OSError, subprocess.CalledProcessError:
         return False  # no Docker, or no production stack here
 

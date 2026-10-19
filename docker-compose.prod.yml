@@ -169,11 +169,16 @@ services:
       OLLAMA_NUM_PARALLEL: ${LLM_PARALLEL:-4}
       OLLAMA_FLASH_ATTENTION: "1"
       OLLAMA_KV_CACHE_TYPE: q8_0
+      # Intel/AMD integrated GPU: uncomment with the lines below.
+      OLLAMA_IGPU_ENABLE: "1"
     volumes:
       - ollama_data:/root/.ollama
     networks: [internal]
     # GPU: uncomment what matches the server.
-    # Intel/AMD integrated:  devices: ["/dev/dri"]
+    # Intel/AMD integrated (Vulkan): the device, the host's video and render
+    # group ids (`getent group video render`), and integrated GPUs allowed.
+    devices: ["/dev/dri"]
+    group_add: ["39", "105"]
     # NVIDIA (needs nvidia-container-toolkit):
     # deploy: {resources: {reservations: {devices: [{driver: nvidia, count: all, capabilities: [gpu]}]}}}
     healthcheck:

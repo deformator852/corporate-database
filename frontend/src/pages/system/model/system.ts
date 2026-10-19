@@ -20,6 +20,9 @@ export type SystemStatus = {
     };
     /** Completed documents cut with another chunk size or overlap. */
     outdated_chunks: number;
+    /** The model the index is built with when the configured one differs:
+     * search is off until the index is rebuilt. */
+    outdated_index_model: string | null;
 };
 
 export const SYSTEM_REFRESH_MS = 15_000;

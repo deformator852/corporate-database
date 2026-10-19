@@ -18,6 +18,7 @@ from exceptions import AppError
 from models.document import Document
 from services.documents.rechunk import outdated_count
 from services.search.embedding import get_embedding_model
+from services.search.index_model import outdated_index_model
 from services.search.rag import COLLECTION_NAME, Rag
 from services.storage import ObjectStorage
 from settings import (
@@ -171,4 +172,7 @@ async def system_status(session: AsyncSession) -> dict[str, Any]:
         },
         # Completed documents cut with another chunk size or overlap.
         "outdated_chunks": await outdated_count(session),
+        # The model the index is built with when EMBEDDING_MODEL names
+        # another: search is off until it is rebuilt.
+        "outdated_index_model": await outdated_index_model(session),
     }

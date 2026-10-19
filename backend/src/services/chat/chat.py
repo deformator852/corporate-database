@@ -14,6 +14,7 @@ from services.chat.excerpts import fit_to_context
 from services.chat.generator import OllamaGenerator, OnDelta, document_budget_chars
 from services.documents.access import retrieval_classifications, user_permission_keys
 from services.search.embedding import EmbeddingModel
+from services.search.index_model import require_current_index
 from services.search.rag import Rag, SearchHit
 from settings import embedding_model
 
@@ -69,6 +70,7 @@ class ChatService:
         document the model read (for the audit log). Generated text also
         streams to `on_delta` as it arrives. `document_ids`, if any, are the
         only documents the answer may come from."""
+        await require_current_index(self.session)
         allowed = retrieval_classifications(await user_permission_keys(self.session, user_id))
         query = messages[-1].content
         documents: list[ContextDocument] = []

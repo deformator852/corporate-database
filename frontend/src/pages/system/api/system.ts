@@ -8,6 +8,13 @@ export async function rechunkDocuments(): Promise<number> {
     return data.documents;
 }
 
+/** After the embedding model changed: the worker embeds every document
+ * again; returns how many. Search finds each one again once it is done. */
+export async function reindexDocuments(): Promise<number> {
+    const {data} = await api.post<{documents: number}>("/system/reindex");
+    return data.documents;
+}
+
 export async function getSystemStatus(): Promise<SystemStatus> {
     const {data} = await api.get<SystemStatus>("/system/status");
     return data;

@@ -19,16 +19,11 @@ import asyncio
 import os
 import sys
 from collections.abc import Callable
-from typing import cast
-
-from sqlalchemy import CursorResult, update
 
 from database import AsyncSessionLocal, engine
 from exceptions import AppError
-from models.document import Document, DocumentStatus
 from services.search.embedding import EmbeddingModel
-from services.search.index_model import save_index_model, stored_index_model
-from services.search.rag import COLLECTION_NAME, Rag
+from services.search.index_model import rebuild_index, stored_index_model
 from settings import EMBEDDING_MODELS
 
 
@@ -59,27 +54,8 @@ async def switch(model: str, report: Callable[[str], None] = print) -> int:
     await asyncio.to_thread(load_model, model, report)
     async with AsyncSessionLocal() as session:
         previous = await stored_index_model(session)
-    report(f"Index model: {previous or 'not recorded'} -> {model}")
-
-    rag = Rag()
-    try:
-        if await rag.client.collection_exists(COLLECTION_NAME):
-            await rag.client.delete_collection(COLLECTION_NAME)
-            report("Old search index deleted.")
-    finally:
-        await rag.client.close()
-
-    async with AsyncSessionLocal() as session:
-        result = await session.execute(
-            update(Document)
-            .where(Document.status == DocumentStatus.COMPLETED)
-            .values(status=DocumentStatus.QUEUED, progress=0, reindexing=True, ready_unannounced=False)
-        )
-        await session.commit()
-        # An UPDATE gives a CursorResult; the async API types it as Result.
-        queued = cast(CursorResult, result).rowcount or 0
-        # Last: until here a rerun repeats every step.
-        await save_index_model(session, model, queued=queued)
+        report(f"Index model: {previous or 'not recorded'} -> {model}")
+        queued = await rebuild_index(session, model)
     report(f"{queued} document(s) queued; the worker embeds them with {model} when it starts.")
     return queued
 

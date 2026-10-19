@@ -136,6 +136,26 @@ describe("System status", () => {
         expect(server.sent("POST", "/system/rechunk")).toHaveLength(1);
     });
 
+    it("offers to rebuild the search index after the embedding model changed", async () => {
+        const {user, server} = renderApp("/system", sessionUser(["system.view", "system.rechunk"]), (s) => {
+            s.on("GET", "/system/status", {
+                services: [],
+                documents: {completed: 3},
+                config: {languages: ["en"], llm_model: "llama3.1:8b", llm_context: 16384, embedding_model: "e5", chunk_size: 400, chunk_overlap: 80},
+                outdated_chunks: 0,
+                outdated_index_model: "bge-base-en",
+            });
+            s.on("POST", "/system/reindex", {documents: 3});
+        });
+
+        expect(await screen.findByText(/The embedding model was changed, so search is off/)).toBeInTheDocument();
+        await user.click(screen.getByRole("button", {name: "Rebuild search index"}));
+        await user.click(screen.getByRole("button", {name: "Rebuild"}));
+
+        expect(await screen.findByText("Rebuilding the search index for 3 document(s). The bar at the top of the page shows how far it is.")).toBeInTheDocument();
+        expect(server.sent("POST", "/system/reindex")).toHaveLength(1);
+    });
+
     it("shows outdated documents without the button to those who may not re-chunk", async () => {
         renderApp("/system", sessionUser(["system.view"]), (s) =>
             s.on("GET", "/system/status", {

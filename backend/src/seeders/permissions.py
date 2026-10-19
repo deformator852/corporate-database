@@ -94,7 +94,7 @@ SYSTEM_PERMISSIONS = (
     (
         "system.rechunk",
         "Update documents for search",
-        "Prepare documents again for search after the search settings change (System page)",
+        "Prepare documents again for search after the search settings or the embedding model change (System page)",
     ),
 )
 

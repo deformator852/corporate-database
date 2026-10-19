@@ -31,7 +31,7 @@ from services.error_log import ErrorLogService
 from services.notifications.events import consume_notification_events
 from services.notifications.hub import dispatch_notification
 from services.search.embedding import get_embedding_model
-from services.search.index_model import verify_index_model
+from services.search.index_model import record_index_model
 from services.search.reindex_hub import reindex_hub
 from settings import chat_retention_days, error_log_retention_days
 
@@ -102,11 +102,10 @@ async def lifespan(_app: FastAPI):
     # First: a failed start is worth an entry too.
     error_log.install("backend")
     check_jwt_secret()
-    # Fail fast: with the wrong key, new data would be unreadable later; with
-    # another embedding model, search would compare unrelated vectors.
+    # Fail fast: with the wrong key, new data would be unreadable later.
     async with AsyncSessionLocal() as session:
         await verify_encryption_key(session)
-        await verify_index_model(session)
+        await record_index_model(session)
     await close_open_chat_requests()
     warm_up_task = asyncio.create_task(warm_up())
     purge_task = asyncio.create_task(purge_old_chats())

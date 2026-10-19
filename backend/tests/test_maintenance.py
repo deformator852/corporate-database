@@ -66,7 +66,7 @@ def test_switching_the_embedding_model_embeds_every_document_again(client, make_
     from exceptions import AppError
     from maintenance.switch_embedding import switch
     from services.search import embedding
-    from services.search.index_model import save_index_model, stored_index_model, verify_index_model
+    from services.search.index_model import outdated_index_model, save_index_model, stored_index_model
 
     old_model = os.environ["EMBEDDING_MODEL"]
     monkeypatch.setenv("EMBEDDING_MODEL", old_model)  # restored after the test; switch() sets it
@@ -80,9 +80,9 @@ def test_switching_the_embedding_model_embeds_every_document_again(client, make_
         async with AsyncSessionLocal() as session:
             return await stored_index_model(session)
 
-    async def verify() -> None:
+    async def outdated() -> str | None:
         async with AsyncSessionLocal() as session:
-            await verify_index_model(session)
+            return await outdated_index_model(session)
 
     def points() -> int:
         if not run(infra.qdrant.collection_exists("documents")):
@@ -111,7 +111,7 @@ def test_switching_the_embedding_model_embeds_every_document_again(client, make_
 
         assert points() == 0 and status() == "queued"
         assert run(index_model()) == "bge-small-en"
-        run(verify())  # EMBEDDING_MODEL now names the index's model
+        assert run(outdated()) is None  # EMBEDDING_MODEL now names the index's model
         headers = {"origin": "https://testserver", "cookie": f"my_token={client.cookies.get('my_token')}"}
         with client.websocket_connect("/api/v1/system/reindex/ws", headers=headers) as banner:
             assert banner.receive_json() == {"active": True, "percent": 0}  # every user's banner, at once
@@ -126,8 +126,7 @@ def test_switching_the_embedding_model_embeds_every_document_again(client, make_
         assert len(client.get("/api/v1/notifications").json()["items"]) == notices
 
         monkeypatch.setenv("EMBEDDING_MODEL", old_model)  # .env edited by hand
-        with pytest.raises(AppError, match="switch-embedding-model"):
-            run(verify())
+        assert run(outdated()) == "bge-small-en"
         with pytest.raises(AppError, match="Unknown embedding model"):
             run(switch("no-such-model", lambda _: None))
     finally:
@@ -167,6 +166,18 @@ def test_switch_embedding_model_in_production_downloads_stops_rebuilds_and_start
     assert steps[0][-2:] == ("EMBEDDING_MODEL=bge-small-en", "models")
     assert steps[2][-4:] == ("python", "-m", "maintenance.switch_embedding", "bge-small-en")
     assert "EMBEDDING_MODEL=bge-small-en" in env.read_text()
+
+
+def test_switch_embedding_model_finds_production_while_the_backend_restarts(monkeypatch):
+    # The backend of a stack whose model does not match the index restarts in
+    # a loop; its database runs.
+    import switch_embedding_model as command
+
+    running = {"postgres"}
+    monkeypatch.setattr(command, "compose", lambda *args, **kwargs: "id\n" if args[-1] in running else "")
+    assert command.production_running()
+    running.clear()
+    assert not command.production_running()
 
 
 def test_compose_reads_env_from_the_file_not_from_what_was_loaded_earlier(monkeypatch, tmp_path):

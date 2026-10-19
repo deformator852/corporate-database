@@ -515,8 +515,15 @@ protects only a removed disk, not the running server.
 
 The embedding model turns documents and questions into vectors for search.
 Vectors of two models cannot be compared, so another model means every
-document is embedded again. Corpus does not start if `EMBEDDING_MODEL` in
-`backend/.env` is not the model the documents are indexed with.
+document is embedded again. While `EMBEDDING_MODEL` in `backend/.env` is not
+the model the documents are indexed with, Corpus runs but search is off: the
+chat answers that the search index must be rebuilt, and new uploads wait in
+the queue.
+
+You can switch with one command, or edit `backend/.env` and rebuild the index
+from the **System** page.
+
+### Switching with the command
 
 1. Choose a model from the table in [Where the models come from](#where-the-models-come-from).
    Running the command without a model also lists them:
@@ -540,6 +547,22 @@ files and chats are not changed. A large library can take hours on a server
 without a GPU.
 
 If the command stops midway, run it again: it continues where it stopped.
+
+### Switching from the System page
+
+1. Set `EMBEDDING_MODEL` in `backend/.env` to a model from the table in
+   [Where the models come from](#where-the-models-come-from).
+2. Restart Corpus. It downloads the new model when it is missing, so the
+   server needs the internet for this step:
+
+   ```sh
+   deploy/deploy.sh up
+   ```
+
+3. On the **System** page, select **Rebuild search index**, then
+   **Rebuild**. You need the **Update documents for search** permission.
+
+The documents are embedded again in the background, as with the command.
 
 To rebuild the index with the same model, for example after changing the
 chunk size with `uv run configure`, run the command with the current model.
@@ -732,4 +755,8 @@ when you use Vault, single sign-on or S3 storage.
 
 **Answers are slow.** The AI model runs on the CPU unless you give it a GPU.
 In `docker-compose.prod.yml`, uncomment the lines under `ollama` that match
-your GPU, then run `deploy/deploy.sh up`.
+your GPU, then run `deploy/deploy.sh up`. For an Intel or AMD integrated GPU
+these are `OLLAMA_IGPU_ENABLE`, `devices` and `group_add`; in `group_add`, put
+the ids that `getent group video render` prints on the server. Check that
+Ollama found the GPU: `deploy/deploy.sh logs ollama` shows a line
+`inference compute` without `library=cpu`.

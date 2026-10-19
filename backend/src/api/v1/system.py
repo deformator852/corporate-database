@@ -1,12 +1,15 @@
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, WebSocket
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_audit_service, require_permission
 from api.ws import hold
 from database import get_db
+from exceptions import AppError
 from models.audit import AuditAction
+from models.document import DONE_STATUSES, Document
 from models.user import User
 from schemas.error import error_responses
 from schemas.error_log import ErrorCategory, ErrorLevel, ErrorLogListSchema
@@ -15,8 +18,10 @@ from services.audit import AuditService
 from services.documents.document import CeleryDocumentQueue
 from services.documents.rechunk import mark_outdated
 from services.error_log import ErrorLogService
+from services.search.index_model import outdated_index_model, rebuild_index
 from services.search.reindex_hub import reindex_hub
 from services.system import system_status
+from settings import embedding_model_key
 
 router = APIRouter(
     prefix="/system",
@@ -80,3 +85,32 @@ async def rechunk_documents(
         CeleryDocumentQueue().start_rechunk()
         await reindex_hub.refresh()
     return {"documents": marked}
+
+
+@router.post(
+    "/reindex",
+    responses=error_responses(401, 403, 409),
+)
+async def reindex_documents(
+    user: User = Depends(require_permission("system.rechunk")),
+    session: AsyncSession = Depends(get_db, scope="function"),
+    audit: AuditService = Depends(get_audit_service),
+) -> dict[str, int]:
+    """After EMBEDDING_MODEL changed: embeds every document again with it.
+    Search finds each document again once it is done. Returns how many were
+    queued."""
+    previous = await outdated_index_model(session)
+    if previous is None:
+        raise AppError(
+            "conflict", "The search index is already built with the current embedding model.", status_code=409
+        )
+    model = embedding_model_key()
+    queued = await rebuild_index(session, model)
+    audit.record(AuditAction.SYSTEM_REINDEX, actor=user, details={"from": previous, "to": model, "documents": queued})
+    await session.commit()
+    queue = CeleryDocumentQueue()
+    # Every unfinished one: those uploaded while the index was outdated too.
+    for document_id in await session.scalars(select(Document.id).where(Document.status.not_in(DONE_STATUSES))):
+        queue.enqueue(document_id)
+    await reindex_hub.refresh()
+    return {"documents": queued}
