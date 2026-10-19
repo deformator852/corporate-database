@@ -149,6 +149,12 @@ export function SystemStatusPage() {
                         </div>
                     </section>
 
+                    {data.missing_files ? (
+                        <Card role="alert" className="flex-row items-start gap-2 px-4 py-3 text-sm">
+                            <CircleAlert className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
+                            {t("system.missingFiles", {count: data.missing_files})}
+                        </Card>
+                    ) : null}
                     <ReindexNotice outdated={data.outdated_index_model !== null} onStarted={load} />
                     <RechunkNotice outdated={data.outdated_chunks} onStarted={load} />
 

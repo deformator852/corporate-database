@@ -191,11 +191,26 @@ def test_compose_reads_env_from_the_file_not_from_what_was_loaded_earlier(monkey
     seen: dict[str, str] = {}
     monkeypatch.setattr(command.subprocess, "run", lambda *a, env, **k: seen.update(env) or SimpleNamespace(stdout=""))
 
+    # Loaded at start and removed from the file since (S3 storage turned off).
+    import settings
+
+    monkeypatch.setattr(settings, "FROM_ENV_FILE", settings.FROM_ENV_FILE | {"S3_ENDPOINT"})
+    monkeypatch.setenv("S3_ENDPOINT", "http://s3.acme.io")
+
     command.compose("up", "-d", "backend", "worker")
 
-    # Compose prefers the environment to --env-file: the stale value must not reach it.
-    assert "EMBEDDING_MODEL" not in seen and "DB_USER" not in seen
+    # Compose prefers the environment to --env-file: the stale values must not reach it.
+    assert "EMBEDDING_MODEL" not in seen and "DB_USER" not in seen and "S3_ENDPOINT" not in seen
     assert seen["PATH"] == os.environ["PATH"]
+
+    # configure starts Corpus with deploy/deploy.sh the same way.
+    from rich.console import Console
+
+    import setup.steps.storage as storage_step
+
+    seen.clear()
+    storage_step.restart_production(Console(record=True))
+    assert "S3_ENDPOINT" not in seen and seen["PATH"] == os.environ["PATH"]
 
 
 def test_switch_embedding_model_starts_the_old_model_again_when_the_rebuild_fails(monkeypatch, tmp_path):

@@ -25,6 +25,7 @@ from services.chat.generator import OllamaGenerator
 from services.chat.history import ChatHistoryService
 from services.chat.limit import close_open_chat_requests, purge_chat_requests
 from services.documents.events import consume_document_events
+from services.documents.file_check import mark_missing_files
 from services.documents.hub import hub
 from services.encryption_key import verify_encryption_key
 from services.error_log import ErrorLogService
@@ -33,6 +34,7 @@ from services.notifications.hub import dispatch_notification
 from services.search.embedding import get_embedding_model
 from services.search.index_model import record_index_model
 from services.search.reindex_hub import reindex_hub
+from services.storage import file_store
 from settings import chat_retention_days, error_log_retention_days
 
 logger = logging.getLogger(__name__)
@@ -49,6 +51,16 @@ async def warm_up() -> None:
         await OllamaGenerator().warm_up()
     except Exception:
         logger.warning("LLM warm-up failed", exc_info=True)
+
+
+async def check_files() -> None:
+    """Marks the documents whose file is missing from the storage, which
+    changes only with a restart. In the background: one request per file."""
+    try:
+        async with AsyncSessionLocal() as session:
+            await mark_missing_files(session, file_store())
+    except Exception:
+        logger.warning("Document file check failed", exc_info=True)
 
 
 _PURGE_EVERY_SECONDS = 6 * 3600
@@ -108,6 +120,7 @@ async def lifespan(_app: FastAPI):
         await record_index_model(session)
     await close_open_chat_requests()
     warm_up_task = asyncio.create_task(warm_up())
+    files_task = asyncio.create_task(check_files())
     purge_task = asyncio.create_task(purge_old_chats())
     document_task = asyncio.create_task(
         keep_running("Document events", lambda: consume_document_events(on_document_event))
@@ -118,9 +131,10 @@ async def lifespan(_app: FastAPI):
     try:
         yield
     finally:
-        for task in (warm_up_task, purge_task, document_task, notification_task):
+        tasks = (warm_up_task, files_task, purge_task, document_task, notification_task)
+        for task in tasks:
             task.cancel()
-        for task in (warm_up_task, purge_task, document_task, notification_task):
+        for task in tasks:
             try:
                 await task
             except asyncio.CancelledError:

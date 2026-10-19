@@ -269,6 +269,14 @@ class DocumentProcessor:
         document = await self._require(document_id)
         if document is None or document.status in DONE_STATUSES:
             return
+        if document.reindexing:
+            # Was ready before: the file may be in another storage (STORAGE
+            # changed without moving the files). Kept, failed, for a retry
+            # once the file is back.
+            document.file_missing = True
+            document.reindexing = False
+            await self.fail(document_id, "The document file is missing.")
+            return
         await self._drop_index(document.id)
         try:
             await asyncio.to_thread(self.storage.delete, document.object_key)

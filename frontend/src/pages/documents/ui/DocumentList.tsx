@@ -175,6 +175,11 @@ function DocumentRow({
                             <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
                             {document.error_message}
                         </p>
+                    ) : document.file_missing ? (
+                        <p className="flex items-start gap-1 text-sm text-destructive">
+                            <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                            {t("documents.fileMissing")}
+                        </p>
                     ) : null}
                 </div>
             </TableCell>

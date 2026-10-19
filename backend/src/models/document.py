@@ -67,6 +67,9 @@ class Document(TimestampMixin, Base):
     # `uv run configure`, the ones cut otherwise can be re-chunked (System page).
     chunk_size: Mapped[int | None] = mapped_column(Integer)
     chunk_overlap: Mapped[int | None] = mapped_column(Integer)
+    # No file in the configured storage, as of the backend's last start
+    # (services/documents/file_check.py).
+    file_missing: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
     __table_args__ = (
         CheckConstraint("length(name) BETWEEN 1 AND 200"),

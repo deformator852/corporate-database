@@ -172,6 +172,10 @@ async def system_status(session: AsyncSession) -> dict[str, Any]:
         },
         # Completed documents cut with another chunk size or overlap.
         "outdated_chunks": await outdated_count(session),
+        # Documents with no file in the storage, as of the backend's start.
+        "missing_files": await session.scalar(
+            select(func.count()).select_from(Document).where(Document.file_missing.is_(True))
+        ),
         # The model the index is built with when EMBEDDING_MODEL names
         # another: search is off until it is rebuilt.
         "outdated_index_model": await outdated_index_model(session),

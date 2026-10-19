@@ -57,6 +57,8 @@ class FileStore(Protocol):
 
     def read(self, key: str) -> bytes: ...
 
+    def exists(self, key: str) -> bool: ...
+
     def write(self, key: str, data: bytes) -> None: ...
 
     def remove(self, key: str) -> None: ...
@@ -81,6 +83,9 @@ class DiskStore:
             raise _missing() from exc
         except OSError as exc:
             raise _unreadable() from exc
+
+    def exists(self, key: str) -> bool:
+        return self._path(key).is_file()
 
     def write(self, key: str, data: bytes) -> None:
         path = self._path(key)
@@ -171,6 +176,20 @@ class S3Store:
             raise (_missing() if exc.code in _MISSING_OBJECT else _unreadable()) from exc
         except _TRANSPORT_ERRORS as exc:
             raise _unreadable() from exc
+
+    def exists(self, key: str) -> bool:
+        try:
+            self.client.stat_object(self.bucket, key)
+        except S3Error as exc:
+            # Without s3:ListBucket, which Corpus does not need, a missing
+            # object answers AccessDenied (Amazon S3); a wrong key or
+            # secret answers otherwise.
+            if exc.code in _MISSING_OBJECT | {"AccessDenied"}:
+                return False
+            raise _unreadable() from exc
+        except _TRANSPORT_ERRORS as exc:
+            raise _unreadable() from exc
+        return True
 
     def write(self, key: str, data: bytes) -> None:
         try:

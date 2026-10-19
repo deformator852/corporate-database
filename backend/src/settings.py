@@ -5,7 +5,7 @@ from functools import partial
 from pathlib import Path
 from urllib.parse import quote
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 
 from exceptions import AppError
 
@@ -13,6 +13,9 @@ from exceptions import AppError
 # environment variables. Either way they are read once per process start;
 # after changing .env (uv run configure), restart the backend and the worker.
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+# The names .env set (not set in the environment before): the commands that
+# start Docker Compose leave them out (switch_embedding_model.stack_env).
+FROM_ENV_FILE = frozenset(name for name in dotenv_values(ENV_FILE) if name not in os.environ)
 load_dotenv(ENV_FILE)
 
 # The Hub answers anonymous downloads with an "unauthenticated requests"

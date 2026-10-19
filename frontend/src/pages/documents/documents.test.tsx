@@ -8,7 +8,7 @@ import {FakeWebSocket} from "@/test/socket";
 
 const WRITER = ["documents.list", "documents.create", "documents.delete"];
 
-type Doc = {id: number; name: string; filename: string; status?: string; progress?: number; classification?: string; error_message?: string | null};
+type Doc = {id: number; name: string; filename: string; status?: string; progress?: number; classification?: string; error_message?: string | null; file_missing?: boolean};
 
 function documents(server: MockApi, list: Doc[]) {
     server.on("GET", "/documents", () => ({
@@ -34,6 +34,14 @@ describe("Documents page", () => {
         expect(within(failed).getByText("Failed")).toBeInTheDocument();
         expect(within(failed).getByText("The document has no text.")).toBeInTheDocument();
         expect(within(failed).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "15");
+    });
+
+    it("marks documents whose file is not in the storage", async () => {
+        renderApp("/documents", sessionUser(WRITER), (s) => documents(s, [POLICY, {id: 2, name: "Contract", filename: "contract.pdf", file_missing: true}]));
+
+        const missing = row(await screen.findByText("Contract").then((el) => el.textContent ?? ""));
+        expect(within(missing).getByText("The file is not in the storage.")).toBeInTheDocument();
+        expect(within(row("Travel policy")).queryByText("The file is not in the storage.")).not.toBeInTheDocument();
     });
 
     it("loads the list again after the live connection was down", async () => {

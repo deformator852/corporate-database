@@ -234,10 +234,9 @@ there instead, under its replication, versioning and retention rules. Corpus
 encrypts each file before it leaves the server: the storage holds only
 encrypted objects named `documents/UUID`, without document names.
 
-> [!IMPORTANT]
-> Choose before the first upload. Switching later moves no files: copy them
-> as [Moving files between the server and S3](#moving-files-between-the-server-and-s3)
-> shows.
+When you switch with documents already uploaded, the step offers to move
+their files; see
+[Moving files between the server and S3](#moving-files-between-the-server-and-s3).
 
 You need:
 
@@ -289,27 +288,35 @@ storage's reason when it refuses Corpus.
 
 ### Moving files between the server and S3
 
-The files keep their names and are encrypted already, so moving them is
-copying them. These steps use the AWS command-line tool, which works with any
-S3-compatible storage. Replace BUCKET with the bucket and HOST with the
-storage's address.
+When you change the storage at **Document storage** in `uv run configure`
+and documents exist, the step asks **Move the document files to the new
+storage?**
 
-To move the files from the server to S3:
+* **Yes.** The step stops the backend and the worker, copies every
+  document's file to the new storage, reads each copy back, saves the new
+  settings and starts Corpus again. The files are encrypted already and
+  keep their names, so nothing is decrypted on the way. The old copies stay:
+  delete them yourself once Corpus works with the new storage. If the copy
+  stops midway, nothing is saved; run the step again and it continues where
+  it stopped.
+* **No.** Only the settings change. The documents stay searchable, but the
+  **Documents** page marks them **The file is not in the storage**, and the
+  **System status** page counts them. They cannot be opened or processed
+  again until their files are in the new storage. Corpus checks every file
+  when it starts.
 
-1. Stop Corpus: `deploy/deploy.sh down`.
-2. Copy the files:
+The step moves files between the server and one S3 storage. To move them
+between two S3 storages at different addresses, copy them with the storages'
+own tools, for example the AWS command-line tool. Replace BUCKET with the
+bucket and HOST with the storage's address:
 
-   ```sh
-   files=$(docker volume inspect corpus_documents_data --format '{{.Mountpoint}}')
-   sudo -E aws s3 sync "$files" s3://BUCKET --endpoint-url https://HOST
-   ```
+```sh
+aws s3 sync s3://OLD-BUCKET/documents s3://BUCKET/documents --endpoint-url https://HOST
+```
 
-3. Choose the S3 storage with `uv run configure` as above, then run
-   `deploy/deploy.sh up`.
-
-To move them back, stop Corpus, copy them into the volume and give them to
-the Corpus user (uid 10001), then answer no at **Document storage** and run
-`deploy/deploy.sh up`:
+To copy the files back to the server by hand, stop Corpus, copy them into the
+volume and give them to the Corpus user (uid 10001), then answer no at
+**Document storage** and to the move, and run `deploy/deploy.sh up`:
 
 ```sh
 files=$(docker volume inspect corpus_documents_data --format '{{.Mountpoint}}')

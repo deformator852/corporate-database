@@ -53,6 +53,8 @@ export type DocumentListItem = {
     error_message: string | null;
     classification: DocumentClassification;
     created_at: string;
+    /** No file in the storage: it cannot be opened or processed again. */
+    file_missing?: boolean;
     converted?: boolean;
 };
 

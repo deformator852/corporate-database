@@ -2,7 +2,7 @@
 (STORAGE=s3), encrypted either way."""
 
 import pytest
-from conftest import csrf, login, process, upload
+from conftest import csrf, login, process, run, upload
 
 WRITER = ["documents.list", "documents.create", "documents.delete", "system.view"]
 TEXT = b"The travel budget per trip is 500 EUR."
@@ -181,3 +181,86 @@ def test_s3_settings_are_checked(monkeypatch):
         monkeypatch.setenv("S3_ENDPOINT", endpoint)
         with pytest.raises(AppError):
             s3_config()
+
+
+def _file_missing(client, document_id: int) -> bool:
+    items = client.get("/api/v1/documents", params={"per_page": 100}).json()["items"]
+    return next(item["file_missing"] for item in items if item["id"] == document_id)
+
+
+def test_files_move_to_another_storage_once_and_still_decrypt(client, make_user, infra):
+    from fakes import FakeMinio
+
+    from maintenance.move_files import document_keys, move
+    from services.storage import DiskStore, ObjectStorage, S3Store
+    from settings import S3Config
+
+    _, email, password = make_user(WRITER)
+    login(client, email, password)
+    upload(client, "Travel", TEXT, "travel.txt")
+    upload(client, "Leave", b"Leave requests go to HR.", "leave.txt")
+    keys = run(document_keys())  # in upload order
+    infra.files.remove(keys[1])  # gone from the old storage too
+    target = S3Store(S3Config("https://s3.acme.io", "corpus", "corpus-app", "secret"), client=FakeMinio())
+
+    moved = move(keys, DiskStore(infra.files.root), target, lambda _: None)
+
+    assert (moved.copied, moved.present, moved.missing) == (1, 0, 1)
+    assert ObjectStorage(target).get(keys[0]) == TEXT  # same key, same encryption
+    again = move(keys, DiskStore(infra.files.root), target, lambda _: None)  # resumed: nothing copied twice
+    assert (again.copied, again.present, again.missing) == (0, 1, 1)
+
+
+def test_documents_without_a_file_are_marked_when_the_backend_starts(client, make_user, infra):
+    from database import AsyncSessionLocal
+    from services.documents.file_check import mark_missing_files
+    from services.storage import file_store
+
+    _, email, password = make_user(WRITER)
+    login(client, email, password)
+    document_id = upload(client, "Travel", TEXT, "travel.txt").json()["id"]
+    process(document_id)
+
+    async def check() -> int:
+        async with AsyncSessionLocal() as session:
+            return await mark_missing_files(session, file_store())
+
+    assert run(check()) == 0 and not _file_missing(client, document_id)
+    [key] = [path.relative_to(infra.files.root).as_posix() for path in infra.files.root.rglob("*") if path.is_file()]
+    content = infra.files.get(key)
+    infra.files.remove(key)  # another storage configured, or deleted by hand
+    assert run(check()) == 1 and _file_missing(client, document_id)
+    assert client.get("/api/v1/system/status").json()["missing_files"] == 1
+    assert client.get(f"/api/v1/documents/{document_id}/file").status_code == 503
+
+    (infra.files.root / key).write_bytes(content)  # copied back
+    assert run(check()) == 0 and not _file_missing(client, document_id)
+
+
+def test_a_ready_document_whose_file_is_gone_is_kept_when_reindexed(client, make_user, infra):
+    """Re-embedding (another model) with the files in another storage: the
+    documents fail, marked, and can be retried; they are not deleted."""
+    from sqlalchemy import update
+
+    from database import AsyncSessionLocal
+    from models.document import Document, DocumentStatus
+    from services.documents.processor import drop_incomplete_document_job
+
+    _, email, password = make_user(WRITER)
+    login(client, email, password)
+    document_id = upload(client, "Travel", TEXT, "travel.txt").json()["id"]
+    process(document_id)
+
+    async def queue_again() -> None:
+        async with AsyncSessionLocal() as session:
+            await session.execute(
+                update(Document).where(Document.id == document_id).values(status=DocumentStatus.QUEUED, reindexing=True)
+            )
+            await session.commit()
+
+    run(queue_again())
+    run(drop_incomplete_document_job(document_id))  # the worker's last retry found no file
+
+    [item] = [i for i in client.get("/api/v1/documents").json()["items"] if i["id"] == document_id]
+    assert (item["status"], item["file_missing"]) == ("failed", True)
+    assert item["error_message"] == "The document file is missing."

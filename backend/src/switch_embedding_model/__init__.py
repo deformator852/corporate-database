@@ -38,20 +38,27 @@ PROD_COMPOSE = REPO_DIR / "docker-compose.prod.yml"
 _STOP_WAIT_SECONDS = 30
 
 
+def stack_env() -> dict[str, str]:
+    """This process's environment for docker compose or deploy/deploy.sh,
+    which then read .env as the file has it now. Compose prefers the
+    environment to --env-file, and this process loaded .env at start: a
+    value written since (EMBEDDING_MODEL, STORAGE) would be ignored, and one
+    removed since (S3_ENDPOINT) would still apply."""
+    from settings import FROM_ENV_FILE
+
+    left_out = FROM_ENV_FILE | set(dotenv_values(ENV_PATH))
+    return {name: value for name, value in os.environ.items() if name not in left_out}
+
+
 def compose(*args: str, capture: bool = False) -> str:
     """docker compose on the production stack, as deploy/deploy.sh runs it,
     with the values of .env as the file has them now."""
-    # Compose prefers the environment to --env-file, and this process loaded
-    # .env at start: an EMBEDDING_MODEL written since would be ignored and the
-    # containers started with the old model.
-    from_file = dotenv_values(ENV_PATH)
-    env = {name: value for name, value in os.environ.items() if name not in from_file}
     result = subprocess.run(
         ["docker", "compose", "--env-file", str(ENV_PATH), "-f", str(PROD_COMPOSE), *args],
         cwd=REPO_DIR,
         check=True,
         text=True,
-        env=env,
+        env=stack_env(),
         stdout=subprocess.PIPE if capture else None,
     )
     return result.stdout or ""

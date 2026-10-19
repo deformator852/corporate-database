@@ -110,6 +110,7 @@ def test_storage_step_keeps_files_on_disk_or_in_the_companys_s3(env, answers, mo
 
     checked: list = []
     monkeypatch.setattr(storage_step, "check_access", checked.append)
+    monkeypatch.setattr(storage_step, "offer_move", lambda *args: "not moved")  # tested below
     env.write_text("STORAGE=disk\n")
     assert storage_step.StorageStep().current() == "files on this server"
     answers.extend([True, "s3.acme.io", "https://s3.acme.io:9443", "corpus", "corpus-app", "s3cret-key", None, ""])
@@ -140,6 +141,82 @@ def test_storage_step_keeps_files_on_disk_or_in_the_companys_s3(env, answers, mo
     storage_step.StorageStep().run(_console())
     values = _values(env)
     assert values["STORAGE"] == "disk" and not [key for key in values if key.startswith("S3_")]
+
+
+def test_switching_storage_offers_to_move_the_files(env, answers, monkeypatch, client, make_user, infra):
+    from conftest import login, upload
+    from fakes import FakeMinio
+
+    import services.storage as storage
+    import setup.steps.storage as storage_step
+    import switch_embedding_model
+
+    fake = FakeMinio()
+    monkeypatch.setattr(storage, "Minio", lambda *args, **kwargs: fake)
+    monkeypatch.setattr(storage_step, "check_access", lambda config: None)
+    monkeypatch.setattr(switch_embedding_model, "production_running", lambda: False)
+    _, email, password = make_user(["documents.list", "documents.create"])
+    login(client, email, password)
+    upload(client, "Travel", b"The travel budget is 500 EUR.", "travel.txt")
+    s3_answers = [True, "https://s3.acme.io", "corpus", "corpus-app", "s3cret-key", None, ""]
+
+    # Declined: saved, the files stay on disk.
+    env.write_text("STORAGE=disk\n")
+    answers.extend([*s3_answers, False])
+    console = _console()
+    storage_step.StorageStep().run(console)
+    assert _values(env)["STORAGE"] == "s3" and fake.objects == {}
+    assert "show as having no file" in console.export_text()
+
+    # Accepted: copied before the new storage is saved.
+    env.write_text("STORAGE=disk\n")
+    answers.extend([*s3_answers, True])
+    console = _console()
+    storage_step.StorageStep().run(console)
+    assert _values(env)["STORAGE"] == "s3" and list(fake.objects) == [
+        path.relative_to(infra.files.root).as_posix() for path in infra.files.root.rglob("*") if path.is_file()
+    ]
+    assert "1 file(s) copied" in console.export_text()
+
+    # A storage that fails midway: nothing saved.
+    env.write_text("STORAGE=disk\n")
+    fake.objects.clear()
+    fake.fail_with = "AccessDenied"
+    answers.extend([*s3_answers, True])
+    console = _console()
+    storage_step.StorageStep().run(console)
+    assert _values(env)["STORAGE"] == "disk" and "Nothing changed" in console.export_text()
+
+
+def test_switching_storage_in_production_moves_the_files_in_the_backend_image(env, answers, monkeypatch):
+    import os
+
+    import setup.steps.storage as storage_step
+    import switch_embedding_model
+
+    steps: list[tuple[str, ...]] = []
+    restarted: list[bool] = []
+    monkeypatch.setattr(storage_step, "check_access", lambda config: None)
+    monkeypatch.setattr(switch_embedding_model, "production_running", lambda: True)
+    monkeypatch.setattr(switch_embedding_model, "compose", lambda *args, **kwargs: steps.append(args) or "")
+    monkeypatch.setattr(storage_step, "restart_production", lambda console: restarted.append(True))
+    # Set by the step: removed again after the test.
+    for name in ("S3_UPSTREAM", "TARGET_STORAGE", "TARGET_STORAGE_DIR", "TARGET_S3_ENDPOINT", "TARGET_S3_BUCKET",
+                 "TARGET_S3_ACCESS_KEY", "TARGET_S3_SECRET_KEY", "TARGET_S3_REGION", "TARGET_S3_CACERT",
+                 "TARGET_S3_CONNECT"):  # fmt: skip
+        monkeypatch.delenv(name, raising=False)
+    env.write_text("STORAGE=disk\n")
+    answers.extend([True, "https://s3.acme.io", "corpus", "corpus-app", "s3cret-key", None, "", True])
+
+    storage_step.StorageStep().run(_console())
+
+    assert [step[:2] for step in steps] == [("stop", "backend"), ("--profile", "s3"), ("run", "--rm")]
+    assert steps[2][-3:] == ("python", "-m", "maintenance.move_files")
+    assert "s3cret-key" not in " ".join(steps[2])  # passed through the environment
+    assert steps[2][steps[2].index("TARGET_S3_SECRET_KEY") - 1] == "-e"
+    assert os.environ["TARGET_S3_SECRET_KEY"] == "s3cret-key" and os.environ["S3_UPSTREAM"] == "s3.acme.io:443"
+    assert os.environ["TARGET_S3_CONNECT"] == "s3-tunnel:9000"
+    assert _values(env)["STORAGE"] == "s3" and restarted == [True]  # started with the new storage
 
 
 def test_storage_check_writes_reads_and_deletes_a_test_object(monkeypatch):

@@ -156,6 +156,20 @@ describe("System status", () => {
         expect(server.sent("POST", "/system/reindex")).toHaveLength(1);
     });
 
+    it("warns about documents with no file in the storage", async () => {
+        renderApp("/system", sessionUser(["system.view"]), (s) =>
+            s.on("GET", "/system/status", {
+                services: [],
+                documents: {completed: 4},
+                config: {languages: ["en"], llm_model: "m", llm_context: 1, embedding_model: "e", chunk_size: 400, chunk_overlap: 80},
+                outdated_chunks: 0,
+                outdated_index_model: null,
+                missing_files: 4,
+            }),
+        );
+        expect(await screen.findByRole("alert")).toHaveTextContent(/4 document\(s\) have no file in the document storage/);
+    });
+
     it("shows outdated documents without the button to those who may not re-chunk", async () => {
         renderApp("/system", sessionUser(["system.view"]), (s) =>
             s.on("GET", "/system/status", {

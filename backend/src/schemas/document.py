@@ -20,6 +20,8 @@ class DocumentListItemSchema(BaseModel):
     error_message: str | None
     classification: DocumentClassification
     created_at: datetime
+    # No file in the storage: it cannot be opened or processed again.
+    file_missing: bool
 
     @classmethod
     def from_document(cls, document: Document) -> Self:
