@@ -402,8 +402,8 @@ Options du thème :
 * `dark: true` ajoute la classe `.dark` et un schéma de couleurs sombre pour
   les contrôles du navigateur.
 * Un thème avec le même `id` qu'un thème du noyau (`neutral`, `ledger`,
-  `slate`, `midnight`) remplace son libellé et ses options. Votre CSS se
-  charge après celui du noyau et l'emporte.
+  `slate`, `midnight`, `vault`) remplace son libellé et ses options. Votre CSS
+  se charge après celui du noyau et l'emporte.
 * `defaultTheme` s'applique aux utilisateurs qui n'ont pas encore choisi de
   thème. Un choix enregistré dans le navigateur est conservé.
 

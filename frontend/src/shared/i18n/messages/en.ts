@@ -22,6 +22,7 @@ export const en = {
     "theme.ledger": "Ledger",
     "theme.slate": "Slate",
     "theme.midnight": "Midnight",
+    "theme.vault": "Vault",
 
     "common.tryAgain": "Try again",
     "common.cancel": "Cancel",

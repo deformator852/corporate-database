@@ -14,6 +14,7 @@ const CORE_THEMES: ThemeOption[] = [
     {id: "ledger", labelKey: "theme.ledger"},
     {id: "slate", labelKey: "theme.slate", dark: true},
     {id: "midnight", labelKey: "theme.midnight", dark: true},
+    {id: "vault", labelKey: "theme.vault", dark: true},
 ];
 
 export const THEMES = mergeByKey(

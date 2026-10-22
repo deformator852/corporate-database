@@ -399,8 +399,8 @@ Opciones del tema:
 * `dark: true` añade la clase `.dark` y un esquema de color oscuro para los
   controles del navegador.
 * Un tema con el mismo `id` que uno del núcleo (`neutral`, `ledger`, `slate`,
-  `midnight`) reemplaza su etiqueta y sus opciones. Su CSS se carga después
-  del CSS del núcleo y gana.
+  `midnight`, `vault`) reemplaza su etiqueta y sus opciones. Su CSS se carga
+  después del CSS del núcleo y gana.
 * `defaultTheme` se aplica a los usuarios que aún no han elegido tema. Una
   elección guardada en el navegador se mantiene.
 

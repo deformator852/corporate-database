@@ -361,15 +361,15 @@
   }
 
   /* Dark themes: header shares the sidebar surface; active link gets an accent edge. */
-  :is([data-theme="slate"], [data-theme="midnight"]) .app-header {
+  :is([data-theme="slate"], [data-theme="midnight"], [data-theme="vault"]) .app-header {
     background-color: color-mix(in srgb, var(--sidebar) 88%, transparent);
   }
 
-  :is([data-theme="slate"], [data-theme="midnight"]) .app-layout__nav-link {
+  :is([data-theme="slate"], [data-theme="midnight"], [data-theme="vault"]) .app-layout__nav-link {
     border-inline-start: 2px solid transparent;
   }
 
-  :is([data-theme="slate"], [data-theme="midnight"]) .app-layout__nav-link--active {
+  :is([data-theme="slate"], [data-theme="midnight"], [data-theme="vault"]) .app-layout__nav-link--active {
     border-inline-start-color: var(--primary);
   }
 }
@@ -598,4 +598,52 @@
   --warning-foreground: #3a2507;
   --info: #2c6585;
   --info-foreground: #ffffff;
+}
+
+/*
+  Vault — dark enamel-green surfaces and brass accents: the dark half of
+  Ledger, the colors of the Corpus website in dark mode. Applied with the
+  .dark class (see theme/themes.ts); :root raises specificity above .dark.
+  All text pairs are WCAG AA (4.5:1+).
+*/
+:root[data-theme="vault"] {
+  --radius: 0.375rem;
+  --background: #0f1d19;
+  --foreground: #ebe4d2;
+  --card: #142621;
+  --card-foreground: #ebe4d2;
+  --popover: #172a24;
+  --popover-foreground: #ebe4d2;
+  --primary: #d4a85e;
+  --primary-foreground: #1f1606;
+  --secondary: #1c312a;
+  --secondary-foreground: #ebe4d2;
+  --muted: #1c312a;
+  --muted-foreground: #a7b2aa;
+  --accent: #213830;
+  --accent-foreground: #f3eddf;
+  --destructive: #ef8a7a;
+  --destructive-foreground: #2a0c07;
+  --border: #243b33;
+  --input: #2e473e;
+  --ring: #d4a85e;
+  --chart-1: #d4a85e;
+  --chart-2: #6fbf9a;
+  --chart-3: #7fb3d5;
+  --chart-4: #e09a6b;
+  --chart-5: #b7c26e;
+  --sidebar: #0b1714;
+  --sidebar-foreground: #cfd6cd;
+  --sidebar-primary: #1f3a31;
+  --sidebar-primary-foreground: #e6c07c;
+  --sidebar-accent: #172a24;
+  --sidebar-accent-foreground: #f3eddf;
+  --sidebar-border: #1b2f28;
+  --sidebar-ring: #d4a85e;
+  --success: #6fcf97;
+  --success-foreground: #062012;
+  --warning: #e5b45a;
+  --warning-foreground: #2b1a03;
+  --info: #7fb3d5;
+  --info-foreground: #0a1a26;
 }

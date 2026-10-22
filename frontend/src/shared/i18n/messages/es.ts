@@ -21,6 +21,7 @@ export const es: Record<MessageKey, string> = {
     "theme.ledger": "Libro mayor",
     "theme.slate": "Pizarra",
     "theme.midnight": "Medianoche",
+    "theme.vault": "Bóveda",
     "common.tryAgain": "Reintentar",
     "common.cancel": "Cancelar",
     "common.delete": "Eliminar",
