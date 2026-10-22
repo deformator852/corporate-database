@@ -15,7 +15,7 @@ services:
       - /bin/bash
       - -c
       - |
-        : "$${DB_PASSWORD:?is empty; run uv run setup in backend/}"
+        : "$${DB_PASSWORD:?is empty; run uv run install in backend/}"
         export POSTGRES_USER="$$DB_USER"
         export POSTGRES_PASSWORD="$$DB_PASSWORD"
         export POSTGRES_DB="$$DB_NAME"
@@ -51,7 +51,7 @@ services:
       - /bin/bash
       - -c
       - |
-        : "$${QDRANT_API_KEY:?is empty; run uv run setup in backend/}"
+        : "$${QDRANT_API_KEY:?is empty; run uv run install in backend/}"
         exec env -i PATH="$$PATH" TZ=Etc/UTC RUN_MODE=production \
           QDRANT__SERVICE__API_KEY="$$QDRANT_API_KEY" ./entrypoint.sh
     volumes:
@@ -80,7 +80,7 @@ services:
       - /bin/bash
       - -c
       - |
-        : "$${RABBITMQ_PASSWORD:?is empty; run uv run setup in backend/}"
+        : "$${RABBITMQ_PASSWORD:?is empty; run uv run install in backend/}"
         export RABBITMQ_DEFAULT_USER="$$RABBITMQ_USER"
         export RABBITMQ_DEFAULT_PASS="$$RABBITMQ_PASSWORD"
         # Drop the rest of backend/.env (encryption key, other passwords);

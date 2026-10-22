@@ -13,14 +13,14 @@
 #                                           stops while it runs.
 #   deploy/deploy.sh restore BACKUP         Replace all data with a backup.
 #   deploy/deploy.sh rotate-key             Re-encrypt the data with a new key.
-#                                           First run: uv run setup key rotate
+#                                           First run: uv run configure key rotate
 #   deploy/deploy.sh down                   Stop Corpus. The data is kept.
 #   deploy/deploy.sh logs [SERVICE]         Follow the logs.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 ENV_FILE=${CORPUS_ENV_FILE:-backend/.env}
-[[ -f $ENV_FILE ]] || { echo "Missing $ENV_FILE: run 'uv run setup' in backend/ first." >&2; exit 1; }
+[[ -f $ENV_FILE ]] || { echo "Missing $ENV_FILE: run 'uv run install' in backend/ first." >&2; exit 1; }
 setting() { grep -E "^$1=" "$ENV_FILE" | tail -1 | cut -d= -f2- | sed -e 's/^["'\'']//' -e 's/["'\'']$//' || true; }
 # A tunnel runs in its own container, where localhost is the tunnel itself:
 # a service on this server is reached by an address the containers can use.
@@ -139,7 +139,7 @@ case "${1:-up}" in
   rotate-key)
     # With Vault the keys are there, not in .env; rotate_key checks them itself.
     [[ $key_store == vault ]] || grep -qE '^DATA_ENCRYPTION_KEY_PREVIOUS=.+' "$ENV_FILE" || {
-      echo "No rotation started: run 'uv run setup key rotate' in backend/ first." >&2; exit 1; }
+      echo "No rotation started: run 'uv run configure key rotate' in backend/ first." >&2; exit 1; }
     # Nothing may write with a key while the data is re-encrypted.
     compose stop backend worker
     compose up -d postgres qdrant
@@ -148,7 +148,7 @@ case "${1:-up}" in
     compose run --rm --no-deps backend python -m maintenance.rotate_key
     if [[ $key_store == vault ]]; then
       compose up -d --remove-orphans
-      echo "Data re-encrypted. Remove the old key from Vault: cd backend && uv run setup key finish"
+      echo "Data re-encrypted. Remove the old key from Vault: cd backend && uv run configure key finish"
     else
       sed -i '/^DATA_ENCRYPTION_KEY_PREVIOUS=/d' "$ENV_FILE"
       compose up -d --remove-orphans

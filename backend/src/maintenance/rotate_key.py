@@ -3,7 +3,7 @@
     deploy/deploy.sh rotate-key                                    (production)
     cd backend/src && uv run python -m maintenance.rotate_key      (development)
 
-Rotation: `uv run setup key rotate` moves the key to
+Rotation: `uv run configure key rotate` moves the key to
 DATA_ENCRYPTION_KEY_PREVIOUS and generates a new one; this command then
 re-encrypts document files (disk or S3), every encrypted column in Postgres (document
 text, chats, the error log) and chunk text (Qdrant), and records the new key's fingerprint. DATA_ENCRYPTION_KEY_PREVIOUS

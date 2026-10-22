@@ -13,7 +13,7 @@ node_modules
 # pytest --cov data
 .coverage
 
-# CA of the company's Vault, copied by uv run setup; differs per installation.
+# CA of the company's Vault, copied by uv run install; differs per installation.
 /deploy/vault/ca.pem
 # CA of the company's SSO provider, copied by uv run configure.
 /deploy/sso/ca.pem

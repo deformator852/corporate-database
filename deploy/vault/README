@@ -1,1 +1,1 @@
-# CA of Vault's TLS certificate goes here as ca.pem (uv run setup copies it).
+# CA of Vault's TLS certificate goes here as ca.pem (uv run install copies it).

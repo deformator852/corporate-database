@@ -1,6 +1,6 @@
 """Encryption at rest for document content.
 
-AES-256-GCM with DATA_ENCRYPTION_KEY (`uv run setup` generates it), from .env
+AES-256-GCM with DATA_ENCRYPTION_KEY (`uv run install` generates it), from .env
 or HashiCorp Vault (key_store.py).
 Encrypted: document files (on disk or in S3, services/storage.py), document
 text and chats in Postgres (`EncryptedText`), chunk text in the Qdrant payload. Not encrypted: document names (the

@@ -12,13 +12,13 @@ machine.
 
 ## Running the backend
 
-1. Generate `backend/.env`. The setup creates the secrets and asks where to
+1. Generate `backend/.env`. The installer creates the secrets and asks where to
    keep the encryption key and the document files, the languages, the AI
    models, the chat limits, the chunk size and single sign-on.
 
    ```sh
    cd backend
-   uv run setup
+   uv run install
    ```
 
 2. Start the services. Run this from the repository root:
@@ -97,7 +97,7 @@ Put the `min_score` it prints into the model's entry in `src/settings.py`.
 ```sh
 cd backend
 uv run configure        # languages, AI model, chat limits, chunk size, SSO, key and file storage
-uv run setup key        # fingerprint of the encryption key
+uv run configure key    # fingerprint of the encryption key
 ```
 
 To use another embedding model once documents exist:
@@ -202,7 +202,7 @@ Its data is on the `vault_data` Docker volume: a key moved there survives
 restarts, and is lost with the volume. Back up the key first:
 
 ```sh
-cd backend && uv run setup key --show
+cd backend && uv run configure key --show
 ```
 
 1. Start the development services from the repository root, Vault included:

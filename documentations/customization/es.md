@@ -341,7 +341,7 @@ nav: [{to: "/documents", labelKey: "custom.nav.files", end: true, can: "document
   `"nav.documents": "Archivos"`.
 * Los idiomas son `en`, `es` y `fr`. Una clave que falta usa `en` y, si
   tampoco existe, la propia clave.
-* La interfaz usa los idiomas elegidos en `uv run setup` o
+* La interfaz usa los idiomas elegidos en `uv run install` o
   `uv run configure` (`APP_LANGUAGE`, el predeterminado, y `APP_LANGUAGES`,
   entre los que los usuarios cambian en la cabecera, en `backend/.env`). Dé
   un valor a sus claves en cada uno de ellos.

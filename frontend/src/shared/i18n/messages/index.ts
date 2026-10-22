@@ -14,7 +14,7 @@ export type Locale = (typeof LOCALES)[number];
 export const DEFAULT_LOCALE: Locale = "en";
 
 // APP_LANGUAGE (the default) and APP_LANGUAGES (the ones users switch
-// between) from backend/.env, injected by vite.config.ts; set by `uv run setup`.
+// between) from backend/.env, injected by vite.config.ts; set by `uv run install`.
 const SYSTEM_LOCALE: Locale = isLocale(import.meta.env.APP_LANGUAGE)
     ? import.meta.env.APP_LANGUAGE
     : DEFAULT_LOCALE;

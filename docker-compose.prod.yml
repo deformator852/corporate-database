@@ -21,22 +21,22 @@ name: corpus
 x-db-env: &db-env
   DB_HOST: postgres
   DB_PORT: "5432"
-  DB_USER: ${DB_USER:?is empty; run uv run setup in backend/}
-  DB_PASSWORD: ${DB_PASSWORD:?is empty; run uv run setup in backend/}
-  DB_NAME: ${DB_NAME:?is empty; run uv run setup in backend/}
+  DB_USER: ${DB_USER:?is empty; run uv run install in backend/}
+  DB_PASSWORD: ${DB_PASSWORD:?is empty; run uv run install in backend/}
+  DB_NAME: ${DB_NAME:?is empty; run uv run install in backend/}
   QDRANT_HOST: qdrant
   QDRANT_PORT: "6333"
-  QDRANT_API_KEY: ${QDRANT_API_KEY:?is empty; run uv run setup in backend/}
+  QDRANT_API_KEY: ${QDRANT_API_KEY:?is empty; run uv run install in backend/}
   APP_LANGUAGE: ${APP_LANGUAGE:-}
   APP_LANGUAGES: ${APP_LANGUAGES:-}
-  EMBEDDING_MODEL: ${EMBEDDING_MODEL:?is empty; run uv run setup in backend/}
+  EMBEDDING_MODEL: ${EMBEDDING_MODEL:?is empty; run uv run install in backend/}
 
 x-worker-env: &worker-env
   <<: *db-env
   RABBITMQ_HOST: rabbitmq
   RABBITMQ_PORT: "5672"
-  RABBITMQ_USER: ${RABBITMQ_USER:?is empty; run uv run setup in backend/}
-  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?is empty; run uv run setup in backend/}
+  RABBITMQ_USER: ${RABBITMQ_USER:?is empty; run uv run install in backend/}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?is empty; run uv run install in backend/}
   # Document files: the documents_data volume (STORAGE=disk), or the
   # company's S3 storage through s3-tunnel (STORAGE=s3).
   STORAGE: ${STORAGE:-disk}
@@ -62,7 +62,7 @@ x-worker-env: &worker-env
   VAULT_CACERT: ${VAULT_CACERT:+/etc/corpus-vault/ca.pem}
   VAULT_CONNECT: ${VAULT_ADDR:+vault-tunnel:8200}
   LLM_HOST: http://ollama:11434
-  LLM_MODEL: ${LLM_MODEL:?is empty; run uv run setup in backend/}
+  LLM_MODEL: ${LLM_MODEL:?is empty; run uv run install in backend/}
   LLM_NUM_CTX: ${LLM_NUM_CTX:-}
   TEXT_CLEANUP: ${TEXT_CLEANUP:-}
   CHUNK_SIZE: ${CHUNK_SIZE:-}
@@ -77,7 +77,7 @@ x-app: &app
   cap_drop: [ALL]
   volumes:
     - hf_models:/models/hf
-    # CA of Vault's certificate, copied here by `uv run setup` (not a secret).
+    # CA of Vault's certificate, copied here by `uv run install` (not a secret).
     - ./deploy/vault:/etc/corpus-vault:ro
     # CA of the SSO provider's certificate, copied by `uv run configure`.
     - ./deploy/sso:/etc/corpus-sso:ro
@@ -90,9 +90,9 @@ services:
     image: postgres:17
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${DB_USER:?is empty; run uv run setup in backend/}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?is empty; run uv run setup in backend/}
-      POSTGRES_DB: ${DB_NAME:?is empty; run uv run setup in backend/}
+      POSTGRES_USER: ${DB_USER:?is empty; run uv run install in backend/}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?is empty; run uv run install in backend/}
+      POSTGRES_DB: ${DB_NAME:?is empty; run uv run install in backend/}
     # POSTGRES_PASSWORD only applies to a new volume; re-apply it on every
     # start (local socket, trusted) so a password rotated in .env works.
     entrypoint:
@@ -118,7 +118,7 @@ services:
     image: qdrant/qdrant:v1.19.1
     restart: unless-stopped
     environment:
-      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:?is empty; run uv run setup in backend/}
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:?is empty; run uv run install in backend/}
       QDRANT__TELEMETRY_DISABLED: "true"
     volumes:
       - qdrant_data:/qdrant/storage
@@ -134,8 +134,8 @@ services:
     restart: unless-stopped
     hostname: rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?is empty; run uv run setup in backend/}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?is empty; run uv run setup in backend/}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?is empty; run uv run install in backend/}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?is empty; run uv run install in backend/}
     # The default user is only created on a new volume; re-apply the password
     # on every start so a password rotated in .env works.
     entrypoint:
@@ -202,7 +202,7 @@ services:
     <<: *app
     environment:
       <<: *worker-env
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?is empty; run uv run setup in backend/}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?is empty; run uv run install in backend/}
       CHAT_RETENTION_DAYS: ${CHAT_RETENTION_DAYS:-}
       ERROR_LOG_RETENTION_DAYS: ${ERROR_LOG_RETENTION_DAYS:-}
       OIDC_ISSUER: ${OIDC_ISSUER:-}
@@ -305,7 +305,7 @@ services:
     profiles: [setup]
     # The only container with internet access: no secrets, no internal network.
     environment:
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:?is empty; run uv run setup in backend/}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:?is empty; run uv run install in backend/}
       HF_HUB_OFFLINE: "0"
       TRANSFORMERS_OFFLINE: "0"
     command: ["python", "-m", "maintenance.download_models"]
@@ -316,7 +316,7 @@ services:
     restart: "no"
     profiles: [setup]
     environment:
-      LLM_MODEL: ${LLM_MODEL:?is empty; run uv run setup in backend/}
+      LLM_MODEL: ${LLM_MODEL:?is empty; run uv run install in backend/}
     entrypoint:
       - /bin/sh
       - -c

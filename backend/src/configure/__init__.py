@@ -1,3 +1,5 @@
+import sys
+
 from setup.app import run
 from setup.steps.chat import ChatStep
 from setup.steps.chunking import ChunkingStep
@@ -10,6 +12,11 @@ from setup.steps.storage import StorageStep
 
 def main() -> None:
     try:
+        if sys.argv[1:2] == ["key"]:
+            from setup.key import main as key_main
+
+            key_main(sys.argv[2:])
+            return
         run(
             [LanguageStep(), LlmStep(), ChatStep(), ChunkingStep(), SsoStep(), KeyStoreStep(), StorageStep()],
             "Configure complete.",

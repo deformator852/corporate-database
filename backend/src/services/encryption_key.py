@@ -59,6 +59,6 @@ async def verify_encryption_key(session: AsyncSession) -> None:
         "misconfigured",
         f"DATA_ENCRYPTION_KEY (fingerprint {current}) is not the key the stored "
         f"data is encrypted with (fingerprint {stored}). Restore the key from "
-        "your backup; `uv run setup key` shows the fingerprint of a key.",
+        "your backup; `uv run configure key` shows the fingerprint of a key.",
         status_code=500,
     )

@@ -67,7 +67,7 @@ def _keys_to_move() -> str:
         raise AppError("conflict", f"A key rotation is in progress ({PREVIOUS} is set); finish it first.", 409)
     key = keys.get(KEY, "")
     if not key:
-        raise AppError("misconfigured", f"{KEY} is not set; run uv run setup.", 500)
+        raise AppError("misconfigured", f"{KEY} is not set; run uv run install.", 500)
     return key
 
 

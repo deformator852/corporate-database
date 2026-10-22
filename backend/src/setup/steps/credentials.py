@@ -10,7 +10,7 @@ _SECRETS = {
     "RABBITMQ_PASSWORD": 16,
     "QDRANT_API_KEY": 32,
     # Encrypts files, document text and chats at rest. Never replaced here:
-    # a new key would make stored data unreadable (`uv run setup key rotate`).
+    # a new key would make stored data unreadable (`uv run configure key rotate`).
     "DATA_ENCRYPTION_KEY": 32,
 }
 # Names are only filled when empty: renaming breaks existing data.

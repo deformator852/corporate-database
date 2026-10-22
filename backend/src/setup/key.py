@@ -1,9 +1,9 @@
 """DATA_ENCRYPTION_KEY: backup and rotation, from .env or HashiCorp Vault.
 
-uv run setup key           fingerprint of the key
-uv run setup key --show    the key itself, to copy it to a safe place
-uv run setup key rotate    start a rotation (see maintenance/rotate_key.py)
-uv run setup key finish    drop the old key once the data is re-encrypted
+uv run configure key           fingerprint of the key
+uv run configure key --show    the key itself, to copy it to a safe place
+uv run configure key rotate    start a rotation (see maintenance/rotate_key.py)
+uv run configure key finish    drop the old key once the data is re-encrypted
 """
 
 import sys
@@ -85,7 +85,7 @@ def confirm_backup(console: Console, key: str) -> None:
         )
     )
     if not sys.stdin.isatty():
-        console.print("[yellow]Not a terminal: back the key up now with `uv run setup key --show`.[/]")
+        console.print("[yellow]Not a terminal: back the key up now with `uv run configure key --show`.[/]")
         return
     while Prompt.ask('Type "saved" once the key is stored', console=console) != "saved":
         pass
@@ -94,7 +94,7 @@ def confirm_backup(console: Console, key: str) -> None:
 def _current(keys: dict[str, str]) -> str:
     key = keys.get(KEY, "")
     if len(key) < MIN_KEY_LENGTH:
-        raise SystemExit(f"{KEY} is not set in {where()}; run uv run setup.")
+        raise SystemExit(f"{KEY} is not set in {where()}; run uv run install.")
     return key
 
 
@@ -122,7 +122,7 @@ def _rotate(console: Console) -> None:
     write_keys(console, {PREVIOUS: key, KEY: replacement})
     console.print(f"Old key kept as {PREVIOUS} ({key_fingerprint(key)}).")
     confirm_backup(console, replacement)
-    finish = "uv run setup key finish" if in_vault() else f"remove {PREVIOUS} from .env"
+    finish = "uv run configure key finish" if in_vault() else f"remove {PREVIOUS} from .env"
     console.print(
         Panel(
             "Re-encrypt the stored data with the new key:\n"

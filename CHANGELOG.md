@@ -15,7 +15,7 @@ The first release.
 * Security: encryption at rest with the company's key (in `backend/.env` or
   HashiCorp Vault), key rotation, role-based permissions, audit log, single
   sign-on (OpenID Connect).
-* Operations: guided `setup` and `configure`, one production script
+* Operations: guided `install` and `configure`, one production script
   (`deploy/deploy.sh`), encrypted backups, document files on the server or in
   the company's S3 storage, moved between them by `configure`, embedding
   model switch and index rebuild from the **System status** page.

@@ -40,7 +40,7 @@ unless you keep them in the company's S3 storage.
 
    ```sh
    git clone REPOSITORY-URL corpus && cd corpus
-   cd backend && uv run setup && cd ..
+   cd backend && uv run install && cd ..
    ```
 
    Replace REPOSITORY-URL with the address of the Corpus repository.
@@ -145,7 +145,7 @@ no longer sign in, and their documents and history stay.
   server, separately from backups of the data. To keep the key off the server's
   disk, keep it in HashiCorp Vault. See
   [Keeping the key in HashiCorp Vault](#keeping-the-key-in-hashicorp-vault).
-* `cd backend && uv run setup key` prints the key's fingerprint. Add `--show`
+* `cd backend && uv run configure key` prints the key's fingerprint. Add `--show`
   to print the key itself.
 * Corpus remembers the fingerprint of the key that encrypted the data and does
   not start with another key. See [Troubleshooting](#troubleshooting).
@@ -618,7 +618,7 @@ Rotate the key when it may have leaked, or when your policy requires it.
    of the new one.
 
    ```sh
-   cd backend && uv run setup key rotate && cd ..
+   cd backend && uv run configure key rotate && cd ..
    ```
 
 2. Re-encrypt the data. The command stops Corpus, re-encrypts every file,
@@ -633,7 +633,7 @@ Rotate the key when it may have leaked, or when your policy requires it.
    a Vault token that may write the secret:
 
    ```sh
-   cd backend && uv run setup key finish && cd ..
+   cd backend && uv run configure key finish && cd ..
    ```
 
 If `rotate-key` stops halfway, fix the cause and run it again. It continues
@@ -705,7 +705,7 @@ not start; `deploy/deploy.sh logs backend` shows why.
 
 1. Check that `backend/.env` holds the key the backup was made with. Compare
    the fingerprint in the backup's `manifest` file with the output of
-   `cd backend && uv run setup key`.
+   `cd backend && uv run configure key`.
 
 2. Run the restore and type `restore` when asked. Corpus checks every part of
    the backup before it deletes anything.
@@ -733,7 +733,7 @@ can.
 **Corpus does not start, and the log says "is not the key the stored data is
 encrypted with".** `backend/.env` holds a different `DATA_ENCRYPTION_KEY` than
 the one that encrypted the data. Restore the original key from your copy. The
-log names both fingerprints; `cd backend && uv run setup key` shows the
+log names both fingerprints; `cd backend && uv run configure key` shows the
 fingerprint of the key in `.env`.
 
 **A component is not running.** Open the **System status** page, then read the

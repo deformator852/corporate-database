@@ -98,7 +98,7 @@ def check_jwt_secret() -> None:
     """Refuses to start with a missing or short JWT_SECRET_KEY: anyone who
     guesses it can sign session tokens for any user."""
     if len(config.JWT_SECRET_KEY or "") < MIN_JWT_SECRET_LENGTH:
-        raise RuntimeError(f"JWT_SECRET_KEY must be at least {MIN_JWT_SECRET_LENGTH} characters; run uv run setup.")
+        raise RuntimeError(f"JWT_SECRET_KEY must be at least {MIN_JWT_SECRET_LENGTH} characters; run uv run install.")
 
 
 def signed_in_at(payload: TokenPayload) -> int:

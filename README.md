@@ -18,7 +18,7 @@ cloud storage.
 * **Ready for audits.** Every sign-in, change and document read, including
   the documents the assistant read to answer a question, goes to an audit
   log.
-* **Set up from the command line.** A guided `setup` command asks a few
+* **Set up from the command line.** A guided `install` command asks a few
   questions, generates every secret and picks the models. Day-to-day changes
   go through `configure`, and production runs with one script.
 
@@ -114,7 +114,7 @@ language, or let each user pick theirs in the header.
 * **One server, one script.** Corpus runs as a Docker Compose stack on a
   single Linux server. `deploy/deploy.sh` builds, starts, updates, backs up
   and restores it. No Kubernetes and no DevOps team.
-* **A guided setup instead of manual configuration.** `uv run setup` asks
+* **A guided setup instead of manual configuration.** `uv run install` asks
   for the language, the AI model and the chat limits, shows how much memory
   each choice needs, and generates every password and key.
 * **Modest hardware.** An 8B model runs on a server with 16 GB of RAM and no
@@ -254,7 +254,7 @@ the AI models.
 
    ```sh
    git clone REPOSITORY-URL corpus && cd corpus
-   cd backend && uv run setup && cd ..
+   cd backend && uv run install && cd ..
    ```
 
 2. Store the encryption key the setup shows in a safe place outside the
@@ -299,7 +299,7 @@ Node.js 22.
 
    ```sh
    cd backend
-   uv run setup
+   uv run install
    ```
 
 2. Start Postgres, Qdrant, RabbitMQ, Ollama and a test Vault, from the
@@ -356,10 +356,10 @@ folder on the server.
 
 | Command | What it does |
 |---|---|
-| `uv run setup` | Guided first setup: secrets, encryption key storage, document storage, languages, AI model, chat limits, embedding model, chunk size, single sign-on. Steps already done show their value and ask before changing it. |
+| `uv run install` | Guided first installation: secrets, encryption key storage, document storage, languages, AI model, chat limits, embedding model, chunk size, single sign-on. Runs once: when it finishes it sets `INSTALLED=true` in `backend/.env` and from then on sends you to `configure`. Stopped halfway, it runs again and shows the steps already done. |
 | `uv run configure` | Changes the settings after installation: languages, AI model, chat limits, chunk size, single sign-on, key storage, document storage. |
-| `uv run setup key` | Prints the encryption key's fingerprint. `--show` prints the key itself. |
-| `uv run setup key rotate` | Starts a key rotation. `setup key finish` removes the old key from Vault afterwards. |
+| `uv run configure key` | Prints the encryption key's fingerprint. `--show` prints the key itself. |
+| `uv run configure key rotate` | Starts a key rotation. `configure key finish` removes the old key from Vault afterwards. |
 | `uv run switch-embedding-model MODEL` | Switches the search model and rebuilds the index. Without MODEL it lists the models. |
 | `deploy/deploy.sh build` | Builds the images. |
 | `deploy/deploy.sh up` | Starts Corpus or applies an update, after downloading missing models. |

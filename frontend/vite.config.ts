@@ -12,7 +12,7 @@ function backendEnv(mode: string) {
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss()],
   define: {
-    // Default and enabled languages chosen by `uv run setup`; backend/.env is
+    // Default and enabled languages chosen by `uv run install`; backend/.env is
     // the single source.
     "import.meta.env.APP_LANGUAGE": JSON.stringify(backendEnv(mode).APP_LANGUAGE ?? ""),
     "import.meta.env.APP_LANGUAGES": JSON.stringify(backendEnv(mode).APP_LANGUAGES ?? ""),

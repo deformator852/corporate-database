@@ -1,11 +1,10 @@
-import sys
 from collections.abc import Sequence
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm
 
-from .env import ensure_env
+from .env import ENV_PATH, ensure_env, env_value, upsert_env
 from .step import Step
 from .steps import SETUP_STEPS
 
@@ -37,13 +36,16 @@ def run(steps: Sequence[Step], done: str, *, footer: str | None = None) -> None:
 
 
 def main() -> None:
+    """`uv run install`: the first installation, once. Later changes go
+    through `uv run configure`."""
+    console = Console()
+    if env_value(ENV_PATH, "INSTALLED") == "true":
+        console.print(f"Corpus is already installed ({ENV_PATH}). Change its settings with [bold]uv run configure[/].")
+        raise SystemExit(1)
     try:
-        if sys.argv[1:2] == ["key"]:
-            from .key import main as key_main
-
-            key_main(sys.argv[2:])
-            return
-        run(SETUP_STEPS, "Setup complete.")
+        run(SETUP_STEPS, "Installation complete. Change the settings later with uv run configure.")
+        # Only once every step is done: stopped halfway, install runs again.
+        upsert_env(ENV_PATH, "INSTALLED", "true")
     except KeyboardInterrupt:
         print()  # end the line ^C left open
         raise SystemExit(130) from None

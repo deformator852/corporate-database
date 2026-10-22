@@ -1,5 +1,5 @@
 """Where DATA_ENCRYPTION_KEY (and, mid-rotation, DATA_ENCRYPTION_KEY_PREVIOUS)
-comes from, chosen by KEY_STORE in `uv run setup` / `uv run configure`.
+comes from, chosen by KEY_STORE in `uv run install` / `uv run configure`.
 
 KEY_STORE=env (default): the environment, that is backend/.env.
 

@@ -1,4 +1,4 @@
-"""`uv run setup` / `configure`: every step against a temporary .env, with
+"""`uv run install` / `configure`: every step against a temporary .env, with
 scripted answers to the terminal prompts."""
 
 import sys
@@ -15,6 +15,7 @@ import switch_embedding_model
 
 MODULES = (
     "setup.env",
+    "setup.app",
     "setup.key",
     "setup.steps.credentials",
     "setup.steps.storage",
@@ -83,6 +84,32 @@ def test_env_file_helpers(env, monkeypatch):
 def test_a_missing_env_file_is_created_from_the_example(env):
     env_module.ensure_env(_console())
     assert _values(env)["APP_LANGUAGE"] == "en"
+
+
+# install runs once
+
+
+def test_install_runs_once_and_then_sends_to_configure(env, monkeypatch, capsys):
+    import setup.app as app
+
+    class Interrupted:
+        title = "Stopped"
+
+        def run(self, console):
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(app, "SETUP_STEPS", [Interrupted()])
+    with pytest.raises(SystemExit) as stopped:
+        app.main()
+    assert stopped.value.code == 130 and "INSTALLED" not in _values(env)  # stopped halfway: runs again
+
+    monkeypatch.setattr(app, "SETUP_STEPS", [])
+    app.main()
+    assert _values(env)["INSTALLED"] == "true"
+
+    with pytest.raises(SystemExit) as refused:
+        app.main()
+    assert refused.value.code == 1 and "uv run configure" in capsys.readouterr().out
 
 
 # Secrets and the encryption key
@@ -534,7 +561,7 @@ def test_embedding_model_is_locked_while_documents_are_indexed(env, answers, mon
     assert changed is not locked and bool(downloaded) is not locked
 
 
-def test_setup_and_configure_run_their_steps(env, answers, monkeypatch, capsys):
+def test_install_and_configure_run_their_steps(env, answers, monkeypatch, capsys):
     import configure
     import setup.app as app
 
@@ -554,8 +581,8 @@ def test_setup_and_configure_run_their_steps(env, answers, monkeypatch, capsys):
     ]
 
     env.write_text("DATA_ENCRYPTION_KEY=" + "k" * 40 + "\n")
-    monkeypatch.setattr(sys, "argv", ["setup", "key"])
-    app.main()
+    monkeypatch.setattr(sys, "argv", ["configure", "key"])
+    configure.main()
     assert "Fingerprint:" in capsys.readouterr().out
 
     step = SimpleNamespace(title="Only", run=lambda console: console.print("step ran"))
