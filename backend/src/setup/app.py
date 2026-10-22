@@ -43,10 +43,7 @@ def main() -> None:
 
             key_main(sys.argv[2:])
             return
-        run(
-            SETUP_STEPS,
-            "Setup complete.",
-            footer="Running already? Restart the backend and the worker (production: deploy/deploy.sh up).",
-        )
+        run(SETUP_STEPS, "Setup complete.")
     except KeyboardInterrupt:
+        print()  # end the line ^C left open
         raise SystemExit(130) from None

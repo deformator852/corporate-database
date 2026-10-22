@@ -11,6 +11,7 @@ from key_store import KEY, PREVIOUS, STORES, VaultClient, VaultConfig, key_store
 
 from ..env import ENV_PATH, env_value, remove_env, upsert_env
 from ..key import admin_token, read_keys, where
+from ..prompts import ask_hidden
 
 # Copied here so the production containers can mount it (docker-compose.prod.yml).
 CA_COPY = ENV_PATH.parents[1] / "deploy" / "vault" / "ca.pem"
@@ -27,6 +28,10 @@ def _setting(name: str) -> str | None:
 
 class KeyStoreStep:
     title = "Encryption key storage"
+
+    def __init__(self, *, installing: bool = False) -> None:
+        # Run by setup: Corpus is not running yet, so there is nothing to restart.
+        self.installing = installing
 
     def current(self) -> str | None:
         if _setting("KEY_STORE") is None:
@@ -47,9 +52,9 @@ class KeyStoreStep:
         target = STORES[choice - 1]
         try:
             if target == "vault":
-                _to_vault(console)
+                _to_vault(console, self.installing)
             elif current == "vault":
-                _to_env(console)
+                _to_env(console, self.installing)
             else:
                 console.print("Keeping the key in .env.")
         except AppError as exc:
@@ -72,7 +77,7 @@ def _ask_vault(console: Console) -> VaultConfig:
         if password:
             # Never shown, not even as the default: Enter keeps the current one.
             label += " (hidden while you type or paste" + ("; Enter keeps the current one)" if current else ")")
-            return Prompt.ask(label, default=current, password=True, show_default=False, console=console) or ""
+            return ask_hidden(console, label, current)
         return Prompt.ask(label, default=current or None, console=console) or ""
 
     ca = ask("VAULT_CACERT", "CA file of Vault's certificate (empty: system CAs)").strip()
@@ -89,7 +94,11 @@ def _ask_vault(console: Console) -> VaultConfig:
     )
 
 
-def _to_vault(console: Console) -> None:
+def _restart_note(installing: bool) -> str:
+    return "" if installing else "\nRestart the backend and the worker (production: deploy/deploy.sh up)."
+
+
+def _to_vault(console: Console, installing: bool) -> None:
     """Puts the key into Vault (or keeps it there under new settings) and
     removes it from .env once the AppRole has read it back."""
     key = _keys_to_move()
@@ -123,15 +132,14 @@ def _to_vault(console: Console) -> None:
             f"The key ({key_fingerprint(key)}) is read from Vault {config.addr}, "
             f"{config.mount}/{config.path}, and is no longer in {ENV_PATH}.\n\n"
             "In Vault, give the AppRole a read-only policy on this path, and bind "
-            "its secret_id to this server's address (secret_id_bound_cidrs).\n"
-            "Restart the backend and the worker (production: deploy/deploy.sh up).",
+            "its secret_id to this server's address (secret_id_bound_cidrs)." + _restart_note(installing),
             title="Key in Vault",
             style="green",
         )
     )
 
 
-def _to_env(console: Console) -> None:
+def _to_env(console: Console, installing: bool) -> None:
     key = _keys_to_move()
     config = VaultConfig.from_values(_setting)
     upsert_env(ENV_PATH, KEY, key)
@@ -141,8 +149,8 @@ def _to_env(console: Console) -> None:
     console.print(
         Panel(
             f"The key ({key_fingerprint(key)}) is now read from {ENV_PATH}. It is still in "
-            f"Vault at {config.mount}/{config.path}: delete it there once it is no longer needed.\n"
-            "Restart the backend and the worker (production: deploy/deploy.sh up).",
+            f"Vault at {config.mount}/{config.path}: delete it there once it is no longer needed."
+            + _restart_note(installing),
             title="Key in .env",
             style="yellow",
         )

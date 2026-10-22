@@ -18,6 +18,7 @@ export const fr: Record<MessageKey, string> = {
     "theme.label": "Thème",
     "language.label": "Langue",
     "theme.neutral": "Neutre",
+    "theme.ledger": "Grand livre",
     "theme.slate": "Ardoise",
     "theme.midnight": "Minuit",
     "common.tryAgain": "Réessayer",

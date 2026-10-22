@@ -38,11 +38,14 @@ def env(tmp_path, monkeypatch):
 
 @pytest.fixture
 def answers(monkeypatch):
-    """Answers for rich prompts in order; None takes the default."""
+    """Answers for rich prompts in order; None takes the default, an
+    exception (KeyboardInterrupt: Ctrl+C) is raised."""
     queue: list = []
 
     def ask(cls, prompt="", *, default=..., **kwargs):
         value = queue.pop(0)
+        if isinstance(value, BaseException):
+            raise value
         return default if value is None else value
 
     monkeypatch.setattr(PromptBase, "ask", classmethod(ask))
@@ -107,23 +110,50 @@ def test_secrets_are_generated_and_the_key_backup_is_confirmed(env, answers):
     assert _values(env) == values and "already set" in console.export_text()
 
 
+def test_a_key_whose_backup_was_not_confirmed_is_not_kept(env, answers):
+    from setup.steps.credentials import SecretsStep
+
+    answers.extend([KeyboardInterrupt(), "saved"])  # Ctrl+C at the prompt, then a second run
+    with pytest.raises(KeyboardInterrupt):
+        SecretsStep().run(_console())
+    assert "DATA_ENCRYPTION_KEY" not in _values(env)
+
+    console = _console()
+    SecretsStep().run(console)  # asks again, with a new key
+    key = _values(env)["DATA_ENCRYPTION_KEY"]
+    assert len(key) >= 32 and key in console.export_text()
+    assert answers == []
+
+
+def test_a_pasted_secret_arrives_without_the_terminals_paste_markers(answers):
+    from setup.prompts import ask_hidden
+
+    # A terminal with bracketed paste wraps the pasted key; a hidden prompt keeps the markers.
+    answers.append("\x1b[200~corpus-local-secret-key-0123456789\x1b[201~")
+    assert ask_hidden(_console(), "Secret key") == "corpus-local-secret-key-0123456789"
+
+
 def test_storage_step_keeps_files_on_disk_or_in_the_companys_s3(env, answers, monkeypatch):
     import setup.steps.storage as storage_step
     from exceptions import AppError
 
     checked: list = []
     monkeypatch.setattr(storage_step, "check_access", checked.append)
-    monkeypatch.setattr(storage_step, "offer_move", lambda *args: "not moved")  # tested below
+    monkeypatch.setattr(storage_step, "offer_move", lambda *args, **kwargs: "not moved")  # tested below
     env.write_text("STORAGE=disk\n")
     assert storage_step.StorageStep().current() == "files on this server"
-    answers.extend([True, "s3.acme.io", "https://s3.acme.io:9443", "corpus", "corpus-app", "s3cret-key", None, ""])
+    # The region has no default: asked again until one is entered.
+    answers.extend(
+        [True, "s3.acme.io", "https://s3.acme.io:9443", "corpus", "corpus-app", "s3cret-key", None, "eu-central-1", ""]
+    )
     console = _console()
     storage_step.StorageStep().run(console)
 
     values = _values(env)
     assert values["STORAGE"] == "s3" and values["S3_ENDPOINT"] == "https://s3.acme.io:9443"  # asked again
     assert values["S3_SECRET_KEY"] == "s3cret-key" and "s3cret-key" not in console.export_text(clear=False)
-    assert values["S3_REGION"] == "us-east-1" and "S3_CACERT" not in values
+    assert values["S3_REGION"] == "eu-central-1" and "S3_CACERT" not in values
+    assert "Enter the region of the storage." in console.export_text(clear=False)
     assert [config.bucket for config in checked] == ["corpus"]  # checked before it was saved
     assert storage_step.StorageStep().current() == (
         "the company's S3 storage: bucket corpus at https://s3.acme.io:9443"
@@ -149,6 +179,27 @@ def test_storage_step_keeps_files_on_disk_or_in_the_companys_s3(env, answers, mo
     assert values["STORAGE"] == "disk" and not [key for key in values if key.startswith("S3_")]
 
 
+def test_setup_neither_asks_for_a_restart_nor_warns_about_the_missing_database(env, answers, monkeypatch):
+    import maintenance.move_files as move_files
+    import setup.steps.storage as storage_step
+
+    async def no_database():
+        raise OSError("Connect call failed")
+
+    monkeypatch.setattr(storage_step, "check_access", lambda config: None)
+    monkeypatch.setattr(switch_embedding_model, "production_running", lambda: False)
+    monkeypatch.setattr(move_files, "document_keys", no_database)
+    # setup installs: nothing runs yet; configure changes a running Corpus.
+    for installing, shown in ((True, False), (False, True)):
+        env.write_text("STORAGE=disk\n")
+        answers.extend([True, "https://s3.acme.io", "corpus", "corpus-app", "s3cret-key", "eu-central-1", ""])
+        console = _console()
+        storage_step.StorageStep(installing=installing).run(console)
+        output = console.export_text()
+        assert _values(env)["STORAGE"] == "s3"
+        assert ("Restart Corpus" in output) is shown and ("Could not list the documents" in output) is shown
+
+
 def test_switching_storage_offers_to_move_the_files(env, answers, monkeypatch, client, make_user, infra):
     from conftest import login, upload
     from fakes import FakeMinio
@@ -163,7 +214,7 @@ def test_switching_storage_offers_to_move_the_files(env, answers, monkeypatch, c
     _, email, password = make_user(["documents.list", "documents.create"])
     login(client, email, password)
     upload(client, "Travel", b"The travel budget is 500 EUR.", "travel.txt")
-    s3_answers = [True, "https://s3.acme.io", "corpus", "corpus-app", "s3cret-key", None, ""]
+    s3_answers = [True, "https://s3.acme.io", "corpus", "corpus-app", "s3cret-key", "eu-central-1", ""]
 
     # Declined: saved, the files stay on disk.
     env.write_text("STORAGE=disk\n")
@@ -210,7 +261,7 @@ def test_switching_storage_in_production_moves_the_files_in_the_backend_image(en
                  "TARGET_S3_CONNECT"):  # fmt: skip
         monkeypatch.delenv(name, raising=False)
     env.write_text("STORAGE=disk\n")
-    answers.extend([True, "https://s3.acme.io", "corpus", "corpus-app", "s3cret-key", None, "", True])
+    answers.extend([True, "https://s3.acme.io", "corpus", "corpus-app", "s3cret-key", "eu-central-1", "", True])
 
     console = _console()
     storage_step.StorageStep().run(console)

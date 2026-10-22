@@ -6,6 +6,7 @@ from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 
 from ..env import ENV_PATH, env_value, remove_env, upsert_env
+from ..prompts import ask_hidden
 
 CA_COPY = ENV_PATH.parents[1] / "deploy" / "sso" / "ca.pem"
 _KEYS = (
@@ -70,14 +71,11 @@ class SsoStep:
         upsert_env(ENV_PATH, "OIDC_CLIENT_ID", ask("OIDC_CLIENT_ID", "Client ID"))
         # Hidden, and never shown as the default: it is a password.
         has_secret = bool(env_value(ENV_PATH, "OIDC_CLIENT_SECRET"))
-        secret = Prompt.ask(
+        secret = ask_hidden(
+            console,
             # Hidden like a password: say so, or typing looks broken.
             "Client secret (hidden while you type or paste" + ("; Enter keeps the current one)" if has_secret else ")"),
-            password=True,
-            default="",
-            show_default=False,
-            console=console,
-        ).strip()
+        )
         if secret:
             upsert_env(ENV_PATH, "OIDC_CLIENT_SECRET", secret)
         site = env_value(ENV_PATH, "SITE_ADDRESS") or "corpus.example.com"

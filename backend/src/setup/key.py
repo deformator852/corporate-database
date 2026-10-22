@@ -17,6 +17,7 @@ from exceptions import AppError
 from key_store import KEY, PREVIOUS, VaultClient, VaultConfig, key_store
 
 from .env import ENV_PATH, env_value, random_secret, remove_env, upsert_env
+from .prompts import ask_hidden
 
 
 def new_key() -> str:
@@ -47,7 +48,7 @@ def admin_token(console: Console) -> str:
     """A Vault token that may write the secret; used once, never saved.
     The app's AppRole only needs to read it."""
     console.print("A Vault token that may write the secret is needed once; it is not saved.")
-    return Prompt.ask("Vault token (hidden while you type or paste; not saved)", password=True, console=console).strip()
+    return ask_hidden(console, "Vault token (hidden while you type or paste; not saved)")
 
 
 def write_keys(console: Console, keys: dict[str, str]) -> None:

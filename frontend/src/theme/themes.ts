@@ -11,6 +11,7 @@ export type ThemeOption = {
 
 const CORE_THEMES: ThemeOption[] = [
     {id: "neutral", labelKey: "theme.neutral"},
+    {id: "ledger", labelKey: "theme.ledger"},
     {id: "slate", labelKey: "theme.slate", dark: true},
     {id: "midnight", labelKey: "theme.midnight", dark: true},
 ];

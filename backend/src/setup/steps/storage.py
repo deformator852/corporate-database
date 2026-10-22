@@ -17,6 +17,7 @@ from exceptions import AppError
 from settings import S3Config
 
 from ..env import ENV_PATH, env_value, remove_env, upsert_env
+from ..prompts import ask_hidden
 
 CA_COPY = ENV_PATH.parents[1] / "deploy" / "s3" / "ca.pem"
 _S3_SETTINGS = ("S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY", "S3_SECRET_KEY", "S3_REGION", "S3_CACERT")
@@ -41,14 +42,14 @@ def _ask_s3(console: Console) -> S3Config:
     access_key = ask("S3_ACCESS_KEY", "Access key")
     current = _setting("S3_SECRET_KEY")
     # Hidden, and never shown as the default: it is a password.
-    secret_key = Prompt.ask(
+    secret_key = ask_hidden(
+        console,
         "Secret key (hidden while you type or paste" + ("; Enter keeps the current one)" if current else ")"),
-        password=True,
-        default=current or "",
-        show_default=False,
-        console=console,
-    ).strip()
-    region = ask("S3_REGION", "Region", "us-east-1")
+        current or "",
+    )
+    # No default: the storage's own region, as its administrator gives it.
+    while not (region := ask("S3_REGION", "Region (as the storage expects it, for example eu-central-1)")):
+        console.print("Enter the region of the storage.")
     ca = ask("S3_CACERT", "CA file of the storage's certificate (empty: public CAs)")
     if ca and Path(ca).resolve() != CA_COPY.resolve():
         CA_COPY.parent.mkdir(parents=True, exist_ok=True)
@@ -95,7 +96,7 @@ def _upstream(endpoint: str) -> str:
 Move = Literal["moved", "moved in production", "not moved", "failed"]
 
 
-def offer_move(console: Console, source: S3Config | None, target: S3Config | None) -> Move:
+def offer_move(console: Console, source: S3Config | None, target: S3Config | None, *, installing: bool = False) -> Move:
     """Offers to copy the document files from the current storage to the
     new one (None: this server), before the new one is saved."""
     if _same(source, target):
@@ -104,7 +105,7 @@ def offer_move(console: Console, source: S3Config | None, target: S3Config | Non
 
     if production_running():
         return _move_in_production(console, source, target)
-    return _move_here(console, source, target)
+    return _move_here(console, source, target, installing)
 
 
 def _same(source: S3Config | None, target: S3Config | None) -> bool:
@@ -121,14 +122,15 @@ def _ask_to_move(console: Console, what: str) -> bool:
     return False
 
 
-def _move_here(console: Console, source: S3Config | None, target: S3Config | None) -> Move:
+def _move_here(console: Console, source: S3Config | None, target: S3Config | None, installing: bool) -> Move:
     """Development: the backend's folder or S3 storage, from this process."""
     from maintenance.move_files import document_keys, move, summary
 
     try:
         keys = asyncio.run(document_keys())
     except Exception as exc:  # noqa: BLE001 - no database yet means nothing to move
-        console.print(f"[yellow]Could not list the documents ({type(exc).__name__}); no files were moved.[/]")
+        if not installing:  # a new installation has no database yet: nothing to say
+            console.print(f"[yellow]Could not list the documents ({type(exc).__name__}); no files were moved.[/]")
         return "not moved"
     if not keys or not _ask_to_move(console, f"the files of {len(keys)} document(s)"):
         return "not moved"
@@ -217,6 +219,11 @@ def check_access(config: S3Config) -> None:
 class StorageStep:
     title = "Document storage"
 
+    def __init__(self, *, installing: bool = False) -> None:
+        # Run by setup: Corpus is not running yet, so there is nothing to
+        # restart, and no database yet means no files to move.
+        self.installing = installing
+
     def current(self) -> str | None:
         kind = _setting("STORAGE")
         if kind is None:
@@ -235,14 +242,14 @@ class StorageStep:
         source = _current_s3()
         use_s3 = Confirm.ask("Keep the files in the company's S3 storage?", default=source is not None, console=console)
         if not use_s3:
-            moved = _move(console, source, None)
+            moved = _move(console, source, None, self.installing)
             if moved == "failed":
                 return
             upsert_env(ENV_PATH, "STORAGE", "disk")
             for name in _S3_SETTINGS:
                 remove_env(ENV_PATH, name)
             console.print("Document files are kept on this server.")
-            _restart(console, moved, changed=not _same(source, None))
+            _restart(console, moved, changed=not _same(source, None) and not self.installing)
             return
         config = _ask_s3(console)
         console.print("Checking that Corpus can write, read and delete in the bucket…")
@@ -255,7 +262,7 @@ class StorageStep:
                 return
         else:
             console.print("[green]The storage works.[/]")
-        moved = _move(console, source, config)
+        moved = _move(console, source, config, self.installing)
         if moved == "failed":
             return
         upsert_env(ENV_PATH, "STORAGE", "s3")
@@ -277,11 +284,11 @@ class StorageStep:
                 style="green",
             )
         )
-        _restart(console, moved, changed=not _same(source, config))
+        _restart(console, moved, changed=not _same(source, config) and not self.installing)
 
 
-def _move(console: Console, source: S3Config | None, target: S3Config | None) -> Move:
-    moved = offer_move(console, source, target)
+def _move(console: Console, source: S3Config | None, target: S3Config | None, installing: bool) -> Move:
+    moved = offer_move(console, source, target, installing=installing)
     if moved == "failed":
         console.print("Nothing changed: run this step again to continue where the move stopped.")
     return moved

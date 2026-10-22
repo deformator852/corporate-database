@@ -24,4 +24,5 @@ def main() -> None:
             ),
         )
     except KeyboardInterrupt:
+        print()  # end the line ^C left open
         raise SystemExit(130) from None

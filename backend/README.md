@@ -178,7 +178,7 @@ else.
    | Bucket | `corpus-documents` |
    | Access key | `corpus-local-access-key` |
    | Secret key | `corpus-local-secret-key-0123456789` (hidden while you type) |
-   | Region | Enter (`us-east-1`) |
+   | Region | `us-east-1` |
    | CA file | Enter (none: the test storage uses plain HTTP) |
 
    The step writes, reads back and deletes a test object before it saves the

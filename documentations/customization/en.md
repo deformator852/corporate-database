@@ -393,8 +393,9 @@ Theme options:
   you do not set keep the core values.
 * `dark: true` adds the `.dark` class and a dark color scheme for browser
   controls.
-* A theme with the same `id` as a core theme (`neutral`, `slate`, `midnight`)
-  replaces its label and options. Your CSS loads after the core CSS and wins.
+* A theme with the same `id` as a core theme (`neutral`, `ledger`, `slate`,
+  `midnight`) replaces its label and options. Your CSS loads after the core
+  CSS and wins.
 * `defaultTheme` applies to users who have not picked a theme yet. A choice
   saved in the browser is kept.
 

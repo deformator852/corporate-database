@@ -19,6 +19,7 @@ export const en = {
     "theme.label": "Theme",
     "language.label": "Language",
     "theme.neutral": "Neutral",
+    "theme.ledger": "Ledger",
     "theme.slate": "Slate",
     "theme.midnight": "Midnight",
 

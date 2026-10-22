@@ -109,6 +109,11 @@ describe("App shell", () => {
         expect(document.documentElement.dataset.theme).toBe("midnight");
         expect(document.documentElement).toHaveClass("dark");
         expect(localStorage.getItem("ui-theme")).toBe("midnight");
+
+        await user.click(screen.getByRole("button", {name: /^Theme:/}));
+        await user.click(within(await screen.findByRole("radiogroup", {name: "Theme"})).getByRole("radio", {name: "Ledger"}));
+        expect(document.documentElement.dataset.theme).toBe("ledger");
+        expect(document.documentElement).not.toHaveClass("dark");
     });
 
     it("shows a not-found page for unknown addresses", async () => {

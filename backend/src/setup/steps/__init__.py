@@ -12,8 +12,8 @@ from .storage import StorageStep
 
 SETUP_STEPS = [
     SecretsStep(),
-    KeyStoreStep(),
-    StorageStep(),
+    KeyStoreStep(installing=True),
+    StorageStep(installing=True),
     LanguageStep(),
     LlmStep(),
     ChatStep(),

@@ -1,5 +1,4 @@
 from rich.console import Console
-from rich.panel import Panel
 
 from ..env import ENV_PATH, env_value, random_secret, upsert_env
 from ..key import confirm_backup, in_vault
@@ -27,6 +26,7 @@ class SecretsStep:
 
     def run(self, console: Console) -> None:
         written: list[str] = []
+        new_key: str | None = None
         for key, default in _NAMES.items():
             if not env_value(ENV_PATH, key):
                 upsert_env(ENV_PATH, key, default)
@@ -35,21 +35,18 @@ class SecretsStep:
             if key == "DATA_ENCRYPTION_KEY" and in_vault():
                 continue  # kept in Vault: a key here would be a second, wrong one
             if len(env_value(ENV_PATH, key) or "") < min_length:
-                upsert_env(ENV_PATH, key, random_secret())
+                if key == "DATA_ENCRYPTION_KEY":
+                    # Written only once its backup is confirmed: setup stopped
+                    # at the prompt makes a new key and asks again next time.
+                    new_key = random_secret()
+                else:
+                    upsert_env(ENV_PATH, key, random_secret())
                 written.append(key)
 
         if not written:
             console.print("Secrets are already set.")
             return
         console.print(f"Generated {', '.join(written)} in {ENV_PATH}")
-        notes = [
-            "Apply them before starting the backend:",
-            "docker compose --env-file backend/.env -f docker-compose.local.yml up -d",
-            "",
-            "Postgres and RabbitMQ pick up a new password on restart; data is kept.",
-        ]
-        if "JWT_SECRET_KEY" in written:
-            notes.append("A new JWT secret signs everyone out.")
-        console.print(Panel("\n".join(notes), title="Restart services", style="yellow"))
-        if "DATA_ENCRYPTION_KEY" in written:
-            confirm_backup(console, env_value(ENV_PATH, "DATA_ENCRYPTION_KEY") or "")
+        if new_key:
+            confirm_backup(console, new_key)
+            upsert_env(ENV_PATH, "DATA_ENCRYPTION_KEY", new_key)
