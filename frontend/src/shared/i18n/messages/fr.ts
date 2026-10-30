@@ -207,6 +207,7 @@ export const fr: Record<MessageKey, string> = {
     "documents.upload.filesSelected": "{{count}} fichiers sélectionnés",
     "documents.upload.namesFromFiles": "Chaque document prend le nom de son fichier.",
     "documents.upload.remove": "Retirer {{name}}",
+    "documents.upload.accessFor": "Accès de {{name}}",
     "documents.upload.progress": "Téléversement {{done}} sur {{total}}…",
     "documents.upload.successMany": "{{count}} documents téléversés.",
     "documents.upload.someFailed": "{{failed}} fichiers sur {{total}} n’ont pas été téléversés. Ils restent dans la liste avec la raison.",

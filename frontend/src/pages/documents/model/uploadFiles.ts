@@ -7,7 +7,8 @@ type UploadBatch = {
     files: File[];
     /** The typed name, used when there is one file; several are named after themselves. */
     name: string;
-    classification: DocumentClassification;
+    /** Each file's access level: several files may each have their own. */
+    classificationOf: (file: File) => DocumentClassification;
     errorFallback: string;
     onProgress: (sent: number) => void;
     onUploaded?: (document: DocumentListItem) => void;
@@ -19,7 +20,7 @@ type UploadBatch = {
 export async function uploadFiles({
     files,
     name,
-    classification,
+    classificationOf,
     errorFallback,
     onProgress,
     onUploaded,
@@ -29,7 +30,7 @@ export async function uploadFiles({
     for (const [index, file] of files.entries()) {
         onProgress(index);
         try {
-            const accepted = await uploadDocument(files.length === 1 ? name : fileStem(file.name), file, classification);
+            const accepted = await uploadDocument(files.length === 1 ? name : fileStem(file.name), file, classificationOf(file));
             converted ||= accepted.converted === true;
             onUploaded?.(accepted);
         } catch (error) {

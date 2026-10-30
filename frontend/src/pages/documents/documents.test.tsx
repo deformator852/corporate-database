@@ -263,6 +263,27 @@ describe("Uploading several files", () => {
         expect(await screen.findAllByText("Queued")).toHaveLength(2);
     });
 
+    it("gives each file its own access level, and Access sets them all", async () => {
+        let id = 10;
+        const {user, server} = renderApp("/documents", sessionUser([...WRITER, "documents.confidential"]), (s) => {
+            documents(s, []);
+            s.on("POST", "/documents", (req) => accept(id++, req.body as FormData));
+        });
+        await user.upload(await screen.findByLabelText("File"), [
+            new File(["a"], "Contract.docx"),
+            new File(["b"], "Policy.txt"),
+        ]);
+        await user.selectOptions(screen.getByLabelText("Access"), "restricted");
+        expect(screen.getByLabelText("Access for Policy.txt")).toHaveValue("restricted");
+        await user.selectOptions(screen.getByLabelText("Access for Contract.docx"), "confidential");
+
+        await user.click(screen.getByRole("button", {name: "Upload"}));
+
+        expect(await screen.findByText("2 documents uploaded.")).toBeInTheDocument();
+        const levels = server.sent("POST", "/documents").map((r) => (r.body as FormData).get("classification"));
+        expect(levels).toEqual(["confidential", "restricted"]);
+    });
+
     it("checks every file before sending any and lets one be removed", async () => {
         const {server} = renderApp("/documents", sessionUser(WRITER), (s) => {
             documents(s, []);

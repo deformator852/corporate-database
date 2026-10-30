@@ -224,6 +224,7 @@ export const en = {
     "documents.upload.filesSelected": "{{count}} files selected",
     "documents.upload.namesFromFiles": "Each document is named after its file.",
     "documents.upload.remove": "Remove {{name}}",
+    "documents.upload.accessFor": "Access for {{name}}",
     "documents.upload.progress": "Uploading {{done}} of {{total}}…",
     "documents.upload.successMany": "{{count}} documents uploaded.",
     "documents.upload.someFailed": "{{failed}} of {{total}} files were not uploaded. They stay in the list with the reason.",

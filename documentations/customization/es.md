@@ -401,8 +401,8 @@ Opciones del tema:
 * Un tema con el mismo `id` que uno del núcleo (`neutral`, `ledger`, `slate`,
   `midnight`, `vault`) reemplaza su etiqueta y sus opciones. Su CSS se carga
   después del CSS del núcleo y gana.
-* `defaultTheme` se aplica a los usuarios que aún no han elegido tema. Una
-  elección guardada en el navegador se mantiene.
+* `defaultTheme` se aplica a los usuarios que aún no han elegido tema (sin
+  él, tienen `ledger`). Una elección guardada en el navegador se mantiene.
 
 ## Obtener actualizaciones
 

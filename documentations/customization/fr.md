@@ -405,7 +405,7 @@ Options du thème :
   `slate`, `midnight`, `vault`) remplace son libellé et ses options. Votre CSS
   se charge après celui du noyau et l'emporte.
 * `defaultTheme` s'applique aux utilisateurs qui n'ont pas encore choisi de
-  thème. Un choix enregistré dans le navigateur est conservé.
+  thème (sans lui, ils ont `ledger`). Un choix enregistré dans le navigateur est conservé.
 
 ## Obtenir les mises à jour
 

@@ -396,8 +396,8 @@ Theme options:
 * A theme with the same `id` as a core theme (`neutral`, `ledger`, `slate`,
   `midnight`, `vault`) replaces its label and options. Your CSS loads after
   the core CSS and wins.
-* `defaultTheme` applies to users who have not picked a theme yet. A choice
-  saved in the browser is kept.
+* `defaultTheme` applies to users who have not picked a theme yet (without
+  it, they get `ledger`). A choice saved in the browser is kept.
 
 ## Getting updates
 

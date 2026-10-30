@@ -8,7 +8,7 @@ import {NativeSelect} from "@/components/ui/native-select";
 import {Field, FieldError, FieldGroup, FieldLabel} from "@/components/ui/field";
 import {Input} from "@/components/ui/input";
 import {useI18n, type TranslateFn} from "@/shared/i18n/I18nProvider";
-import {documentClassificationKey} from "@/entities/document/model";
+import {documentClassificationKey, type DocumentClassification} from "@/entities/document/model";
 import {can} from "@/shared/lib/api/me";
 import {uploadFiles} from "@pages/documents/model/uploadFiles";
 import {SelectedFiles} from "@pages/documents/ui/SelectedFiles";
@@ -35,6 +35,8 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
     const [sent, setSent] = useState(0);
     // Server reasons for files that were not uploaded; they stay selected.
     const [failures, setFailures] = useState(new Map<File, string>());
+    // Levels chosen for single files of a batch; the others take the Access field's.
+    const [levels, setLevels] = useState(new Map<File, DocumentClassification>());
     const schema = useMemo(() => createDocumentUploadSchema(t), [t]);
     const {
         register,
@@ -55,11 +57,15 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
     });
 
     const files = useWatch({control, name: "files"});
+    const classification = useWatch({control, name: "classification"});
     const several = files.length > 1;
     // Files left after a batch upload keep their list and reasons.
     const listed = several || failures.size > 0;
     const nameRegister = register("name");
-    const classificationRegister = register("classification");
+    // The Access field sets the level of every chosen file.
+    const classificationRegister = register("classification", {
+        onChange: () => setLevels(new Map()),
+    });
     const classifications = allowedUploadClassifications(
         can("documents.restricted"),
         can("documents.confidential"),
@@ -72,6 +78,7 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
         }
         setSuccess(null);
         setFailures(new Map());
+        setLevels(new Map());
         // A single file fills the name unless the user typed one: an empty
         // name, or the one filled in from the previous file (e.g. after a
         // failed upload).
@@ -99,7 +106,7 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
         const {failed, converted} = await uploadFiles({
             files: data.files,
             name: data.name,
-            classification: data.classification,
+            classificationOf: (file) => levels.get(file) ?? data.classification,
             errorFallback: t("documents.upload.error"),
             onProgress: setSent,
             onUploaded,
@@ -111,6 +118,7 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
         setFailures(data.files.length > 1 ? failed : new Map());
         if (failed.size === 0) {
             reset({name: "", classification: data.classification, files: []});
+            setLevels(new Map());
             setSuccess(successMessage(t, data.files.length, converted));
             return;
         }
@@ -225,6 +233,11 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
                             <SelectedFiles
                                 files={files}
                                 problemOf={(file, index) => failures.get(file) ?? errors.files?.[index]?.message}
+                                classifications={classifications}
+                                classificationOf={(file) => levels.get(file) ?? classification}
+                                onClassificationChange={(file, level) =>
+                                    setLevels((current) => new Map(current).set(file, level))
+                                }
                                 disabled={isSubmitting}
                                 onRemove={removeFile}
                             />

@@ -207,6 +207,7 @@ export const es: Record<MessageKey, string> = {
     "documents.upload.filesSelected": "{{count}} archivos seleccionados",
     "documents.upload.namesFromFiles": "Cada documento recibe el nombre de su archivo.",
     "documents.upload.remove": "Quitar {{name}}",
+    "documents.upload.accessFor": "Acceso de {{name}}",
     "documents.upload.progress": "Subiendo {{done}} de {{total}}…",
     "documents.upload.successMany": "{{count}} documentos subidos.",
     "documents.upload.someFailed": "{{failed}} de {{total}} archivos no se subieron. Siguen en la lista con el motivo.",
