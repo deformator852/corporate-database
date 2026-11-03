@@ -427,6 +427,7 @@ export const fr: Record<MessageKey, string> = {
     "chat.copied": "Copié",
     "chat.copyError": "Impossible de copier",
     "chat.regenerate": "Régénérer la réponse",
+    "chat.aiGenerated": "Généré par IA. Peut contenir des erreurs.",
     "chat.documents.all": "Tous les documents",
     "chat.documents.chosen": "Documents : {{count}}",
     "chat.documents.title": "Répondre à partir de ces documents",

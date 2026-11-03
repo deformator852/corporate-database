@@ -82,6 +82,8 @@ class ChatAnswerSchema(BaseModel):
     # The saved answer, to rate it.
     message_id: int
     sources: list[ChatSourceSchema] = Field(default_factory=list)
+    # Machine-readable mark of AI output (EU AI Act, Article 50(2)).
+    ai_generated: Literal[True] = True
 
 
 class ChatDeltaSchema(BaseModel):
@@ -144,6 +146,8 @@ class ChatHistoryMessageSchema(BaseModel):
     sources: list[ChatSourceSchema]
     created_at: datetime
     rating: Rating | None = None
+    # Machine-readable mark of AI output (EU AI Act, Article 50(2)).
+    ai_generated: bool
 
 
 class ChatConversationItemSchema(BaseModel):
@@ -187,6 +191,7 @@ class ChatConversationSchema(BaseModel):
                     sources=[ChatSourceSchema(**source) for source in m.sources],
                     created_at=m.created_at,
                     rating=rating_name(m.rating),
+                    ai_generated=m.role == "assistant",
                 )
                 for m in conversation.messages
             ],
@@ -280,6 +285,8 @@ class ChatFeedbackItemSchema(BaseModel):
     rated_at: datetime
     # None once the user is deleted.
     user: ChatUserSchema | None
+    # Machine-readable mark of the answer as AI output (EU AI Act, Article 50(2)).
+    ai_generated: Literal[True] = True
 
 
 class ChatFeedbackListSchema(PageSchema):

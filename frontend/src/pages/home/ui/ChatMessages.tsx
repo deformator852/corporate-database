@@ -84,6 +84,7 @@ export function ChatMessages({
             {messages.map((message, index) => (
                 <div key={message.id} className="space-y-1.5">
                     <p
+                        data-ai-generated={message.role === "assistant" ? "true" : undefined}
                         className={`rounded-2xl px-3.5 py-2.5 text-sm break-words whitespace-pre-wrap ${bubbleClass(message.role)}`}
                     >
                         {/* For screen readers; not part of a selection or a copy. */}
@@ -121,6 +122,7 @@ export function ChatMessages({
                                     onRate={(rating) => onRate(message, rating)}
                                 />
                             ) : null}
+                            <span className="ml-1 text-xs text-muted-foreground">{t("chat.aiGenerated")}</span>
                         </div>
                     ) : null}
                 </div>

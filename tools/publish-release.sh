@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Publishes one tagged version of Corpus to the customers' repository
-# (github.com/corpuskb/corpus): the files of that tag as one commit, without
+# (github.com/corpuskb/Corpus): the files of that tag as one commit, without
 # this repository's history. Customers update with `git pull`.
 #
 #   tools/publish-release.sh v1.0.0
@@ -10,7 +10,7 @@
 set -euo pipefail
 
 tag=${1:?usage: tools/publish-release.sh vX.Y.Z}
-remote=${CORPUS_RELEASE_REMOTE:-https://github.com/corpuskb/corpus.git}
+remote=${CORPUS_RELEASE_REMOTE:-https://github.com/corpuskb/Corpus.git}
 root=$(git rev-parse --show-toplevel)
 version=${tag#v}
 
