@@ -436,11 +436,10 @@ Options du thème :
 
 ## Obtenir les mises à jour
 
-1. Ajoutez une fois le dépôt principal. Remplacez UPSTREAM-URL par son
-   adresse.
+1. Ajoutez une fois le dépôt principal :
 
    ```sh
-   git remote add upstream UPSTREAM-URL
+   git remote add upstream https://github.com/deformator852/archfold.git
    ```
 
 2. Récupérez la mise à jour, appliquez les migrations du noyau et de vos

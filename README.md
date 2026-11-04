@@ -255,7 +255,7 @@ the AI models.
    for the languages, the AI models and the chat limits.
 
    ```sh
-   git clone REPOSITORY-URL archfold && cd archfold
+   git clone https://github.com/deformator852/archfold.git archfold && cd archfold
    cd backend && uv run install && cd ..
    ```
 

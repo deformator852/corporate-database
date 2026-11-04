@@ -39,11 +39,9 @@ unless you keep them in the company's S3 storage.
    [Keeping document files in S3 storage](#keeping-document-files-in-s3-storage).
 
    ```sh
-   git clone REPOSITORY-URL archfold && cd archfold
+   git clone https://github.com/deformator852/archfold.git archfold && cd archfold
    cd backend && uv run install && cd ..
    ```
-
-   Replace REPOSITORY-URL with the address of the Archfold repository.
 
 2. When the setup shows `DATA_ENCRYPTION_KEY`, store a copy outside the
    server, then type `saved`. See

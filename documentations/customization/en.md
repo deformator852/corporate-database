@@ -429,10 +429,10 @@ Theme options:
 
 ## Getting updates
 
-1. Add the main repository once. Replace UPSTREAM-URL with its address.
+1. Add the main repository once:
 
    ```sh
-   git remote add upstream UPSTREAM-URL
+   git remote add upstream https://github.com/deformator852/archfold.git
    ```
 
 2. Pull the update, apply the migrations of core and of your extensions, and

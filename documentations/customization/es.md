@@ -434,11 +434,10 @@ Opciones del tema:
 
 ## Obtener actualizaciones
 
-1. Añada el repositorio principal una vez. Sustituya UPSTREAM-URL por su
-   dirección.
+1. Añada el repositorio principal una vez:
 
    ```sh
-   git remote add upstream UPSTREAM-URL
+   git remote add upstream https://github.com/deformator852/archfold.git
    ```
 
 2. Descargue la actualización, aplique las migraciones del núcleo y de sus
