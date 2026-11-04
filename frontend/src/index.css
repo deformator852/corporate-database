@@ -304,3 +304,16 @@
   --radius-xl: calc(var(--radius-box) * 1.4);
   --radius-2xl: calc(var(--radius-box) * 1.8);
 }
+
+
+/* The home page fills the space next to the sidebar. */
+.app-layout__main:has(> .app-layout__content--pane) {
+  --section-gap: 0px;
+}
+
+.app-layout__content--pane {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+  padding-inline: 0;
+}

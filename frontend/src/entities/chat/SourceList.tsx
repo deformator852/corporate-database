@@ -56,12 +56,12 @@ export function SourceList({sources, answer = ""}: {sources: ChatSource[]; answe
                     <Button
                         key={source.id}
                         type="button"
-                        variant="outline"
+                        variant="secondary"
                         size="xs"
                         title={source.filename}
                         aria-label={t("chat.openSource", {name: source.name})}
                         onClick={() => open(source)}
-                        className="max-w-64 rounded-full font-medium"
+                        className="max-w-64 font-medium"
                     >
                         <FileText className="size-3.5 shrink-0 text-base-content/70" aria-hidden />
                         <span className="truncate">{source.name}</span>

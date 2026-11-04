@@ -1,11 +1,13 @@
 import {Check, Copy, RefreshCw, ThumbsDown, ThumbsUp} from "lucide-react";
-import {useEffect, useRef, useState} from "react";
+import {useEffect, useRef, useState, type ReactNode} from "react";
 
 import {SourceList} from "@/entities/chat/SourceList";
 import type {ChatMessage, ChatStatus} from "@pages/home/model/chat";
 import type {AnswerRating} from "@/entities/chat/model";
 import {cn} from "cn";
+import {useSessionStore} from "@/shared/auth/session-store";
 import {useI18n} from "@/shared/i18n/I18nProvider";
+import {LogoMark} from "@/shared/ui/Logo";
 
 type ChatMessagesProps = {
     messages: ChatMessage[];
@@ -23,14 +25,6 @@ type ChatMessagesProps = {
 const FOLLOW_MARGIN_PX = 40;
 
 const ICON_BUTTON = "d-btn d-btn-ghost d-btn-square d-btn-xs text-base-content/70";
-
-function bubbleClass(role: ChatMessage["role"]) {
-    if (role === "user") {
-        // Selected text inverts the bubble's own colors, or it would not show.
-        return "d-chat-bubble d-chat-bubble-primary max-w-[min(100%,36rem)] selection:bg-primary-content selection:text-primary";
-    }
-    return "d-chat-bubble w-full max-w-[min(100%,48rem)] bg-base-200";
-}
 
 export function ChatMessages({
     messages,
@@ -61,13 +55,34 @@ export function ChatMessages({
         }
     };
 
+    const actions = (message: ChatMessage, index: number) => (
+        <div className="flex flex-wrap items-center gap-0.5">
+            <CopyAnswer text={message.content} />
+            {/* Saved answers only: the server replaces it by id. */}
+            {index === messages.length - 1 && message.messageId != null && status !== "pending" && onRegenerate ? (
+                <button
+                    type="button"
+                    className={ICON_BUTTON}
+                    aria-label={t("chat.regenerate")}
+                    title={t("chat.regenerate")}
+                    onClick={onRegenerate}
+                >
+                    <RefreshCw className="size-3.5" aria-hidden />
+                </button>
+            ) : null}
+            {message.messageId != null && onRate ? (
+                <RateAnswer rating={message.rating ?? null} onRate={(rating) => onRate(message, rating)} />
+            ) : null}
+            <span className="ml-1 text-xs text-base-content/70">{t("chat.aiGenerated")}</span>
+        </div>
+    );
+
     if (messages.length === 0 && status === "idle") {
         return (
-            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-6 py-10 text-center">
-                <p className="text-lg font-semibold">{t("chat.emptyTitle")}</p>
-                <p className="max-w-sm text-sm text-base-content/70">
-                    {t("chat.emptyDescription")}
-                </p>
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 py-10 text-center">
+                <LogoMark className="size-12" />
+                <p className="text-xl font-semibold tracking-tight">{t("chat.emptyTitle")}</p>
+                <p className="max-w-md text-sm text-base-content/70">{t("chat.emptyDescription")}</p>
             </div>
         );
     }
@@ -79,97 +94,84 @@ export function ChatMessages({
             aria-live="polite"
             aria-relevant="additions"
             aria-label={t("chat.conversation")}
-            className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4"
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
             onScroll={onScroll}
         >
-            {messages.map((message, index) => (
-                <div key={message.id} className="space-y-1.5">
-                    <div className={message.role === "user" ? "d-chat d-chat-end" : "d-chat d-chat-start"}>
+            <div className="flex flex-col py-2">
+                {messages.map((message, index) => (
+                    <Row key={message.id} role={message.role}>
                         <p
                             data-ai-generated={message.role === "assistant" ? "true" : undefined}
-                            className={`text-sm break-words whitespace-pre-wrap ${bubbleClass(message.role)}`}
+                            className="text-sm leading-6 break-words whitespace-pre-wrap"
                         >
-                            {/* For screen readers; not part of a selection or a copy. */}
-                            <span className="sr-only select-none">
-                                {message.role === "user" ? t("chat.you") : t("chat.assistant")}
-                            </span>
                             {message.content}
                         </p>
+                        {message.role === "assistant" && message.sources?.length ? (
+                            <SourceList sources={message.sources} answer={message.content} />
+                        ) : null}
+                        {message.role === "assistant" ? actions(message, index) : null}
+                    </Row>
+                ))}
+
+                {status === "pending" && streaming ? (
+                    // Hidden from the live region: screen readers get the finished answer once.
+                    <div aria-hidden>
+                        <Row role="assistant">
+                            <p className="text-sm leading-6 break-words whitespace-pre-wrap">
+                                {streaming}
+                                <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse rounded-sm bg-base-content/70 align-middle" />
+                            </p>
+                        </Row>
                     </div>
-                    {message.role === "assistant" && message.sources?.length ? (
-                        <SourceList sources={message.sources} answer={message.content} />
-                    ) : null}
-                    {message.role === "assistant" ? (
-                        <div className="flex items-center gap-0.5">
-                            <CopyAnswer text={message.content} />
-                            {/* Saved answers only: the server replaces it by id. */}
-                            {index === messages.length - 1 &&
-                            message.messageId != null &&
-                            status !== "pending" &&
-                            onRegenerate ? (
-                                <button
-                                    type="button"
-                                    className={ICON_BUTTON}
-                                    aria-label={t("chat.regenerate")}
-                                    title={t("chat.regenerate")}
-                                    onClick={onRegenerate}
-                                >
-                                    <RefreshCw className="size-3.5" aria-hidden />
-                                </button>
-                            ) : null}
-                            {message.messageId != null && onRate ? (
-                                <RateAnswer
-                                    rating={message.rating ?? null}
-                                    onRate={(rating) => onRate(message, rating)}
-                                />
-                            ) : null}
-                            <span className="ml-1 text-xs text-base-content/70">{t("chat.aiGenerated")}</span>
+                ) : null}
+                {status === "pending" && streaming ? <span className="sr-only">{t("chat.writing")}</span> : null}
+                {status === "pending" && !streaming ? (
+                    <Row role="assistant">
+                        <p className="flex h-6 items-center" aria-label={t("chat.writing")}>
+                            <span className="d-loading d-loading-dots d-loading-sm" />
+                        </p>
+                    </Row>
+                ) : null}
+                {status === "refused" && error ? (
+                    <Row role="assistant">
+                        <p role="status" className="text-sm leading-6">
+                            {error}
+                        </p>
+                    </Row>
+                ) : null}
+                {status === "error" && error ? (
+                    <div className="px-4 py-3 md:px-6">
+                        <div className="d-alert d-alert-error max-w-3xl text-sm">
+                            <p>{error}</p>
+                            <button type="button" className="d-btn d-btn-sm" onClick={onRetry}>
+                                {t("chat.retry")}
+                            </button>
                         </div>
-                    ) : null}
-                </div>
-            ))}
+                    </div>
+                ) : null}
+            </div>
+        </div>
+    );
+}
 
-            {status === "pending" && streaming ? (
-                // Hidden from the live region: screen readers get the finished
-                // answer once, not every piece.
-                <div className="d-chat d-chat-start">
-                    <p
-                        aria-hidden
-                        className={`text-sm break-words whitespace-pre-wrap ${bubbleClass("assistant")}`}
-                    >
-                        {streaming}
-                        <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse rounded-sm bg-base-content/70 align-middle" />
-                    </p>
+/** One message of the log: who wrote it, then what they wrote. */
+function Row({role, children}: {role: ChatMessage["role"]; children: ReactNode}) {
+    const {t} = useI18n();
+    const user = useSessionStore((state) => state.user);
+    const initials = `${user?.first_name.charAt(0) ?? ""}${user?.last_name.charAt(0) ?? ""}`.toUpperCase();
+    return (
+        <div className="flex gap-3 px-4 py-3 hover:bg-base-200/40 md:px-6">
+            {role === "user" ? (
+                <div className="d-avatar d-avatar-placeholder shrink-0 self-start" aria-hidden>
+                    <div className="size-8 rounded-full bg-base-200 text-xs font-medium">{initials}</div>
                 </div>
-            ) : null}
-            {status === "pending" && streaming ? (
-                <span className="sr-only">{t("chat.writing")}</span>
-            ) : null}
-
-            {status === "pending" && !streaming ? (
-                <div className="d-chat d-chat-start">
-                    <p className="d-chat-bubble bg-base-200" aria-label={t("chat.writing")}>
-                        <span className="d-loading d-loading-dots d-loading-sm" />
-                    </p>
-                </div>
-            ) : null}
-
-            {status === "refused" && error ? (
-                <div className="d-chat d-chat-start">
-                    <p role="status" className="d-chat-bubble max-w-[min(100%,36rem)] bg-base-200 text-sm">
-                        {error}
-                    </p>
-                </div>
-            ) : null}
-
-            {status === "error" && error ? (
-                <div className="d-alert d-alert-error mr-auto max-w-[min(100%,36rem)] text-sm">
-                    <p>{error}</p>
-                    <button type="button" className="d-btn d-btn-sm" onClick={onRetry}>
-                        {t("chat.retry")}
-                    </button>
-                </div>
-            ) : null}
+            ) : (
+                <LogoMark className="size-8" />
+            )}
+            <div className="flex max-w-3xl min-w-0 flex-1 flex-col gap-1.5">
+                <div className="text-sm font-semibold select-none">{t(role === "user" ? "chat.you" : "chat.assistant")}</div>
+                {children}
+            </div>
         </div>
     );
 }

@@ -246,6 +246,30 @@ describe("Assistant chat", () => {
         expect(within(history).queryByRole("button", {name: /Delete/})).not.toBeInTheDocument();
     });
 
+    it("shows the open chat's title and who wrote each message", async () => {
+        const {user} = await openChat((s) => {
+            s.on("GET", "/chat/conversations", {items: [SAVED], total: 1});
+            s.on("GET", "/chat/conversations/:id", {
+                ...SAVED,
+                messages: [
+                    {id: 1, role: "user", content: "How much per trip?", sources: [], created_at: SAVED.created_at},
+                    {id: 2, role: "assistant", content: "500 EUR per trip.", sources: [], created_at: SAVED.created_at},
+                ],
+            });
+        });
+        const panel = screen.getByRole("region", {name: "Assistant chat"});
+        expect(within(panel).getByText("Assistant")).toBeInTheDocument();
+
+        const history = screen.getByRole("complementary", {name: "History"});
+        await user.click(await within(history).findByRole("button", {name: "Travel budget?"}));
+
+        const log = await screen.findByRole("log", {name: "Conversation"});
+        expect(await within(log).findByText("How much per trip?")).toBeInTheDocument();
+        expect(within(panel).getByText("Travel budget?")).toBeInTheDocument();
+        expect(within(log).getByText("You")).toBeInTheDocument();
+        expect(within(log).getByText("Assistant")).toBeInTheDocument();
+    });
+
     it("searches the saved chats", async () => {
         const {user, server} = await openChat((s) =>
             s.on("GET", "/chat/conversations", (request: ApiRequest) =>

@@ -1,4 +1,4 @@
-import {Files, X} from "lucide-react";
+import {ChevronDown, Files, X} from "lucide-react";
 import {useRef, useState} from "react";
 
 import {
@@ -47,12 +47,13 @@ export function ChatDocumentPicker({value, onChange, disabled}: ChatDocumentPick
         <div className="flex flex-wrap items-center gap-1.5">
             <button
                 type="button"
-                className="d-btn d-btn-ghost d-btn-sm text-base-content/70"
+                className="d-btn d-btn-sm text-sm font-normal"
                 disabled={disabled}
                 onClick={() => setOpen(true)}
             >
                 <Files className="size-4" aria-hidden />
                 {value.length ? t("chat.documents.chosen", {count: value.length}) : t("chat.documents.all")}
+                <ChevronDown className="size-3.5 opacity-70" aria-hidden />
             </button>
             {value.map((document) => (
                 <span

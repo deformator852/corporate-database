@@ -54,11 +54,22 @@ export function ChatHistory({
     const [search, setSearch] = useDebouncedSearch(query, onSearch);
     return (
         <div className="flex h-full min-h-0 flex-col">
-            <div className="flex shrink-0 flex-col gap-1.5 p-2">
-                <button type="button" className="d-btn d-btn-ghost d-btn-sm w-full justify-start" disabled={disabled} onClick={onNew}>
-                    <SquarePen className="size-4" aria-hidden />
-                    {t("chat.newChat")}
-                </button>
+            <div className="flex shrink-0 flex-col gap-2 px-3 pt-2.5 pb-2">
+                <div className="flex items-center gap-2">
+                    {/* Phones: the panel around this list has the title. */}
+                    <p className="hidden text-sm font-semibold md:block">{t("chat.history")}</p>
+                    {/* An icon next to the title; with its name on phones. */}
+                    <button
+                        type="button"
+                        className="d-btn d-btn-ghost d-btn-sm w-full justify-start md:ml-auto md:w-8 md:justify-center md:px-0"
+                        disabled={disabled}
+                        title={t("chat.newChat")}
+                        onClick={onNew}
+                    >
+                        <SquarePen className="size-4" aria-hidden />
+                        <span className="md:sr-only">{t("chat.newChat")}</span>
+                    </button>
+                </div>
                 <label className="d-input d-input-sm w-full">
                     <Search className="size-4 text-base-content/70" aria-hidden />
                     <input
@@ -84,7 +95,7 @@ export function ChatHistory({
                     {query ? t("chat.historyNoMatch") : t("chat.historyEmpty")}
                 </div>
             ) : (
-                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3">
                     {groupByAge(conversations).map((group) => (
                         <section key={group.label} aria-label={t(group.label)} className="mt-3 first:mt-1">
                             <h2 className="px-2.5 pb-1 text-xs font-medium text-base-content/70">{t(group.label)}</h2>
@@ -101,7 +112,7 @@ export function ChatHistory({
                                                 onClick={() => onOpen(conversation.id)}
                                                 className={cn(
                                                     "block w-full truncate text-left disabled:cursor-not-allowed",
-                                                    active && "bg-base-200 font-medium text-base-content",
+                                                    active && "bg-base-300/60 font-medium text-base-content shadow-[inset_2px_0_0_var(--color-primary)]",
                                                 )}
                                             >
                                                 {conversation.title}

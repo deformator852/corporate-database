@@ -35,6 +35,7 @@ function Home() {
     };
 
     const pending = chat.status === "pending";
+    const title = chat.conversations?.find((item) => item.id === chat.conversationId)?.title;
     const history = (
         <ChatHistory
             conversations={chat.conversations}
@@ -62,22 +63,22 @@ function Home() {
     }
 
     return (
-        <div className="flex h-full min-h-0 flex-1 gap-4 overflow-hidden text-base-content">
+        <div className="flex h-full min-h-0 flex-1 overflow-hidden text-base-content">
             <h1 className="sr-only">{t("chat.title")}</h1>
             {historyShown ? (
                 <aside
                     id="chat-history"
                     aria-label={t("chat.history")}
-                    className="d-card d-card-border hidden w-64 shrink-0 overflow-hidden bg-base-100 md:block"
+                    className="hidden w-60 shrink-0 border-r border-base-300 bg-base-200/40 md:block"
                 >
                     {history}
                 </aside>
             ) : null}
             <section
                 aria-label={t("chat.panelLabel")}
-                className="d-card d-card-border relative h-full min-h-0 flex-1 overflow-hidden bg-base-100"
+                className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col"
             >
-                <header className="d-navbar min-h-0 shrink-0 gap-1 border-b border-base-300 p-1.5">
+                <header className="flex shrink-0 items-center gap-1 border-b border-base-300 px-3 py-2 md:px-5">
                     <button
                         type="button"
                         className="d-btn d-btn-ghost d-btn-square d-btn-sm hidden md:inline-flex"
@@ -112,7 +113,7 @@ function Home() {
                             <div className="min-h-0 flex-1">{history}</div>
                         </SheetContent>
                     </Sheet>
-                    <p className="min-w-0 flex-1 truncate px-1 text-sm font-medium">{t("chat.title")}</p>
+                    <p className="min-w-0 flex-1 truncate px-1 text-sm font-medium">{title ?? t("chat.title")}</p>
                     <button
                         type="button"
                         className={cn("d-btn d-btn-ghost d-btn-square d-btn-sm", historyShown && "md:hidden")}
