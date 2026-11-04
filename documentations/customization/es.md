@@ -1,7 +1,7 @@
-# Personalizar Corpus
+# Personalizar Archfold
 
 Esta guía muestra cómo añadir páginas, endpoints de API, permisos, temas y
-traducciones a Corpus sin editar archivos del núcleo, para que las
+traducciones an Archfold sin editar archivos del núcleo, para que las
 actualizaciones se integren sin conflictos.
 
 Otros idiomas: [English](en.md) · [Français](fr.md)
@@ -20,7 +20,7 @@ en ellas, así que una nueva versión se integra sin conflictos.
 Sustituya EXTENSION por cualquier nombre de carpeta, por ejemplo `crm` o `hr`.
 Puede tener varias extensiones. Se cargan en orden alfabético y se omiten las
 carpetas cuyo nombre empieza por `_`. No hay que registrarlas en ningún sitio:
-Corpus encuentra ambas carpetas automáticamente.
+Archfold encuentra ambas carpetas automáticamente.
 
 Puede seguir editando archivos del núcleo, pero cada edición puede causar un
 conflicto en la próxima actualización. Use primero una extensión y edite el
@@ -430,7 +430,7 @@ Opciones del tema:
   los bordes lo usan. Muchos temas oscuros ya hechos lo tienen más oscuro, y los
   bordes apenas se ven hasta que lo redefine.
 * Incluya en la compilación las fuentes que use su tema, por ejemplo con un
-  paquete `@fontsource`. Corpus no carga fuentes de internet.
+  paquete `@fontsource`. Archfold no carga fuentes de internet.
 
 ## Obtener actualizaciones
 

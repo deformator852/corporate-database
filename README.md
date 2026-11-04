@@ -1,6 +1,6 @@
-# Corpus
+# Archfold
 
-Corpus is a secure, confidential, self-hosted AI knowledge base for
+Archfold is a secure, confidential, self-hosted AI knowledge base for
 companies. Employees ask questions in plain language and get answers taken
 from the company's own documents, with the sources shown. The AI model runs
 on your own server: no question or answer ever leaves your network, and
@@ -8,7 +8,7 @@ documents leave it only if you choose to keep their files, encrypted, in
 cloud storage.
 
 * **Local AI only.** The language model runs in Ollama, and search runs on
-  your server. Corpus calls no cloud AI service. After installation its
+  your server. Archfold calls no cloud AI service. After installation its
   containers have no route to the internet, only narrow paths to the
   services you connect: HashiCorp Vault, the SSO provider, the S3 storage.
 * **Confidential by design.** Documents, document text, chats and the error
@@ -33,8 +33,8 @@ cloud storage.
 * [Running it for development](#running-it-for-development)
 * [Command-line tools](#command-line-tools)
 * [Settings](#settings)
-* [Customizing Corpus](#customizing-corpus)
-* [Updating Corpus](#updating-corpus)
+* [Customizing Archfold](#customizing-archfold)
+* [Updating Archfold](#updating-archfold)
 * [Documentation](#documentation)
 * [Third-party software and models](#third-party-software-and-models)
 * [License](#license)
@@ -113,7 +113,7 @@ language, or let each user pick theirs in the header.
 
 ### Small companies
 
-* **One server, one script.** Corpus runs as a Docker Compose stack on a
+* **One server, one script.** Archfold runs as a Docker Compose stack on a
   single Linux server. `deploy/deploy.sh` builds, starts, updates, backs up
   and restores it. No Kubernetes and no DevOps team.
 * **A guided setup instead of manual configuration.** `uv run install` asks
@@ -151,9 +151,9 @@ language, or let each user pick theirs in the header.
   answers the model writes at the same time.
 * **Customization without forking.** Add API endpoints, pages, permissions,
   background tasks, themes and translations in `custom/`, and keep receiving
-  updates. See [Customizing Corpus](#customizing-corpus).
+  updates. See [Customizing Archfold](#customizing-archfold).
 
-Corpus scales up, not out: one server with a bigger GPU and a larger model
+Archfold scales up, not out: one server with a bigger GPU and a larger model
 serves more people. One worker processes uploaded documents in turn, and the
 model writes a set number of answers at once (`LLM_PARALLEL`).
 
@@ -198,11 +198,11 @@ documents the model read.
 
 ## Security and confidentiality
 
-| Area | What Corpus does |
+| Area | What Archfold does |
 |---|---|
 | Data location | Everything runs on your server, and the AI model is local. After installation no container reaches the internet: the only ways out are tunnels to the Vault, SSO provider and S3 storage you connect, each to that one address. Document files leave the server only if you keep them in S3, encrypted. |
 | Encryption at rest | AES-256-GCM for document files, document text, search chunk text, chats and the error log. Backups are encrypted with the same key. |
-| Key | In `backend/.env` or in HashiCorp Vault. Corpus refuses to start with a key that does not match the data. Rotation re-encrypts everything. |
+| Key | In `backend/.env` or in HashiCorp Vault. Archfold refuses to start with a key that does not match the data. Rotation re-encrypts everything. |
 | Access control | Roles and permissions, four document levels, no privilege escalation, the last administrator protected. |
 | Sign-in | Passwords hashed with bcrypt, sign-in throttling, 15-minute tokens rotated on refresh, sessions of 12 hours at most, cookies with CSRF protection. Single sign-on with PKCE and full ID token checks. |
 | Audit | Sign-ins and failures, changes to users, roles and documents, document reads, reads and deletions of other users' chats. |
@@ -210,7 +210,7 @@ documents the model read.
 | Containers | The backend and the worker run as an unprivileged user with no Linux capabilities. Services sit on separate networks, and each gets only the secrets it needs. |
 | Privacy | Logs never hold document text, chat content or secrets. Chats and errors are deleted after their retention periods. |
 
-Corpus does not encrypt document names, user emails, the audit log or search
+Archfold does not encrypt document names, user emails, the audit log or search
 vectors. Keep the server's data on an encrypted disk. The
 [deployment guide](documentations/deployment.md#encrypting-the-disk) shows
 how.
@@ -248,14 +248,14 @@ documents. Keep backups on another machine.
 
 You need the server described in [System requirements](#system-requirements),
 `git` and [uv](https://docs.astral.sh/uv/), a host name such as
-`corpus.company.local`, and internet access during installation to download
+`archfold.company.local`, and internet access during installation to download
 the AI models.
 
 1. Get the code and run the guided setup. It generates the secrets and asks
    for the languages, the AI models and the chat limits.
 
    ```sh
-   git clone REPOSITORY-URL corpus && cd corpus
+   git clone REPOSITORY-URL archfold && cd archfold
    cd backend && uv run install && cd ..
    ```
 
@@ -266,11 +266,11 @@ the AI models.
    `deploy/certs/`.
 
    ```sh
-   SITE_ADDRESS=corpus.company.local
+   SITE_ADDRESS=archfold.company.local
    TLS=internal
    ```
 
-4. Build and start Corpus. The first start downloads the AI models. Later
+4. Build and start Archfold. The first start downloads the AI models. Later
    starts need no internet.
 
    ```sh
@@ -284,7 +284,7 @@ the AI models.
    deploy/deploy.sh admin ADMIN-EMAIL
    ```
 
-6. Open `https://corpus.company.local`, sign in, change the password under
+6. Open `https://archfold.company.local`, sign in, change the password under
    **My account**, and check the **System status** page.
 
 Next, create roles and users. The
@@ -364,14 +364,14 @@ folder on the server.
 | `uv run configure key rotate` | Starts a key rotation. `configure key finish` removes the old key from Vault afterwards. |
 | `uv run switch-embedding-model MODEL` | Switches the search model and rebuilds the index. Without MODEL it lists the models. |
 | `deploy/deploy.sh build` | Builds the images. |
-| `deploy/deploy.sh up` | Starts Corpus or applies an update, after downloading missing models. |
+| `deploy/deploy.sh up` | Starts Archfold or applies an update, after downloading missing models. |
 | `deploy/deploy.sh models` | Downloads newer versions of the models. |
 | `deploy/deploy.sh admin EMAIL` | Creates an administrator. |
 | `deploy/deploy.sh backup [DIR]` | Makes an encrypted backup of the database, the search index and the document files (with S3 storage, the bucket is backed up by the storage). |
 | `deploy/deploy.sh restore DIR` | Replaces all data with a backup, after checking every part of it. |
 | `deploy/deploy.sh rotate-key` | Re-encrypts all data with the new key. |
 | `deploy/deploy.sh logs [SERVICE]` | Follows the logs. |
-| `deploy/deploy.sh down` | Stops Corpus. The data is kept. |
+| `deploy/deploy.sh down` | Stops Archfold. The data is kept. |
 
 ## Settings
 
@@ -395,7 +395,7 @@ process starts: after a change, run `deploy/deploy.sh up`.
 | `OIDC_*` | empty | Single sign-on; set by the Sign-in step |
 | `SITE_ADDRESS`, `TLS` | `localhost`, `internal` | Host name and certificate of the web server |
 
-## Customizing Corpus
+## Customizing Archfold
 
 Add features without editing core files, so updates keep merging cleanly.
 Your code lives in two folders that updates never touch:
@@ -405,7 +405,7 @@ Your code lives in two folders that updates never touch:
 | `backend/src/custom/EXTENSION/` | API endpoints, permissions, database tables and migrations, background tasks, startup code that replaces any core dependency |
 | `frontend/src/custom/EXTENSION/` | Pages, sidebar links, translations, themes, replacements for core pages |
 
-Corpus finds the extensions by itself. For example, this adds an endpoint
+Archfold finds the extensions by itself. For example, this adds an endpoint
 behind its own permission:
 
 ```python
@@ -423,12 +423,12 @@ async def report(_user=Depends(require_permission("crm.report"))) -> dict:
     return {"ok": True}
 ```
 
-See [Customizing Corpus](documentations/customization/en.md)
+See [Customizing Archfold](documentations/customization/en.md)
 ([Español](documentations/customization/es.md),
 [Français](documentations/customization/fr.md)) for pages, themes,
 translations, migrations and the limits of extensions.
 
-## Updating Corpus
+## Updating Archfold
 
 ```sh
 git pull
@@ -441,10 +441,10 @@ changes; the **System status** page shows the version installed.
 
 ## Documentation
 
-* [Deploying Corpus on a company server](documentations/deployment.md):
+* [Deploying Archfold on a company server](documentations/deployment.md):
   installation, access, single sign-on, languages, S3 storage, backups, disk
   encryption, key rotation, HashiCorp Vault, troubleshooting
-* [Customizing Corpus](documentations/customization/en.md) ·
+* [Customizing Archfold](documentations/customization/en.md) ·
   [Español](documentations/customization/es.md) ·
   [Français](documentations/customization/fr.md)
 * [Backend development](backend/README.md)
@@ -452,7 +452,7 @@ changes; the **System status** page shows the version installed.
 
 ## Third-party software and models
 
-Corpus runs on open-source software: PostgreSQL, Qdrant, RabbitMQ, Ollama,
+Archfold runs on open-source software: PostgreSQL, Qdrant, RabbitMQ, Ollama,
 Caddy, LibreOffice, FastAPI, React and the libraries listed in
 `backend/pyproject.toml` and `frontend/package.json`. Each keeps its own
 license.
@@ -462,7 +462,7 @@ installation, and each has its own license and use policy, for example the
 Llama 3.1 Community License, the Gemma Terms of Use, and Apache 2.0 for
 Qwen. Check the license of the models you choose.
 
-Built with Llama: with a Llama model, the default, Corpus shows "Built with
+Built with Llama: with a Llama model, the default, Archfold shows "Built with
 Llama" at the bottom of the menu, as the Llama license asks. By using a Llama
 model, you accept the
 [Llama 3.1 Community License](https://www.llama.com/llama3_1/license/) and its
@@ -470,11 +470,11 @@ Acceptable Use Policy.
 
 ## License
 
-Corpus is licensed under the [Apache License 2.0](LICENSE). See also
+Archfold is licensed under the [Apache License 2.0](LICENSE). See also
 [NOTICE](NOTICE).
 
 You may use, change and distribute it, also commercially, as the license says.
-It comes with no warranty, and it does not grant the right to use the Corpus
+It comes with no warranty, and it does not grant the right to use the Archfold
 name for your own product.
 
 To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md). To report a

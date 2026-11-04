@@ -29,13 +29,13 @@ from sqlalchemy.pool import NullPool
 from models.error_log import ErrorLog
 
 LEVELS = ("warning", "error", "critical")
-# unhandled: an error nothing caught (a bug); app: Corpus logged it itself;
-# library: a package Corpus uses failed (its warnings are not kept).
+# unhandled: an error nothing caught (a bug); app: Archfold logged it itself;
+# library: a package Archfold uses failed (its warnings are not kept).
 CATEGORIES = ("unhandled", "app", "library")
 # Loggers that report errors nothing else caught: the web server's, and
 # Celery's for a task that raised.
 _UNHANDLED_LOGGERS = ("uvicorn", "celery.app.trace")
-# Corpus's own top-level modules and packages (src/): their loggers are the app's.
+# Archfold's own top-level modules and packages (src/): their loggers are the app's.
 _SRC = Path(__file__).resolve().parents[1]
 _OWN_MODULES = frozenset(
     path.stem for path in _SRC.iterdir() if path.suffix == ".py" or (path / "__init__.py").exists()
@@ -47,7 +47,7 @@ _QUEUE_SIZE = 10_000
 _PER_LOGGER_PER_MINUTE = 30
 # Marks an exception the app already logged, so uvicorn's own report of the
 # same exception (it re-raises from the error handler) is not stored twice.
-LOGGED = "_corpus_logged"
+LOGGED = "_archfold_logged"
 _FORMATTER = logging.Formatter()
 
 

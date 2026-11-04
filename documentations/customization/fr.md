@@ -1,7 +1,7 @@
-# Personnaliser Corpus
+# Personnaliser Archfold
 
 Ce guide montre comment ajouter des pages, des endpoints d'API, des
-autorisations, des thèmes et des traductions à Corpus sans modifier les
+autorisations, des thèmes et des traductions à Archfold sans modifier les
 fichiers du noyau, pour que les mises à jour se fusionnent sans conflit.
 
 Autres langues : [English](en.md) · [Español](es.md)
@@ -20,7 +20,7 @@ jamais de fichiers, donc une nouvelle version se fusionne sans conflit.
 Remplacez EXTENSION par un nom de dossier de votre choix, par exemple `crm` ou
 `hr`. Vous pouvez avoir plusieurs extensions. Elles sont chargées par ordre
 alphabétique, et les dossiers dont le nom commence par `_` sont ignorés. Vous
-n'avez rien à déclarer : Corpus trouve les deux dossiers automatiquement.
+n'avez rien à déclarer : Archfold trouve les deux dossiers automatiquement.
 
 Vous pouvez toujours modifier les fichiers du noyau, mais chaque modification
 peut provoquer un conflit à la prochaine mise à jour. Utilisez d'abord une
@@ -432,7 +432,7 @@ Options du thème :
   à l'emploi l'ont plus foncé, et les bordures se voient à peine tant que vous ne
   le redéfinissez pas.
 * Intégrez à la compilation les polices de votre thème, par exemple avec un
-  paquet `@fontsource`. Corpus ne charge pas de polices depuis internet.
+  paquet `@fontsource`. Archfold ne charge pas de polices depuis internet.
 
 ## Obtenir les mises à jour
 

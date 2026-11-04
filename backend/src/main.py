@@ -145,7 +145,7 @@ async def lifespan(_app: FastAPI):
 _DOCS = (os.getenv("API_DOCS") or "").strip().lower() in {"1", "true", "yes"}
 
 app = FastAPI(
-    title="Corpus",
+    title="Archfold",
     version=app_version(),
     lifespan=lifespan,
     docs_url="/docs" if _DOCS else None,

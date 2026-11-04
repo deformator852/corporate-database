@@ -136,7 +136,7 @@ async def sign_in_methods() -> dict[str, object]:
     """What the sign-in page offers. Public: it shows before sign-in."""
     oidc = oidc_config()
     return {
-        # With single sign-on, only administrators sign in with a Corpus
+        # With single sign-on, only administrators sign in with an Archfold
         # password, behind a link on the page.
         "password": oidc is None,
         "sso": {"name": oidc.name} if oidc else None,

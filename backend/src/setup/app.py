@@ -40,7 +40,9 @@ def main() -> None:
     through `uv run configure`."""
     console = Console()
     if env_value(ENV_PATH, "INSTALLED") == "true":
-        console.print(f"Corpus is already installed ({ENV_PATH}). Change its settings with [bold]uv run configure[/].")
+        console.print(
+            f"Archfold is already installed ({ENV_PATH}). Change its settings with [bold]uv run configure[/]."
+        )
         raise SystemExit(1)
     try:
         run(SETUP_STEPS, "Installation complete. Change the settings later with uv run configure.")

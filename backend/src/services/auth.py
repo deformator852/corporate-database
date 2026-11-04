@@ -62,7 +62,7 @@ class AuthService:
             await self._record_failure(data.email)
             raise AppError("account_disabled", "This account is disabled", status_code=403)
         if oidc_config() is not None and not _is_admin(user):
-            # With single sign-on, only administrators keep their Corpus
+            # With single sign-on, only administrators keep their Archfold
             # password: their way in when the company's provider is down.
             # After the password check, so it tells strangers nothing.
             raise AppError("sso_required", "Sign in with SSO.", status_code=403)
@@ -126,7 +126,7 @@ class AuthService:
         wanted = {role_map[group] for group in groups if group in role_map}
         if _is_admin(user) and ADMIN_ROLE_KEY not in wanted and not await self._other_admin_exists(user.id):
             # Left out of the group at the provider, but the only admin: a
-            # directory change must not leave Corpus without administrators.
+            # directory change must not leave Archfold without administrators.
             wanted.add(ADMIN_ROLE_KEY)
         managed_keys = {role.key for role in managed}
         user.roles = [role for role in user.roles if role.key not in managed_keys] + [

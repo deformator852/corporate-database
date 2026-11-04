@@ -30,7 +30,7 @@ class KeyStoreStep:
     title = "Encryption key storage"
 
     def __init__(self, *, installing: bool = False) -> None:
-        # Run by setup: Corpus is not running yet, so there is nothing to restart.
+        # Run by setup: Archfold is not running yet, so there is nothing to restart.
         self.installing = installing
 
     def current(self) -> str | None:
@@ -89,7 +89,7 @@ def _ask_vault(console: Console) -> VaultConfig:
         role_id=ask("VAULT_ROLE_ID", "AppRole role_id"),
         secret_id=ask("VAULT_SECRET_ID", "AppRole secret_id", password=True),
         mount=ask("VAULT_KV_MOUNT", "KV v2 mount", "secret").strip("/"),
-        path=ask("VAULT_KV_PATH", "Secret path", "corpus").strip("/"),
+        path=ask("VAULT_KV_PATH", "Secret path", "archfold").strip("/"),
         cacert=str(CA_COPY) if ca else "",
     )
 

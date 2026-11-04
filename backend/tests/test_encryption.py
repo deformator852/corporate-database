@@ -120,7 +120,7 @@ def test_the_key_can_come_from_vault_and_never_from_env(monkeypatch):
 
     fake = FakeVault()
     key = "key-held-in-vault-" + "v" * 32
-    fake.secrets["corpus"] = {"DATA_ENCRYPTION_KEY": key}
+    fake.secrets["archfold"] = {"DATA_ENCRYPTION_KEY": key}
 
     class Bound(key_store.VaultClient):
         def __init__(self, config, transport=None):
@@ -129,8 +129,8 @@ def test_the_key_can_come_from_vault_and_never_from_env(monkeypatch):
     monkeypatch.setattr(key_store, "VaultClient", Bound)
     monkeypatch.setenv("KEY_STORE", "vault")
     monkeypatch.setenv("VAULT_ADDR", "https://vault.test:8200")
-    monkeypatch.setenv("VAULT_ROLE_ID", "corpus-role")
-    monkeypatch.setenv("VAULT_SECRET_ID", "corpus-secret")
+    monkeypatch.setenv("VAULT_ROLE_ID", "archfold-role")
+    monkeypatch.setenv("VAULT_SECRET_ID", "archfold-secret")
     monkeypatch.setenv("VAULT_CONNECT", "vault-tunnel:8200")  # as in production
     monkeypatch.setenv("DATA_ENCRYPTION_KEY", "an-env-key-that-must-be-ignored-" + "e" * 16)
     try:
@@ -141,7 +141,7 @@ def test_the_key_can_come_from_vault_and_never_from_env(monkeypatch):
         assert fake.last.url.host == "vault-tunnel"
         assert fake.last.headers["host"] == "vault.test:8200"
         assert fake.last.extensions["sni_hostname"] == "vault.test"
-        assert [path for _, path, _ in fake.requests] == ["auth/approle/login", "secret/data/corpus"]  # once
+        assert [path for _, path, _ in fake.requests] == ["auth/approle/login", "secret/data/archfold"]  # once
 
         monkeypatch.setenv("VAULT_SECRET_ID", "revoked")
         encryption.reset_keys()

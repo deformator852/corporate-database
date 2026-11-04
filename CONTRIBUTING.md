@@ -1,4 +1,4 @@
-# Contributing to Corpus
+# Contributing to Archfold
 
 This guide shows you how to run the checks and what a change must include. To
 set up a development environment, see [README.md](README.md) and the
@@ -49,9 +49,9 @@ npx vitest run
 
 * Never log or store unencrypted document text, chat content or secrets.
 * Never add a runtime dependency on the internet, such as telemetry or update
-  checks. Corpus runs on the company's own servers.
+  checks. Archfold runs on the company's own servers.
 * Do not add files under `backend/src/custom/` or `frontend/src/custom/`. Those
-  folders belong to the people who install Corpus.
+  folders belong to the people who install Archfold.
 
 ## License
 

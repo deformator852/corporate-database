@@ -169,9 +169,9 @@ def test_a_flood_from_one_logger_is_capped(client):
     assert f"Real problem {marker}" in messages
 
 
-def test_entries_say_whether_they_are_bugs_corpus_or_libraries(client, make_user):
+def test_entries_say_whether_they_are_bugs_archfold_or_libraries(client, make_user):
     marker = uuid.uuid4().hex
-    logging.getLogger("services.documents.processor").error("Corpus noticed %s", marker)
+    logging.getLogger("services.documents.processor").error("Archfold noticed %s", marker)
     logging.getLogger("pypdf._reader").warning("Library warned %s", marker)  # console only
     logging.getLogger("qdrant_client").error("Library failed %s", marker)
     logging.getLogger("uvicorn.error").error("Server caught %s", marker)
@@ -185,7 +185,7 @@ def test_entries_say_whether_they_are_bugs_corpus_or_libraries(client, make_user
     kinds = {item["message"].split()[0]: item["category"] for item in items if marker in item["message"]}
     # A library's warning is not kept; its error is.
     assert kinds == {
-        "Corpus": "app",
+        "Archfold": "app",
         "Library": "library",
         "Server": "unhandled",
         "Said": "unhandled",

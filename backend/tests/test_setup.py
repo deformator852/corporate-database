@@ -156,8 +156,8 @@ def test_a_pasted_secret_arrives_without_the_terminals_paste_markers(answers):
     from setup.prompts import ask_hidden
 
     # A terminal with bracketed paste wraps the pasted key; a hidden prompt keeps the markers.
-    answers.append("\x1b[200~corpus-local-secret-key-0123456789\x1b[201~")
-    assert ask_hidden(_console(), "Secret key") == "corpus-local-secret-key-0123456789"
+    answers.append("\x1b[200~archfold-local-secret-key-0123456789\x1b[201~")
+    assert ask_hidden(_console(), "Secret key") == "archfold-local-secret-key-0123456789"
 
 
 def test_storage_step_keeps_files_on_disk_or_in_the_companys_s3(env, answers, monkeypatch):
@@ -171,7 +171,17 @@ def test_storage_step_keeps_files_on_disk_or_in_the_companys_s3(env, answers, mo
     assert storage_step.StorageStep().current() == "files on this server"
     # The region has no default: asked again until one is entered.
     answers.extend(
-        [True, "s3.acme.io", "https://s3.acme.io:9443", "corpus", "corpus-app", "s3cret-key", None, "eu-central-1", ""]
+        [
+            True,
+            "s3.acme.io",
+            "https://s3.acme.io:9443",
+            "archfold",
+            "archfold-app",
+            "s3cret-key",
+            None,
+            "eu-central-1",
+            "",
+        ]
     )
     console = _console()
     storage_step.StorageStep().run(console)
@@ -181,11 +191,11 @@ def test_storage_step_keeps_files_on_disk_or_in_the_companys_s3(env, answers, mo
     assert values["S3_SECRET_KEY"] == "s3cret-key" and "s3cret-key" not in console.export_text(clear=False)
     assert values["S3_REGION"] == "eu-central-1" and "S3_CACERT" not in values
     assert "Enter the region of the storage." in console.export_text(clear=False)
-    assert [config.bucket for config in checked] == ["corpus"]  # checked before it was saved
+    assert [config.bucket for config in checked] == ["archfold"]  # checked before it was saved
     assert storage_step.StorageStep().current() == (
-        "the company's S3 storage: bucket corpus at https://s3.acme.io:9443"
+        "the company's S3 storage: bucket archfold at https://s3.acme.io:9443"
     )
-    assert "Restart Corpus to use the new storage" in console.export_text()
+    assert "Restart Archfold to use the new storage" in console.export_text()
 
     def refuse(config) -> None:
         raise AppError("unavailable", "Could not store the document. NoSuchBucket")
@@ -201,7 +211,7 @@ def test_storage_step_keeps_files_on_disk_or_in_the_companys_s3(env, answers, mo
     answers.extend([False])  # back to this server
     console = _console()
     storage_step.StorageStep().run(console)
-    assert "Restart Corpus to use the new storage" in console.export_text()
+    assert "Restart Archfold to use the new storage" in console.export_text()
     values = _values(env)
     assert values["STORAGE"] == "disk" and not [key for key in values if key.startswith("S3_")]
 
@@ -216,15 +226,15 @@ def test_setup_neither_asks_for_a_restart_nor_warns_about_the_missing_database(e
     monkeypatch.setattr(storage_step, "check_access", lambda config: None)
     monkeypatch.setattr(switch_embedding_model, "production_running", lambda: False)
     monkeypatch.setattr(move_files, "document_keys", no_database)
-    # setup installs: nothing runs yet; configure changes a running Corpus.
+    # setup installs: nothing runs yet; configure changes a running Archfold.
     for installing, shown in ((True, False), (False, True)):
         env.write_text("STORAGE=disk\n")
-        answers.extend([True, "https://s3.acme.io", "corpus", "corpus-app", "s3cret-key", "eu-central-1", ""])
+        answers.extend([True, "https://s3.acme.io", "archfold", "archfold-app", "s3cret-key", "eu-central-1", ""])
         console = _console()
         storage_step.StorageStep(installing=installing).run(console)
         output = console.export_text()
         assert _values(env)["STORAGE"] == "s3"
-        assert ("Restart Corpus" in output) is shown and ("Could not list the documents" in output) is shown
+        assert ("Restart Archfold" in output) is shown and ("Could not list the documents" in output) is shown
 
 
 def test_switching_storage_offers_to_move_the_files(env, answers, monkeypatch, client, make_user, infra):
@@ -241,7 +251,7 @@ def test_switching_storage_offers_to_move_the_files(env, answers, monkeypatch, c
     _, email, password = make_user(["documents.list", "documents.create"])
     login(client, email, password)
     upload(client, "Travel", b"The travel budget is 500 EUR.", "travel.txt")
-    s3_answers = [True, "https://s3.acme.io", "corpus", "corpus-app", "s3cret-key", "eu-central-1", ""]
+    s3_answers = [True, "https://s3.acme.io", "archfold", "archfold-app", "s3cret-key", "eu-central-1", ""]
 
     # Declined: saved, the files stay on disk.
     env.write_text("STORAGE=disk\n")
@@ -288,13 +298,13 @@ def test_switching_storage_in_production_moves_the_files_in_the_backend_image(en
                  "TARGET_S3_CONNECT"):  # fmt: skip
         monkeypatch.delenv(name, raising=False)
     env.write_text("STORAGE=disk\n")
-    answers.extend([True, "https://s3.acme.io", "corpus", "corpus-app", "s3cret-key", "eu-central-1", "", True])
+    answers.extend([True, "https://s3.acme.io", "archfold", "archfold-app", "s3cret-key", "eu-central-1", "", True])
 
     console = _console()
     storage_step.StorageStep().run(console)
 
     assert [step[:2] for step in steps] == [("stop", "backend"), ("--profile", "s3"), ("run", "--rm")]
-    assert "Restart Corpus" not in console.export_text()  # started by the step itself
+    assert "Restart Archfold" not in console.export_text()  # started by the step itself
     assert steps[2][-3:] == ("python", "-m", "maintenance.move_files")
     assert "s3cret-key" not in " ".join(steps[2])  # passed through the environment
     assert steps[2][steps[2].index("TARGET_S3_SECRET_KEY") - 1] == "-e"
@@ -313,7 +323,7 @@ def test_storage_check_writes_reads_and_deletes_a_test_object(monkeypatch):
 
     fake = FakeMinio()
     monkeypatch.setattr(storage, "Minio", lambda *args, **kwargs: fake)
-    config = S3Config("https://s3.acme.io", "corpus", "corpus-app", "secret")
+    config = S3Config("https://s3.acme.io", "archfold", "archfold-app", "secret")
     check_access(config)
     assert fake.objects == {}  # cleaned up
     fake.fail_with = "NoSuchBucket"
@@ -367,7 +377,7 @@ def vault(monkeypatch):
 
 
 # Answers to the Vault questions: CA file, address, role_id, secret_id, mount, path.
-VAULT_ANSWERS = ["", "https://vault.test:8200", "corpus-role", "corpus-secret", None, None]
+VAULT_ANSWERS = ["", "https://vault.test:8200", "archfold-role", "archfold-secret", None, None]
 
 
 def test_the_key_moves_into_vault_rotates_there_and_moves_back(env, answers, vault):
@@ -382,18 +392,18 @@ def test_the_key_moves_into_vault_rotates_there_and_moves_back(env, answers, vau
 
     KeyStoreStep().run(_console())
 
-    assert vault.secrets["corpus"] == {"DATA_ENCRYPTION_KEY": key}
+    assert vault.secrets["archfold"] == {"DATA_ENCRYPTION_KEY": key}
     values = _values(env)
     assert "DATA_ENCRYPTION_KEY" not in values  # a copy of the disk holds no key
     assert (values["KEY_STORE"], values["VAULT_ADDR"], values["VAULT_KV_PATH"]) == (
         "vault",
         "https://vault.test:8200",
-        "corpus",
+        "archfold",
     )
     # Run again (configure): "Change it?" defaults to no and skips the step.
     import setup.app as app
 
-    assert KeyStoreStep().current() == "Vault https://vault.test:8200, secret/corpus"
+    assert KeyStoreStep().current() == "Vault https://vault.test:8200, secret/archfold"
     before, calls = env.read_text(), len(vault.requests)
     answers.extend([None])
     app.run([KeyStoreStep()], "Done.")
@@ -405,11 +415,11 @@ def test_the_key_moves_into_vault_rotates_there_and_moves_back(env, answers, vau
 
     answers.extend(["admin-token", "saved"])
     key_command(["rotate"])
-    rotated = vault.secrets["corpus"]
+    rotated = vault.secrets["archfold"]
     assert rotated["DATA_ENCRYPTION_KEY_PREVIOUS"] == key and rotated["DATA_ENCRYPTION_KEY"] != key
     answers.append("admin-token")
     key_command(["finish"])
-    assert vault.secrets["corpus"] == {"DATA_ENCRYPTION_KEY": rotated["DATA_ENCRYPTION_KEY"]}
+    assert vault.secrets["archfold"] == {"DATA_ENCRYPTION_KEY": rotated["DATA_ENCRYPTION_KEY"]}
     assert all(token in {"app-token", "admin-token", None} for _, _, token in vault.requests)
 
     answers.append(1)
@@ -425,14 +435,14 @@ def test_the_key_moves_into_vault_rotates_there_and_moves_back(env, answers, vau
     ("stored", "answers_after", "reason"),
     [
         ({"DATA_ENCRYPTION_KEY": "someone-elses-key-" + "x" * 32}, [], "another key"),
-        (None, ["", "https://vault.test:8200", "corpus-role", "wrong-secret", None, None], "invalid role"),
+        (None, ["", "https://vault.test:8200", "archfold-role", "wrong-secret", None, None], "invalid role"),
     ],
 )
 def test_nothing_changes_when_vault_cannot_take_the_key(env, answers, vault, stored, answers_after, reason):
     from setup.steps.key_store import KeyStoreStep
 
     if stored:
-        vault.secrets["corpus"] = stored
+        vault.secrets["archfold"] = stored
     before = "DATA_ENCRYPTION_KEY=" + "k" * 40 + "\n"
     env.write_text(before)
     answers.extend([2, *(answers_after or VAULT_ANSWERS)])
@@ -442,7 +452,7 @@ def test_nothing_changes_when_vault_cannot_take_the_key(env, answers, vault, sto
 
     output = console.export_text()
     assert "Nothing changed" in output and reason in output
-    assert env.read_text() == before and vault.secrets.get("corpus") == stored
+    assert env.read_text() == before and vault.secrets.get("archfold") == stored
 
 
 def test_key_command_needs_a_key(env):
@@ -594,9 +604,9 @@ def test_install_and_configure_run_their_steps(env, answers, monkeypatch, capsys
 def test_sign_in_step_turns_sso_on_and_off(env, answers):
     from setup.steps.sso import SsoStep
 
-    env.write_text("SITE_ADDRESS=corpus.acme.io\n")
+    env.write_text("SITE_ADDRESS=archfold.acme.io\n")
     answers.extend([True, "http://idp", "https://idp.acme.io/realms/acme/", ""])  # https asked again; no CA
-    answers.extend(["corpus", "s3cret", None, "Acme", None, "Corpus Admins=admin;Legal=legal"])
+    answers.extend(["archfold", "s3cret", None, "Acme", None, "Archfold Admins=admin;Legal=legal"])
     answers.extend([False])  # no takeover by email
     console = _console()
     SsoStep().run(console)
@@ -604,8 +614,8 @@ def test_sign_in_step_turns_sso_on_and_off(env, answers):
     values = _values(env)
     assert values["OIDC_ISSUER"] == "https://idp.acme.io/realms/acme"  # asked again until https
     assert values["OIDC_CLIENT_SECRET"] == "s3cret" and "s3cret" not in console.export_text()
-    assert values["OIDC_REDIRECT_URI"] == "https://corpus.acme.io/api/v1/auth/sso/callback"
-    assert values["OIDC_ROLE_MAP"] == "'Corpus Admins=admin;Legal=legal'"  # quoted: it has a space
+    assert values["OIDC_REDIRECT_URI"] == "https://archfold.acme.io/api/v1/auth/sso/callback"
+    assert values["OIDC_ROLE_MAP"] == "'Archfold Admins=admin;Legal=legal'"  # quoted: it has a space
 
     answers.extend([True, None, None, None, "", None, None, None, None, None])  # keep everything
     SsoStep().run(_console())
@@ -630,7 +640,7 @@ def test_secret_prompts_never_show_the_current_secret(env, monkeypatch):
     from setup.steps import key_store, sso
 
     env.write_text(
-        "VAULT_SECRET_ID=current-secret-id\nOIDC_ISSUER=https://idp.acme.io\nOIDC_CLIENT_ID=corpus\n"
+        "VAULT_SECRET_ID=current-secret-id\nOIDC_ISSUER=https://idp.acme.io\nOIDC_CLIENT_ID=archfold\n"
         "OIDC_CLIENT_SECRET=current-client-secret\nOIDC_REDIRECT_URI=https://c.acme.io/cb\nOIDC_NAME=Acme\n"
         "OIDC_GROUPS_CLAIM=groups\nOIDC_ROLE_MAP=A=admin\n"
     )
@@ -655,9 +665,9 @@ def test_env_values_with_spaces_are_quoted_and_read_back(tmp_path):
 
     path = tmp_path / ".env"
     upsert_env(path, "OIDC_NAME", "Microsoft Entra")
-    upsert_env(path, "OIDC_ROLE_MAP", "CN=Corpus Admins,OU=Groups,DC=acme=admin")
+    upsert_env(path, "OIDC_ROLE_MAP", "CN=Archfold Admins,OU=Groups,DC=acme=admin")
     assert env_value(path, "OIDC_NAME") == "Microsoft Entra"
-    assert dotenv_values(path)["OIDC_ROLE_MAP"] == "CN=Corpus Admins,OU=Groups,DC=acme=admin"
+    assert dotenv_values(path)["OIDC_ROLE_MAP"] == "CN=Archfold Admins,OU=Groups,DC=acme=admin"
     for bad in ("", "two\nlines", "it's mine"):
         with pytest.raises(ValueError):
             upsert_env(path, "OIDC_NAME", bad)

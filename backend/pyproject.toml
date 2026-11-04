@@ -1,7 +1,7 @@
 [project]
 name = "backend"
 version = "1.0.0"
-description = "Corpus backend: API, document worker and command-line tools"
+description = "Archfold backend: API, document worker and command-line tools"
 readme = "README.md"
 requires-python = ">=3.14"
 license = "Apache-2.0"

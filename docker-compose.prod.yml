@@ -1,7 +1,7 @@
-name: corpus
+name: archfold
 
 # Production stack. Run through deploy/deploy.sh: it passes backend/.env (or
-# CORPUS_ENV_FILE) to fill the ${...} values below. Network isolation is the point of this file:
+# ARCHFOLD_ENV_FILE) to fill the ${...} values below. Network isolation is the point of this file:
 #   internal  - every service; no route to the internet (internal: true)
 #   edge      - only the HTTPS proxy, the one published port
 #   egress    - only the `models` job (profile "setup"), run on purpose to
@@ -46,7 +46,7 @@ x-worker-env: &worker-env
   S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
   S3_SECRET_KEY: ${S3_SECRET_KEY:-}
   S3_REGION: ${S3_REGION:-}
-  S3_CACERT: ${S3_CACERT:+/etc/corpus-s3/ca.pem}
+  S3_CACERT: ${S3_CACERT:+/etc/archfold-s3/ca.pem}
   S3_CONNECT: ${S3_ENDPOINT:+s3-tunnel:9000}
   # KEY_STORE=env: the key below (and the previous one while rotating).
   # KEY_STORE=vault: read from HashiCorp Vault through vault-tunnel instead
@@ -59,7 +59,7 @@ x-worker-env: &worker-env
   VAULT_SECRET_ID: ${VAULT_SECRET_ID:-}
   VAULT_KV_MOUNT: ${VAULT_KV_MOUNT:-}
   VAULT_KV_PATH: ${VAULT_KV_PATH:-}
-  VAULT_CACERT: ${VAULT_CACERT:+/etc/corpus-vault/ca.pem}
+  VAULT_CACERT: ${VAULT_CACERT:+/etc/archfold-vault/ca.pem}
   VAULT_CONNECT: ${VAULT_ADDR:+vault-tunnel:8200}
   LLM_HOST: http://ollama:11434
   LLM_MODEL: ${LLM_MODEL:?is empty; run uv run install in backend/}
@@ -69,7 +69,7 @@ x-worker-env: &worker-env
   CHUNK_OVERLAP: ${CHUNK_OVERLAP:-}
 
 x-app: &app
-  image: corpus-backend:latest
+  image: archfold-backend:latest
   restart: unless-stopped
   # Runs as an unprivileged user (Dockerfile) and needs no Linux privileges:
   # code that breaks in (a parser, LibreOffice) cannot gain any.
@@ -78,11 +78,11 @@ x-app: &app
   volumes:
     - hf_models:/models/hf
     # CA of Vault's certificate, copied here by `uv run install` (not a secret).
-    - ./deploy/vault:/etc/corpus-vault:ro
+    - ./deploy/vault:/etc/archfold-vault:ro
     # CA of the SSO provider's certificate, copied by `uv run configure`.
-    - ./deploy/sso:/etc/corpus-sso:ro
+    - ./deploy/sso:/etc/archfold-sso:ro
     # CA of the company's S3 storage, copied by `uv run configure`.
-    - ./deploy/s3:/etc/corpus-s3:ro
+    - ./deploy/s3:/etc/archfold-s3:ro
   networks: [internal]
 
 services:
@@ -213,7 +213,7 @@ services:
       OIDC_GROUPS_CLAIM: ${OIDC_GROUPS_CLAIM:-}
       OIDC_ROLE_MAP: ${OIDC_ROLE_MAP:-}
       OIDC_LINK_BY_EMAIL: ${OIDC_LINK_BY_EMAIL:-}
-      OIDC_CACERT: ${OIDC_CACERT:+/etc/corpus-sso/ca.pem}
+      OIDC_CACERT: ${OIDC_CACERT:+/etc/archfold-sso/ca.pem}
       OIDC_CONNECT: ${OIDC_ISSUER:+sso-tunnel:443}
       CHAT_QUESTIONS_PER_10_MIN: ${CHAT_QUESTIONS_PER_10_MIN:-}
       API_DOCS: "false"
@@ -221,9 +221,9 @@ services:
     # backend and the worker see them, never the internet-facing models job.
     volumes: &documents-volumes
       - hf_models:/models/hf
-      - ./deploy/vault:/etc/corpus-vault:ro
-      - ./deploy/sso:/etc/corpus-sso:ro
-      - ./deploy/s3:/etc/corpus-s3:ro
+      - ./deploy/vault:/etc/archfold-vault:ro
+      - ./deploy/sso:/etc/archfold-sso:ro
+      - ./deploy/s3:/etc/archfold-s3:ro
       - documents_data:/data/documents
     depends_on:
       migrate: {condition: service_completed_successfully}
@@ -267,7 +267,7 @@ services:
 
   # STORAGE=s3 only (profile "s3", set by deploy.sh): the backend's and the
   # worker's one way to the company's S3 storage, and only to it. Plain TCP:
-  # TLS runs from Corpus to the storage itself, checked against its name.
+  # TLS runs from Archfold to the storage itself, checked against its name.
   s3-tunnel:
     image: alpine/socat:1.8.0.3
     restart: unless-stopped
@@ -276,7 +276,7 @@ services:
     networks: [internal, egress]
 
   proxy:
-    image: corpus-proxy:latest
+    image: archfold-proxy:latest
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]
     # No secrets: only what the Caddyfile reads.

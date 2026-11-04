@@ -20,8 +20,8 @@ class ErrorLog(Base):
     # backend or worker: the process that logged it.
     source: Mapped[str] = mapped_column(String(16))
     logger: Mapped[str] = mapped_column(String(128))
-    # unhandled (a bug: nothing caught it), app (Corpus logged it) or library
-    # (a package Corpus uses failed); services/error_log.category_of.
+    # unhandled (a bug: nothing caught it), app (Archfold logged it) or library
+    # (a package Archfold uses failed); services/error_log.category_of.
     category: Mapped[str] = mapped_column(String(16), server_default="library")
     # Encrypted: an error can quote a document or a chat.
     message: Mapped[str] = mapped_column(EncryptedText)

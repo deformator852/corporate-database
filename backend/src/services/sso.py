@@ -45,7 +45,7 @@ class SsoIdentity:
     subject: str
     email: str | None
     # The provider vouches for the email (an "email" claim not marked
-    # unverified): only then may it match or rename a Corpus account.
+    # unverified): only then may it match or rename an Archfold account.
     # preferred_username is a display name OIDC says not to rely on.
     email_trusted: bool
     first_name: str

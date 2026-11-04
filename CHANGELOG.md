@@ -1,11 +1,14 @@
 # Changelog
 
-What each version of Corpus changes. The installed version is shown on the
+What each version of Archfold changes. The installed version is shown on the
 **System status** page and recorded in every backup's `manifest`.
 
 ## Unreleased
 
-* Corpus is now open source, under the Apache License 2.0.
+* The project is now called Archfold; it was called Corpus. The default Docker
+  project is `archfold`, so an existing production stack needs
+  `COMPOSE_PROJECT_NAME=corpus` to keep its volumes.
+* Archfold is now open source, under the Apache License 2.0.
 * The interface moved to daisyUI, with a light and a dark mode. Custom themes
   must be rewritten with daisyUI's variables: the extension API is now version 2.
 

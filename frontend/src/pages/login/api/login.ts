@@ -5,7 +5,7 @@ import type {LoginFormData} from "@pages/login/schema/loginForm";
 
 /** What the sign-in page offers (backend /auth/methods). */
 export type SignInMethods = {
-    /** Corpus passwords sign in; false while single sign-on is on. */
+    /** Archfold passwords sign in; false while single sign-on is on. */
     password: boolean;
     sso: {name: string} | null;
 };

@@ -115,6 +115,18 @@ describe("App shell", () => {
         expect(localStorage.getItem("ui-theme")).toBe("corporate");
     });
 
+    it("shows the dark favicon in dark mode", async () => {
+        const icon = document.head.appendChild(Object.assign(document.createElement("link"), {rel: "icon"}));
+        const {user} = renderApp("/", sessionUser());
+
+        await user.click(await screen.findByRole("button", {name: "Switch to dark mode"}));
+        expect(icon).toHaveAttribute("href", "/favicon-dark.svg");
+
+        await user.click(screen.getByRole("button", {name: "Switch to light mode"}));
+        expect(icon).toHaveAttribute("href", "/favicon.svg");
+        icon.remove();
+    });
+
     it("shows a not-found page for unknown addresses", async () => {
         const {user, router} = renderApp("/no/such/page", sessionUser());
         expect(await screen.findByRole("heading", {level: 1})).toBeInTheDocument();

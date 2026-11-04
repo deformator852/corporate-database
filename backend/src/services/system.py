@@ -1,4 +1,4 @@
-"""Health of the services Corpus depends on, for the admin status page.
+"""Health of the services Archfold depends on, for the admin status page.
 
 Checks run in parallel, each with a timeout, so one hung service cannot hang
 the page. Details are for operators: they may name hosts and models, never

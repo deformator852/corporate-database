@@ -155,7 +155,7 @@ def storage_dir() -> Path:
 class S3Config:
     """STORAGE=s3: the company's S3-compatible object storage (Ceph, NetApp
     StorageGRID, Dell ECS, AWS S3 and the like). The bucket is the company's:
-    Corpus only reads, writes and deletes objects in it."""
+    Archfold only reads, writes and deletes objects in it."""
 
     # http(s)://host[:port], no path.
     endpoint: str
@@ -289,7 +289,7 @@ def text_cleanup_mode() -> str:
 
 
 def app_version() -> str:
-    """Corpus's version: `version` in backend/pyproject.toml, the one place
+    """Archfold's version: `version` in backend/pyproject.toml, the one place
     it is set (see CHANGELOG.md)."""
     return version("backend")
 
@@ -331,10 +331,10 @@ class OidcConfig:
     name: str
     # ID token claim listing the user's groups.
     groups_claim: str
-    # Provider group -> Corpus role key. Mapped roles follow the groups at
+    # Provider group -> Archfold role key. Mapped roles follow the groups at
     # every sign-in; other roles stay as administrators set them.
     role_map: dict[str, str]
-    # A first SSO sign-in takes over the Corpus account with the same email.
+    # A first SSO sign-in takes over the Archfold account with the same email.
     link_by_email: bool
     # host:port to dial instead of the issuer's host, with TLS still checked
     # against the issuer's name: production's sso-tunnel, the backend's only

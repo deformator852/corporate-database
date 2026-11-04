@@ -10,7 +10,7 @@ target the one TARGET_STORAGE, TARGET_STORAGE_DIR and TARGET_S3_* name.
 
 The files are encrypted already and keep their keys, so moving is copying.
 Each copy is read back before the next file. The originals stay: delete
-them once Corpus works with the new storage. Resumable: a file already in
+them once Archfold works with the new storage. Resumable: a file already in
 the target is not copied again.
 """
 

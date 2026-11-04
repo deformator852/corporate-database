@@ -41,12 +41,12 @@ ENV PATH=/app/.venv/bin:$PATH \
     HF_HUB_DISABLE_TELEMETRY=1
 
 # /data/documents: owned here, so a new documents_data volume mounted on it
-# starts owned by corpus too (STORAGE=disk).
-RUN useradd --create-home --uid 10001 corpus \
+# starts owned by archfold too (STORAGE=disk).
+RUN useradd --create-home --uid 10001 archfold \
     && mkdir -p /models/hf /data/documents \
-    && chown -R corpus /models /app /data \
+    && chown -R archfold /models /app /data \
     && chmod 700 /data/documents
-USER corpus
+USER archfold
 WORKDIR /app/src
 
 EXPOSE 8000

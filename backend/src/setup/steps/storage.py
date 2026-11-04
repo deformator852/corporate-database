@@ -91,7 +91,7 @@ def _upstream(endpoint: str) -> str:
     return host if ":" in host else host + (":443" if endpoint.startswith("https:") else ":80")
 
 
-# Moved in production: Corpus was stopped for it, and starts once the new
+# Moved in production: Archfold was stopped for it, and starts once the new
 # storage is saved.
 Move = Literal["moved", "moved in production", "not moved", "failed"]
 
@@ -168,7 +168,7 @@ def _move_in_production(console: Console, source: S3Config | None, target: S3Con
             "TARGET_S3_ACCESS_KEY": target.access_key,
             "TARGET_S3_SECRET_KEY": target.secret_key,
             "TARGET_S3_REGION": target.region,
-            "TARGET_S3_CACERT": "/etc/corpus-s3/ca.pem" if target.cacert else "",
+            "TARGET_S3_CACERT": "/etc/archfold-s3/ca.pem" if target.cacert else "",
             "TARGET_S3_CONNECT": "s3-tunnel:9000",
         }
     else:
@@ -181,7 +181,7 @@ def _move_in_production(console: Console, source: S3Config | None, target: S3Con
         compose("--profile", "s3", "up", "-d", "s3-tunnel")
         compose("run", "--rm", "--no-deps", *passed, "backend", "python", "-m", "maintenance.move_files")
     except subprocess.CalledProcessError:
-        console.print("[red]Moving stopped (see above); starting Corpus again with the old storage.[/]")
+        console.print("[red]Moving stopped (see above); starting Archfold again with the old storage.[/]")
         restart_production(console)
         return "failed"
     return "moved in production"
@@ -190,12 +190,12 @@ def _move_in_production(console: Console, source: S3Config | None, target: S3Con
 def restart_production(console: Console) -> None:
     from switch_embedding_model import REPO_DIR, stack_env
 
-    console.print("Starting Corpus (deploy/deploy.sh up)...")
+    console.print("Starting Archfold (deploy/deploy.sh up)...")
     subprocess.run([str(REPO_DIR / "deploy" / "deploy.sh"), "up"], check=False, env=stack_env())
 
 
 def check_access(config: S3Config) -> None:
-    """Writes, reads back and deletes a test object: what Corpus does with
+    """Writes, reads back and deletes a test object: what Archfold does with
     every document. Raises AppError with the storage's reason."""
     from services.storage import S3Store
 
@@ -203,8 +203,8 @@ def check_access(config: S3Config) -> None:
         store = S3Store(config)
     except ValueError as exc:  # the client refuses the address itself (a bad port)
         raise AppError("invalid", f"The storage address is not valid: {exc}", status_code=400) from exc
-    key = f"corpus-check/{uuid.uuid4()}"
-    probe = b"Corpus storage check"
+    key = f"archfold-check/{uuid.uuid4()}"
+    probe = b"Archfold storage check"
     try:
         store.write(key, probe)
         if store.read(key) != probe:
@@ -220,7 +220,7 @@ class StorageStep:
     title = "Document storage"
 
     def __init__(self, *, installing: bool = False) -> None:
-        # Run by setup: Corpus is not running yet, so there is nothing to
+        # Run by setup: Archfold is not running yet, so there is nothing to
         # restart, and no database yet means no files to move.
         self.installing = installing
 
@@ -252,7 +252,7 @@ class StorageStep:
             _restart(console, moved, changed=not _same(source, None) and not self.installing)
             return
         config = _ask_s3(console)
-        console.print("Checking that Corpus can write, read and delete in the bucket…")
+        console.print("Checking that Archfold can write, read and delete in the bucket…")
         try:
             check_access(config)
         except AppError as exc:
@@ -295,11 +295,11 @@ def _move(console: Console, source: S3Config | None, target: S3Config | None, in
 
 
 def _restart(console: Console, moved: Move, *, changed: bool) -> None:
-    """Corpus reads the storage settings when it starts."""
+    """Archfold reads the storage settings when it starts."""
     if moved == "moved in production":
         restart_production(console)  # stopped for the move
     elif changed:
         console.print(
-            "[yellow]Restart Corpus to use the new storage: production deploy/deploy.sh up; "
+            "[yellow]Restart Archfold to use the new storage: production deploy/deploy.sh up; "
             "development: restart the backend and the worker.[/]"
         )

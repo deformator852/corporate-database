@@ -33,6 +33,12 @@
   --color-error-content: oklch(15% 0 0);
 }
 
+/* The logo in dark mode, in the colors of public/favicon-dark.svg. */
+[data-theme="business"] {
+  --logo-tile: #2c3137;
+  --logo-mark: #5ab0f0;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 :root {

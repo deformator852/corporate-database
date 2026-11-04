@@ -21,7 +21,7 @@ import pytest
 from dotenv import dotenv_values
 
 _ENV = dotenv_values(os.path.join(os.path.dirname(__file__), "..", ".env"))
-_TEST_DB = f"corpus_test_{uuid.uuid4().hex[:8]}"
+_TEST_DB = f"archfold_test_{uuid.uuid4().hex[:8]}"
 
 # Before any app import: modules read the environment at import time.
 os.environ.update(
@@ -42,7 +42,7 @@ os.environ.update(
         # Files on disk, in a folder per test (`infra`); S3 tests set S3_*.
         # Never the developer's backend/storage, even without `infra`.
         "STORAGE": "disk",
-        "STORAGE_DIR": tempfile.mkdtemp(prefix="corpus-test-files-"),
+        "STORAGE_DIR": tempfile.mkdtemp(prefix="archfold-test-files-"),
         # Off unless a test turns them on: the developer's backend/.env may
         # set them (SSO on refuses passwords; a Vault would hold their real
         # key). Empty values win over the file (load_dotenv never overrides

@@ -10,6 +10,7 @@
     if (localStorage.getItem("ui-theme-dark") === "1") {
       document.documentElement.classList.add("dark");
       document.documentElement.style.colorScheme = "dark";
+      document.querySelector('link[rel="icon"]').setAttribute("href", "/favicon-dark.svg");
     }
   } catch (e) {}
 })();

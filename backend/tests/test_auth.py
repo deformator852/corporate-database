@@ -39,7 +39,7 @@ def test_an_unknown_email_costs_a_password_check_too(client, monkeypatch):
 
     monkeypatch.setattr(services.auth, "verify_password", spy)
 
-    response = login(client, "nobody-here@corpus.test", "some-password")
+    response = login(client, "nobody-here@archfold.test", "some-password")
 
     # Answering without the (slow) check would tell which emails have accounts.
     assert response.status_code == 401 and checked == ["some-password"]

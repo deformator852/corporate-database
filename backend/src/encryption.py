@@ -50,6 +50,8 @@ class _Key:
         self.cipher = AESGCM(self.material)
         # Separate derivation: the id can be stored and shown without
         # revealing anything about the key itself.
+        # The "corpus" labels here predate the name Archfold. They are part of the
+        # derivation: changing them makes stored data unreadable.
         self.id = hmac.new(raw, b"corpus key id", hashlib.sha256).digest()[:_KEY_ID_BYTES]
 
 
@@ -148,7 +150,7 @@ def _open(blob: bytes, context: str) -> bytes:
 def _not_encrypted() -> AppError:
     return AppError(
         "misconfigured",
-        "Stored data is not encrypted; it was not written by Corpus.",
+        "Stored data is not encrypted; it was not written by Archfold.",
         status_code=500,
     )
 
@@ -252,7 +254,7 @@ def stream_fingerprint(header: bytes) -> str:
 def decrypt_stream(source: BinaryIO, target: BinaryIO) -> None:
     header = source.read(len(_STREAM_MAGIC) + _KEY_ID_BYTES + _SALT_BYTES)
     if len(header) < len(_STREAM_MAGIC) + _KEY_ID_BYTES + _SALT_BYTES or not header.startswith(_STREAM_MAGIC):
-        raise AppError("invalid", "Not a Corpus backup file.", status_code=400)
+        raise AppError("invalid", "Not an Archfold backup file.", status_code=400)
     key_id = header[len(_STREAM_MAGIC) : len(_STREAM_MAGIC) + _KEY_ID_BYTES]
     key = next((k for k in _keys() if k.id == key_id), None)
     if key is None:

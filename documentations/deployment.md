@@ -1,12 +1,12 @@
-# Deploying Corpus on a company server
+# Deploying Archfold on a company server
 
-This guide shows you how to install Corpus on a Linux server in your company
+This guide shows you how to install Archfold on a Linux server in your company
 network and keep it running: updates, backups, disk encryption and key
 rotation.
 
 ## About the deployment
 
-Corpus runs entirely inside the company network. After installation, no
+Archfold runs entirely inside the company network. After installation, no
 container can reach the internet. Only the model download job reaches it, and
 only when you run it. If you connect HashiCorp Vault, single sign-on or S3
 storage, a tunnel container forwards to that one address and nowhere else.
@@ -25,12 +25,12 @@ unless you keep them in the company's S3 storage.
   x86-64 CPU with AVX2. The AI model uses most of the memory. A GPU is
   optional. Larger models need more: see
   [System requirements](../README.md#system-requirements).
-* A host name that users will open, for example `corpus.company.local`
+* A host name that users will open, for example `archfold.company.local`
 * Either a company TLS certificate, or Caddy's internal certificate
   (`TLS=internal`)
 * Internet access during installation only, to download the AI models
 
-## Installing Corpus
+## Installing Archfold
 
 1. Get the code and run the setup. It generates the secrets and asks where
    to keep the document files, the system language, the AI models and the
@@ -39,11 +39,11 @@ unless you keep them in the company's S3 storage.
    [Keeping document files in S3 storage](#keeping-document-files-in-s3-storage).
 
    ```sh
-   git clone REPOSITORY-URL corpus && cd corpus
+   git clone REPOSITORY-URL archfold && cd archfold
    cd backend && uv run install && cd ..
    ```
 
-   Replace REPOSITORY-URL with the address of the Corpus repository.
+   Replace REPOSITORY-URL with the address of the Archfold repository.
 
 2. When the setup shows `DATA_ENCRYPTION_KEY`, store a copy outside the
    server, then type `saved`. See
@@ -52,7 +52,7 @@ unless you keep them in the company's S3 storage.
 3. In `backend/.env`, set the address and the certificate:
 
    ```sh
-   SITE_ADDRESS=corpus.company.local
+   SITE_ADDRESS=archfold.company.local
    TLS=internal
    ```
 
@@ -65,7 +65,7 @@ unless you keep them in the company's S3 storage.
    deploy/deploy.sh build
    ```
 
-5. Start Corpus. Database migrations run automatically. The first start
+5. Start Archfold. Database migrations run automatically. The first start
    downloads the AI models named in `backend/.env` (the embedding model and
    the LLM, several GB, side by side). This is the only step that needs the
    internet; later starts find the models on disk and skip it.
@@ -74,7 +74,7 @@ unless you keep them in the company's S3 storage.
    deploy/deploy.sh up
    ```
 
-   The Corpus containers themselves never get internet access: only the
+   The Archfold containers themselves never get internet access: only the
    download jobs do, and only while they run.
 
 6. Create the first administrator. The command prints the password once.
@@ -83,7 +83,7 @@ unless you keep them in the company's S3 storage.
    deploy/deploy.sh admin ADMIN-EMAIL
    ```
 
-7. Open `https://corpus.company.local` and sign in. Click your name at the
+7. Open `https://archfold.company.local` and sign in. Click your name at the
    top to open **My account**, and change the password. On the
    **System status** page, check that every component shows **Running**.
 
@@ -147,7 +147,7 @@ no longer sign in, and their documents and history stay.
   [Keeping the key in HashiCorp Vault](#keeping-the-key-in-hashicorp-vault).
 * `cd backend && uv run configure key` prints the key's fingerprint. Add `--show`
   to print the key itself.
-* Corpus remembers the fingerprint of the key that encrypted the data and does
+* Archfold remembers the fingerprint of the key that encrypted the data and does
   not start with another key. See [Troubleshooting](#troubleshooting).
 * The application does not encrypt document names, user emails, the audit log
   or search vectors. Keep the Docker data on an encrypted disk. See
@@ -155,7 +155,7 @@ no longer sign in, and their documents and history stay.
 * Back up regularly and keep the backups on another machine. See
   [Backing up](#backing-up).
 
-## Updating Corpus
+## Updating Archfold
 
 1. Get the new version, then build and restart:
 
@@ -165,16 +165,16 @@ no longer sign in, and their documents and history stay.
    ```
 
 2. If you changed the AI models with `uv run configure`, `deploy/deploy.sh up`
-   downloads the new ones before it starts Corpus. To fetch newer versions
+   downloads the new ones before it starts Archfold. To fetch newer versions
    of models already on disk, run `deploy/deploy.sh models`.
 
 ## Signing in with the company account (SSO)
 
-Users can sign in with their company account instead of a Corpus password:
+Users can sign in with their company account instead of an Archfold password:
 Microsoft Entra ID, ADFS, Keycloak, Okta or another provider that supports
 OpenID Connect. SSO is off until you turn it on.
 
-1. At the provider, register Corpus as a confidential web application with
+1. At the provider, register Archfold as a confidential web application with
    this redirect URI, where SITE is the address users open:
 
    ```text
@@ -188,27 +188,27 @@ OpenID Connect. SSO is off until you turn it on.
    secret. The setup asks:
    * **Button name**: the button says "Sign in with NAME".
    * **Group to role map**: `GROUP=ROLE_KEY` pairs separated by `;`, for
-     example `Corpus Admins=admin;Legal=legal`. A mapped role follows the
+     example `Archfold Admins=admin;Legal=legal`. A mapped role follows the
      groups at every sign-in. Leave it empty to assign roles on the
      **Users** page.
-   * **Link existing Corpus accounts by email**: someone who already has a
-     Corpus account keeps it at their first SSO sign-in, with its roles and
+   * **Link existing Archfold accounts by email**: someone who already has a
+     Archfold account keeps it at their first SSO sign-in, with its roles and
      chats. Answer yes only when your IT department assigns the emails at
      the provider; where people choose their own, one could take over
      another's account. With no, such a sign-in is refused.
 3. Run `deploy/deploy.sh up`.
 
-While SSO is on, only users with the Admin role sign in with a Corpus
+While SSO is on, only users with the Admin role sign in with an Archfold
 password, through **Administrator sign-in with a password** under the SSO
 button; everyone else signs in with the company account. So administrators
 can still get in when the provider is down. To let everyone use passwords
 again, run `uv run configure`, answer no to **Use single sign-on?** and run
 `deploy/deploy.sh up`.
 
-A user's first SSO sign-in creates their Corpus account. Corpus recognizes
+A user's first SSO sign-in creates their Archfold account. Archfold recognizes
 the person by the provider's own ID, not by email.
 
-If a Corpus account with the same email already exists and linking by email
+If an Archfold account with the same email already exists and linking by email
 is off, the sign-in is refused with "An account with your email already
 exists". To let the person in, delete that account or change its email on the
 **Users** page; their next SSO sign-in creates a new account. The chats of
@@ -227,10 +227,10 @@ them on the **Users** page.
 
 ## Keeping document files in S3 storage
 
-By default, Corpus keeps uploaded files on the server, in the
+By default, Archfold keeps uploaded files on the server, in the
 `documents_data` Docker volume. A company with its own S3-compatible object
 storage, such as Ceph, NetApp StorageGRID, Dell ECS or AWS S3, can keep them
-there instead, under its replication, versioning and retention rules. Corpus
+there instead, under its replication, versioning and retention rules. Archfold
 encrypts each file before it leaves the server: the storage holds only
 encrypted objects named `documents/UUID`, without document names.
 
@@ -240,18 +240,18 @@ their files; see
 
 You need:
 
-* A bucket for Corpus, for example `corpus-documents`.
+* A bucket for Archfold, for example `archfold-documents`.
 * An access key and a secret key of an account allowed only to read, write
   and delete objects in that bucket. For example, as an S3 policy:
 
   ```json
   {"Version": "2012-10-17", "Statement": [{"Effect": "Allow",
     "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
-    "Resource": ["arn:aws:s3:::corpus-documents/*"]}]}
+    "Resource": ["arn:aws:s3:::archfold-documents/*"]}]}
   ```
 
 * The storage's address, `https://HOST` or `https://HOST:PORT` without a
-  path, reachable from the Corpus server. For Amazon S3, use the address of
+  path, reachable from the Archfold server. For Amazon S3, use the address of
   the bucket's region, for example `https://s3.eu-central-1.amazonaws.com`,
   and enter that region (`eu-central-1`) when the step asks.
 
@@ -276,15 +276,15 @@ You need:
 
    The containers have no route out of the server, so `deploy.sh` starts an
    `s3-tunnel` container that forwards only to the storage's address. TLS
-   runs from Corpus to the storage and is checked against the storage's
+   runs from Archfold to the storage and is checked against the storage's
    name.
 
 `deploy/deploy.sh backup` then copies the database and the search index, not
 the files. Back the bucket up with the storage's versioning or replication,
-and restore the bucket and a Corpus backup from the same point in time.
+and restore the bucket and an Archfold backup from the same point in time.
 
 The **System status** page shows the bucket under **File storage**, or the
-storage's reason when it refuses Corpus.
+storage's reason when it refuses Archfold.
 
 ### Moving files between the server and S3
 
@@ -294,15 +294,15 @@ storage?**
 
 * **Yes.** The step stops the backend and the worker, copies every
   document's file to the new storage, reads each copy back, saves the new
-  settings and starts Corpus again. The files are encrypted already and
+  settings and starts Archfold again. The files are encrypted already and
   keep their names, so nothing is decrypted on the way. The old copies stay:
-  delete them yourself once Corpus works with the new storage. If the copy
+  delete them yourself once Archfold works with the new storage. If the copy
   stops midway, nothing is saved; run the step again and it continues where
   it stopped.
 * **No.** Only the settings change. The documents stay searchable, but the
   **Documents** page marks them **The file is not in the storage**, and the
   **System status** page counts them. They cannot be opened or processed
-  again until their files are in the new storage. Corpus checks every file
+  again until their files are in the new storage. Archfold checks every file
   when it starts.
 
 The step moves files between the server and one S3 storage. To move them
@@ -314,19 +314,19 @@ bucket and HOST with the storage's address:
 aws s3 sync s3://OLD-BUCKET/documents s3://BUCKET/documents --endpoint-url https://HOST
 ```
 
-To copy the files back to the server by hand, stop Corpus, copy them into the
-volume and give them to the Corpus user (uid 10001), then answer no at
+To copy the files back to the server by hand, stop Archfold, copy them into the
+volume and give them to the Archfold user (uid 10001), then answer no at
 **Document storage** and to the move, and run `deploy/deploy.sh up`:
 
 ```sh
-files=$(docker volume inspect corpus_documents_data --format '{{.Mountpoint}}')
+files=$(docker volume inspect archfold_documents_data --format '{{.Mountpoint}}')
 sudo -E aws s3 sync s3://BUCKET/documents "$files/documents" --endpoint-url https://HOST
 sudo chown -R 10001:10001 "$files"
 ```
 
 ## Using several languages
 
-Corpus can serve documents and users in several languages: English, Spanish
+Archfold can serve documents and users in several languages: English, Spanish
 and French. Each user picks the interface language in the header (the
 **Language** button), and reads the interface, error messages, notices and
 the assistant's answers in it. The choice is saved on the account.
@@ -387,16 +387,16 @@ Every user gets one answer at a time, whatever the settings.
 
 ## Viewing errors
 
-Corpus keeps the warnings and errors of the backend and the worker, with
+Archfold keeps the warnings and errors of the backend and the worker, with
 their tracebacks, encrypted in the database. To see them, open **Error log**
 in the sidebar; you need the **View error log** permission, which the Admin
 role has. Filter by level (warning, error, critical) and by type:
 
 | Type | What it means |
 |---|---|
-| Unhandled (bug) | An error nothing in Corpus caught. Report these. |
-| Handled | Corpus noticed the problem and logged it, for example a document it could not process |
-| System | A component Corpus uses failed, for example the database or the AI model. Only its errors are kept, not its warnings. |
+| Unhandled (bug) | An error nothing in Archfold caught. Report these. |
+| Handled | Archfold noticed the problem and logged it, for example a document it could not process |
+| System | A component Archfold uses failed, for example the database or the AI model. Only its errors are kept, not its warnings. |
 
 Each part of the code keeps at most 30 entries a minute, so a failing
 component cannot fill the database.
@@ -408,7 +408,7 @@ still show everything, including messages below warning level.
 
 ## Managing chat history
 
-Corpus saves every user's chats, encrypted. Users cannot delete their own
+Archfold saves every user's chats, encrypted. Users cannot delete their own
 chats. A chat is deleted automatically after 90 days without new messages; to
 change that, set `CHAT_RETENTION_DAYS` in `backend/.env` (`0` keeps chats
 forever) and run `deploy/deploy.sh up`.
@@ -438,7 +438,7 @@ recorded in the **Audit log**.
 
 ## Backing up
 
-A backup goes into `BACKUP-DIR/corpus-YYYYMMDD-HHMMSS/`:
+A backup goes into `BACKUP-DIR/archfold-YYYYMMDD-HHMMSS/`:
 
 | File | What it holds |
 |---|---|
@@ -451,7 +451,7 @@ Every part is encrypted with `DATA_ENCRYPTION_KEY`, so a stolen backup reveals
 nothing, and a backup is useless without that key.
 
 1. Run the backup. Replace BACKUP-DIR with the folder for backups; without it,
-   the backup goes to `backups/` in the repository. Corpus stops while the
+   the backup goes to `backups/` in the repository. Archfold stops while the
    backup runs, so all parts match, and starts again by itself. Small
    installations take under a minute.
 
@@ -466,7 +466,7 @@ To back up every night at 03:00 and keep 14 days, add this line with
 `crontab -e` as a user in the `docker` group:
 
 ```text
-0 3 * * * /opt/corpus/deploy/deploy.sh backup BACKUP-DIR >> /var/log/corpus-backup.log 2>&1 && find BACKUP-DIR -maxdepth 1 -name 'corpus-*' -mtime +14 -exec rm -rf {} +
+0 3 * * * /opt/archfold/deploy/deploy.sh backup BACKUP-DIR >> /var/log/archfold-backup.log 2>&1 && find BACKUP-DIR -maxdepth 1 -name 'archfold-*' -mtime +14 -exec rm -rf {} +
 ```
 
 > [!IMPORTANT]
@@ -475,7 +475,7 @@ To back up every night at 03:00 and keep 14 days, add this line with
 
 ## Encrypting the disk
 
-Corpus encrypts document content itself. Postgres still holds document names,
+Archfold encrypts document content itself. Postgres still holds document names,
 user emails and the audit log, and Qdrant holds search vectors, from which
 parts of the text can be reconstructed. Keep all Docker data on a LUKS
 encrypted volume, so a stolen disk or a discarded server reveals nothing.
@@ -493,21 +493,21 @@ To use a separate data disk instead, follow these steps before the first
 
    ```sh
    sudo cryptsetup luksFormat DISK
-   sudo cryptsetup open DISK corpus-data
-   sudo mkfs.ext4 /dev/mapper/corpus-data
+   sudo cryptsetup open DISK archfold-data
+   sudo mkfs.ext4 /dev/mapper/archfold-data
    ```
 
 2. Mount the disk and move the Docker data there:
 
    ```sh
    sudo mkdir -p /srv/docker
-   sudo mount /dev/mapper/corpus-data /srv/docker
+   sudo mount /dev/mapper/archfold-data /srv/docker
    echo '{"data-root": "/srv/docker"}' | sudo tee /etc/docker/daemon.json
    sudo systemctl restart docker
    ```
 
-3. To open the disk at boot, add `corpus-data DISK none luks` to
-   `/etc/crypttab` and `/dev/mapper/corpus-data /srv/docker ext4 defaults 0 2`
+3. To open the disk at boot, add `archfold-data DISK none luks` to
+   `/etc/crypttab` and `/dev/mapper/archfold-data /srv/docker ext4 defaults 0 2`
    to `/etc/fstab`. The boot then waits for the passphrase at the console.
 
 4. Check the result: `lsblk -f` shows `crypto_LUKS` under the disk, and
@@ -523,7 +523,7 @@ protects only a removed disk, not the running server.
 The embedding model turns documents and questions into vectors for search.
 Vectors of two models cannot be compared, so another model means every
 document is embedded again. While `EMBEDDING_MODEL` in `backend/.env` is not
-the model the documents are indexed with, Corpus runs but search is off: the
+the model the documents are indexed with, Archfold runs but search is off: the
 chat answers that the search index must be rebuilt, and new uploads wait in
 the queue.
 
@@ -559,7 +559,7 @@ If the command stops midway, run it again: it continues where it stopped.
 
 1. Set `EMBEDDING_MODEL` in `backend/.env` to a model from the table in
    [Where the models come from](#where-the-models-come-from).
-2. Restart Corpus. It downloads the new model when it is missing, so the
+2. Restart Archfold. It downloads the new model when it is missing, so the
    server needs the internet for this step:
 
    ```sh
@@ -577,7 +577,7 @@ chunk size with `uv run configure`, run the command with the current model.
 ### Where the models come from
 
 The embedding models are open models published on the Hugging Face Hub
-(huggingface.co). Corpus knows the ones below; `EMBEDDING_MODEL` takes the
+(huggingface.co). Archfold knows the ones below; `EMBEDDING_MODEL` takes the
 name in the first column.
 
 | Name | Hugging Face model | Documents in | Vector size |
@@ -621,9 +621,9 @@ Rotate the key when it may have leaked, or when your policy requires it.
    cd backend && uv run configure key rotate && cd ..
    ```
 
-2. Re-encrypt the data. The command stops Corpus, re-encrypts every file,
+2. Re-encrypt the data. The command stops Archfold, re-encrypts every file,
    document text, chat and error log entry, and the search index text,
-   removes the old key from `.env`, and starts Corpus again.
+   removes the old key from `.env`, and starts Archfold again.
 
    ```sh
    deploy/deploy.sh rotate-key
@@ -646,28 +646,28 @@ the old key, like older backups.
 
 By default `DATA_ENCRYPTION_KEY` is in `backend/.env`, so a copy of the
 server's disk includes it. With HashiCorp Vault, `.env` holds only the
-credentials of a Vault AppRole. Corpus reads the key from Vault when it starts
+credentials of a Vault AppRole. Archfold reads the key from Vault when it starts
 and keeps it in memory only. A copy of the disk is then no use outside the
 company network, and you can revoke the AppRole, bind it to the server's
 address and see every read in Vault's audit log.
 
 You need a Vault server with a KV version 2 secrets engine (mounted at
-`secret` by default), reachable from the Corpus server. A hardware security
-module (HSM) protects Vault's own master key; Corpus needs no HSM setup of its
+`secret` by default), reachable from the Archfold server. A hardware security
+module (HSM) protects Vault's own master key; Archfold needs no HSM setup of its
 own.
 
-1. In Vault, create a read-only policy and an AppRole for Corpus. Replace
-   SERVER-IP with the address of the Corpus server:
+1. In Vault, create a read-only policy and an AppRole for Archfold. Replace
+   SERVER-IP with the address of the Archfold server:
 
    ```sh
    vault auth enable approle
-   vault policy write corpus-read - <<'EOF'
-   path "secret/data/corpus" { capabilities = ["read"] }
+   vault policy write archfold-read - <<'EOF'
+   path "secret/data/archfold" { capabilities = ["read"] }
    EOF
-   vault write auth/approle/role/corpus token_policies=corpus-read \
+   vault write auth/approle/role/archfold token_policies=archfold-read \
      secret_id_bound_cidrs=SERVER-IP/32 token_bound_cidrs=SERVER-IP/32
-   vault read -field=role_id auth/approle/role/corpus/role-id
-   vault write -f -field=secret_id auth/approle/role/corpus/secret-id
+   vault read -field=role_id auth/approle/role/archfold/role-id
+   vault write -f -field=secret_id auth/approle/role/archfold/secret-id
    ```
 
 2. Run the key storage step and choose **HashiCorp Vault**:
@@ -677,9 +677,9 @@ own.
    ```
 
    It asks for the Vault address, the role_id and secret_id from step 1, the
-   mount and path (`secret`, `corpus`), and the CA file of Vault's certificate
+   mount and path (`secret`, `archfold`), and the CA file of Vault's certificate
    if a company CA signed it. It then asks once for a Vault token that may
-   write `secret/data/corpus`, writes the key there, checks that the AppRole
+   write `secret/data/archfold`, writes the key there, checks that the AppRole
    can read it, and removes the key from `.env`. The token is not saved.
 
 3. Apply it:
@@ -690,12 +690,12 @@ own.
 
    The containers have no route out of the server, so `deploy.sh` starts a
    `vault-tunnel` container that forwards only to the Vault address. TLS runs
-   from Corpus to Vault and is checked against Vault's name.
+   from Archfold to Vault and is checked against Vault's name.
 
 To move the key back into `.env`, run `uv run configure` and choose the `.env`
 file. The key stays in Vault until you delete it there.
 
-If Vault cannot be reached when Corpus starts, the backend and the worker do
+If Vault cannot be reached when Archfold starts, the backend and the worker do
 not start; `deploy/deploy.sh logs backend` shows why.
 
 ## Restoring a backup
@@ -707,11 +707,11 @@ not start; `deploy/deploy.sh logs backend` shows why.
    the fingerprint in the backup's `manifest` file with the output of
    `cd backend && uv run configure key`.
 
-2. Run the restore and type `restore` when asked. Corpus checks every part of
+2. Run the restore and type `restore` when asked. Archfold checks every part of
    the backup before it deletes anything.
 
    ```sh
-   deploy/deploy.sh restore BACKUP-DIR/corpus-YYYYMMDD-HHMMSS
+   deploy/deploy.sh restore BACKUP-DIR/archfold-YYYYMMDD-HHMMSS
    ```
 
 3. On a new server, download the AI models, which backups do not contain:
@@ -720,9 +720,9 @@ not start; `deploy/deploy.sh logs backend` shows why.
    deploy/deploy.sh models
    ```
 
-A backup made by an older version of Corpus is migrated when Corpus starts.
+A backup made by an older version of Archfold is migrated when Archfold starts.
 
-With S3 storage the backup holds no files: Corpus reads them from the bucket
+With S3 storage the backup holds no files: Archfold reads them from the bucket
 as it is now. Files of documents uploaded after the backup stay there unused.
 Files of documents deleted after the backup are gone, unless the bucket's
 versioning brings them back; restore the bucket to the backup's time if it
@@ -730,7 +730,7 @@ can.
 
 ## Troubleshooting
 
-**Corpus does not start, and the log says "is not the key the stored data is
+**Archfold does not start, and the log says "is not the key the stored data is
 encrypted with".** `backend/.env` holds a different `DATA_ENCRYPTION_KEY` than
 the one that encrypted the data. Restore the original key from your copy. The
 log names both fingerprints; `cd backend && uv run configure key` shows the
@@ -763,7 +763,7 @@ when you use Vault, single sign-on or S3 storage.
 **`deploy.sh` says an address points to this server's loopback address.**
 Vault, the SSO provider and the S3 storage are reached through tunnel
 containers, and inside a container `localhost` or `127.0.0.1` is the
-container itself. If the service runs on the Corpus server, make it listen on
+container itself. If the service runs on the Archfold server, make it listen on
 the server's network address and enter that address or the server's host
 name instead, with `cd backend && uv run configure`.
 

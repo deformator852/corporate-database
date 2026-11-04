@@ -25,7 +25,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def uses_password(user: User) -> bool:
-    """Signs in with a Corpus password: always without single sign-on; with
+    """Signs in with an Archfold password: always without single sign-on; with
     it, administrators only (their way in when the provider is down). The
     user's roles must be loaded."""
     if user.password is None:

@@ -15,7 +15,7 @@ from joserfc import jwt
 from joserfc.jwk import KeySet, RSAKey
 
 ISSUER = "https://idp.acme.test/realms/acme"
-CLIENT_ID = "corpus"
+CLIENT_ID = "archfold"
 SECRET = "client-secret-" + "s" * 20
 
 
@@ -173,8 +173,8 @@ def test_a_first_sign_in_creates_the_account_and_starts_a_session(client, provid
 
 def test_mapped_groups_give_and_take_roles(client, provider, make_user, monkeypatch):
     make_user(admin=True)  # another admin: this one's Admin role may go
-    monkeypatch.setenv("OIDC_ROLE_MAP", "CN=Corpus Admins,OU=Groups,DC=acme=admin")
-    provider.claims = _person(groups=["CN=Corpus Admins,OU=Groups,DC=acme", "Other"])
+    monkeypatch.setenv("OIDC_ROLE_MAP", "CN=Archfold Admins,OU=Groups,DC=acme=admin")
+    provider.claims = _person(groups=["CN=Archfold Admins,OU=Groups,DC=acme", "Other"])
     _sign_in(client, provider)
     assert "users.list" in client.get("/api/v1/auth/me").json()["permissions"]
 
@@ -285,7 +285,7 @@ def test_production_reaches_the_provider_through_its_tunnel(client, provider, mo
 
 
 def test_the_last_admin_keeps_the_role_when_the_group_drops_them(client, provider, monkeypatch):
-    """A directory change must not leave Corpus without an administrator."""
+    """A directory change must not leave Archfold without an administrator."""
     from conftest import run
     from sqlalchemy import func, select, update
 

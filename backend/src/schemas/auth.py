@@ -48,7 +48,7 @@ class SessionUserSchema(BaseModel):
     permissions: list[str]
     # None until the user picks one in the header: the default language.
     language: str | None
-    # Signs in with a Corpus password, which they may change. False for SSO
+    # Signs in with an Archfold password, which they may change. False for SSO
     # users, and, while single sign-on is on, for all but administrators.
     uses_password: bool
     # Shown as "Built with Llama" in the interface, as the model's license asks.

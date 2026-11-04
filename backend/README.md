@@ -1,4 +1,4 @@
-# Corpus backend
+# Archfold backend
 
 The backend is a FastAPI application with a Celery worker that processes
 uploaded documents. This guide shows you how to run it on a development
@@ -116,11 +116,11 @@ after changing the chunk size.
 ## Testing single sign-on locally
 
 A test identity provider (Keycloak) runs in Docker when you ask for it. Its
-realm `corpus` comes from `dev/keycloak/corpus-realm.json`:
+realm `archfold` comes from `dev/keycloak/archfold-realm.json`:
 
 | User | Password | Group |
 |---|---|---|
-| `ana` | `ana-password-1` | Corpus Admins |
+| `ana` | `ana-password-1` | Archfold Admins |
 | `bob` | `bob-password-1` | Legal |
 
 These are test values; never use them anywhere else.
@@ -138,13 +138,13 @@ These are test values; never use them anywhere else.
 
    | Question | Answer |
    |---|---|
-   | Issuer address | `https://localhost:8443/realms/corpus` |
+   | Issuer address | `https://localhost:8443/realms/archfold` |
    | CA file | `../dev/keycloak/certs/ca.pem` |
-   | Client ID | `corpus` |
-   | Client secret | `corpus-local-secret-0123456789` |
+   | Client ID | `archfold` |
+   | Client secret | `archfold-local-secret-0123456789` |
    | Callback address | `http://localhost:5173/api/v1/auth/sso/callback` |
    | Button name | `Keycloak` |
-   | Group to role map | `Corpus Admins=admin` |
+   | Group to role map | `Archfold Admins=admin` |
 
 4. Restart the backend and the frontend development server, open
    `http://localhost:5173/login` and select **Sign in with Keycloak**.
@@ -160,7 +160,7 @@ no at the Sign-in step.
 ## Testing S3 storage locally
 
 A test S3 storage (VersityGW) runs in Docker when you ask for it, with the
-bucket `corpus-documents`. These are test values; never use them anywhere
+bucket `archfold-documents`. These are test values; never use them anywhere
 else.
 
 1. Start it from the repository root:
@@ -175,9 +175,9 @@ else.
    | Question | Answer |
    |---|---|
    | Storage address | `http://localhost:7070` |
-   | Bucket | `corpus-documents` |
-   | Access key | `corpus-local-access-key` |
-   | Secret key | `corpus-local-secret-key-0123456789` (hidden while you type) |
+   | Bucket | `archfold-documents` |
+   | Access key | `archfold-local-access-key` |
+   | Secret key | `archfold-local-secret-key-0123456789` (hidden while you type) |
    | Region | `us-east-1` |
    | CA file | Enter (none: the test storage uses plain HTTP) |
 
@@ -195,7 +195,7 @@ shows. To go back, run `uv run configure` and answer no.
 
 A test HashiCorp Vault starts with the other development services, set up as a
 company's Vault administrator would (`dev/vault/start.sh`): KV v2 at
-`secret`, an AppRole `corpus` that may only read `secret/data/corpus`, and a
+`secret`, an AppRole `archfold` that may only read `secret/data/archfold`, and a
 token that may write it. These are test values; never use them anywhere else.
 
 Its data is on the `vault_data` Docker volume: a key moved there survives
@@ -218,11 +218,11 @@ cd backend && uv run configure key --show
    |---|---|
    | CA file | Enter (none: the test Vault uses plain HTTP) |
    | Vault address | `http://localhost:8200` |
-   | AppRole role_id | `corpus-local-role-id` |
-   | AppRole secret_id | `corpus-local-secret-id` (hidden while you type) |
+   | AppRole role_id | `archfold-local-role-id` |
+   | AppRole secret_id | `archfold-local-secret-id` (hidden while you type) |
    | KV v2 mount | Enter (`secret`) |
-   | Secret path | Enter (`corpus`) |
-   | Vault token | `corpus-local-admin-token` (hidden while you type) |
+   | Secret path | Enter (`archfold`) |
+   | Vault token | `archfold-local-admin-token` (hidden while you type) |
 
    It writes the key to Vault, checks the AppRole reads it back and removes
    it from `.env`.
@@ -235,4 +235,4 @@ start while the key is there. To move the key back, run `uv run configure`
 and choose the `.env` file. The Vault UI is at `http://localhost:8200`.
 
 To deploy to a server, see
-[Deploying Corpus on a company server](../documentations/deployment.md).
+[Deploying Archfold on a company server](../documentations/deployment.md).

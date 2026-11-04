@@ -5,6 +5,9 @@ export function applyTheme(theme: ThemeOption) {
   root.dataset.theme = theme.id;
   root.classList.toggle("dark", theme.dark === true);
   root.style.colorScheme = theme.dark ? "dark" : "light";
+  document
+    .querySelector('link[rel="icon"]')
+    ?.setAttribute("href", theme.dark ? "/favicon-dark.svg" : "/favicon.svg");
   try {
     // Read by public/theme-init.js before the app loads.
     localStorage.setItem("ui-theme-dark", theme.dark ? "1" : "0");

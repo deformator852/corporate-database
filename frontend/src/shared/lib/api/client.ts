@@ -81,7 +81,7 @@ export function refreshSession(): Promise<void> {
  */
 function oneTabAtATime<T>(work: () => Promise<T>): Promise<T> {
     const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
-    return locks ? locks.request("corpus-session-refresh", work) : work();
+    return locks ? locks.request("archfold-session-refresh", work) : work();
 }
 
 function isRefreshRequest(config: InternalAxiosRequestConfig): boolean {

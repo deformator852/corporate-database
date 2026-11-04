@@ -39,10 +39,10 @@ class SsoStep:
     def run(self, console: Console) -> None:
         console.print(
             "Users can sign in with their company account (single sign-on through Microsoft Entra ID, "
-            "ADFS, Keycloak, Okta or another OpenID Connect provider) instead of a Corpus password."
+            "ADFS, Keycloak, Okta or another OpenID Connect provider) instead of an Archfold password."
         )
         console.print(
-            "With single sign-on on, only administrators sign in with a Corpus password (a link on the "
+            "With single sign-on on, only administrators sign in with an Archfold password (a link on the "
             "sign-in page), so they can get in when the company's sign-in server is down; everyone else "
             "uses the company account."
         )
@@ -50,7 +50,7 @@ class SsoStep:
         if not Confirm.ask("Use single sign-on?", default=bool(current), console=console):
             for key in _KEYS:
                 remove_env(ENV_PATH, key)
-            console.print("Single sign-on is off: users sign in with Corpus passwords.")
+            console.print("Single sign-on is off: users sign in with Archfold passwords.")
             return
 
         def ask(key: str, label: str, default: str = "") -> str:
@@ -78,14 +78,14 @@ class SsoStep:
         )
         if secret:
             upsert_env(ENV_PATH, "OIDC_CLIENT_SECRET", secret)
-        site = env_value(ENV_PATH, "SITE_ADDRESS") or "corpus.example.com"
+        site = env_value(ENV_PATH, "SITE_ADDRESS") or "archfold.example.com"
         redirect = ask("OIDC_REDIRECT_URI", "Callback address", f"https://{site}/api/v1/auth/sso/callback")
         upsert_env(ENV_PATH, "OIDC_REDIRECT_URI", redirect)
         upsert_env(ENV_PATH, "OIDC_NAME", ask("OIDC_NAME", 'Button name ("Sign in with …")', "Microsoft"))
         upsert_env(ENV_PATH, "OIDC_GROUPS_CLAIM", ask("OIDC_GROUPS_CLAIM", "Groups claim in the ID token", "groups"))
         console.print(
             "Roles from groups: GROUP=ROLE_KEY pairs separated by ';', for example "
-            "Corpus Admins=admin;Legal=legal. Mapped roles follow the groups at every sign-in. "
+            "Archfold Admins=admin;Legal=legal. Mapped roles follow the groups at every sign-in. "
             "Empty: administrators assign roles on the Users page."
         )
         role_map = ask("OIDC_ROLE_MAP", "Group to role map")
@@ -94,21 +94,21 @@ class SsoStep:
         else:
             remove_env(ENV_PATH, "OIDC_ROLE_MAP")
         console.print(
-            "People who already have a Corpus account (made with a password) can keep it: at their first "
+            "People who already have an Archfold account (made with a password) can keep it: at their first "
             "SSO sign-in, the account with the same email becomes theirs, with its roles and chats. Say yes "
             "only if your IT department assigns the emails at the provider. Where people choose their own "
             "email, someone could take over another person's account this way. With no, such a sign-in is "
             "refused until an administrator sorts it out."
         )
         link = Confirm.ask(
-            "Link existing Corpus accounts by email?",
+            "Link existing Archfold accounts by email?",
             default=_on(env_value(ENV_PATH, "OIDC_LINK_BY_EMAIL"), False),
             console=console,
         )
         upsert_env(ENV_PATH, "OIDC_LINK_BY_EMAIL", "on" if link else "off")
         console.print(
             Panel(
-                f"Register Corpus at the provider as a confidential web application:\n"
+                f"Register Archfold at the provider as a confidential web application:\n"
                 f"  redirect URI: {redirect}\n"
                 f"  scopes: openid email profile\n"
                 f"  ID token: include the groups claim if roles come from groups",

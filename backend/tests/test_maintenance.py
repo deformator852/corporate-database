@@ -203,7 +203,7 @@ def test_compose_reads_env_from_the_file_not_from_what_was_loaded_earlier(monkey
     assert "EMBEDDING_MODEL" not in seen and "DB_USER" not in seen and "S3_ENDPOINT" not in seen
     assert seen["PATH"] == os.environ["PATH"]
 
-    # configure starts Corpus with deploy/deploy.sh the same way.
+    # configure starts Archfold with deploy/deploy.sh the same way.
     from rich.console import Console
 
     import setup.steps.storage as storage_step
@@ -425,7 +425,7 @@ def test_seeders_prepare_permissions_roles_and_the_search_collection(infra):
     ("settings", "named"),
     [
         ("KEY_STORE=vault\nVAULT_ADDR=http://localhost:8200\n", "VAULT_ADDR"),
-        ("OIDC_ISSUER=https://127.0.0.1:8443/realms/corpus\n", "OIDC_ISSUER"),
+        ("OIDC_ISSUER=https://127.0.0.1:8443/realms/archfold\n", "OIDC_ISSUER"),
         ("STORAGE=s3\nS3_ENDPOINT=http://[::1]:7070\n", "S3_ENDPOINT"),
     ],
 )
@@ -440,7 +440,7 @@ def test_deploy_refuses_a_tunnel_to_the_servers_loopback(tmp_path, settings, nam
     bin_dir.mkdir()
     (bin_dir / "docker").write_text(f'#!/bin/sh\necho "$@" >> {calls}\n')
     (bin_dir / "docker").chmod(0o755)
-    env = {**os.environ, "CORPUS_ENV_FILE": str(env_file), "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+    env = {**os.environ, "ARCHFOLD_ENV_FILE": str(env_file), "PATH": f"{bin_dir}:{os.environ['PATH']}"}
 
     up = subprocess.run([str(deploy), "up"], env=env, capture_output=True, text=True)
 

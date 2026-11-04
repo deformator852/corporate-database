@@ -1,5 +1,5 @@
 #!/bin/sh
-# Local test Vault for Corpus's key storage (docker-compose.local.yml, profile
+# Local test Vault for Archfold's key storage (docker-compose.local.yml, profile
 # "vault"). A real server with its data on a volume, not dev mode: dev mode
 # keeps everything in memory, and an encryption key moved there would be gone
 # at the next restart. Initialised on the first start (one unseal key, kept on
@@ -32,20 +32,20 @@ VAULT_TOKEN=$(grep '"root_token"' "$DATA/init.json" | cut -d'"' -f4)
 export VAULT_TOKEN
 vault operator unseal "$unseal_key" >/dev/null
 
-# What a company's Vault administrator does for Corpus (deployment.md).
+# What a company's Vault administrator does for Archfold (deployment.md).
 vault secrets list | grep -q '^secret/' || vault secrets enable -path=secret kv-v2 >/dev/null
 vault auth list | grep -q '^approle/' || vault auth enable approle >/dev/null
-vault policy write corpus-read - >/dev/null <<'HCL'
-path "secret/data/corpus" { capabilities = ["read"] }
+vault policy write archfold-read - >/dev/null <<'HCL'
+path "secret/data/archfold" { capabilities = ["read"] }
 HCL
-vault policy write corpus-write - >/dev/null <<'HCL'
-path "secret/data/corpus" { capabilities = ["create", "update", "read"] }
+vault policy write archfold-write - >/dev/null <<'HCL'
+path "secret/data/archfold" { capabilities = ["create", "update", "read"] }
 HCL
-vault write auth/approle/role/corpus token_policies=corpus-read >/dev/null
-vault write auth/approle/role/corpus/role-id role_id=corpus-local-role-id >/dev/null
+vault write auth/approle/role/archfold token_policies=archfold-read >/dev/null
+vault write auth/approle/role/archfold/role-id role_id=archfold-local-role-id >/dev/null
 # Fixed test values; "already exists" on later starts is fine.
-vault write auth/approle/role/corpus/custom-secret-id secret_id=corpus-local-secret-id >/dev/null 2>&1 || true
-vault token create -id=corpus-local-admin-token -policy=corpus-write -orphan -period=768h >/dev/null 2>&1 || true
+vault write auth/approle/role/archfold/custom-secret-id secret_id=archfold-local-secret-id >/dev/null 2>&1 || true
+vault token create -id=archfold-local-admin-token -policy=archfold-write -orphan -period=768h >/dev/null 2>&1 || true
 echo "Test Vault ready on http://localhost:8200"
 
 wait "$server"

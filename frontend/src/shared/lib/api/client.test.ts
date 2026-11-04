@@ -78,7 +78,7 @@ describe("API client", () => {
         try {
             mockApi().on("POST", "/auth/refresh");
             await refreshSession();
-            expect(held).toEqual(["corpus-session-refresh"]);
+            expect(held).toEqual(["archfold-session-refresh"]);
         } finally {
             Reflect.deleteProperty(navigator, "locks");
         }

@@ -1,6 +1,6 @@
 # Security policy
 
-Corpus stores confidential company documents, so security reports are welcome.
+Archfold stores confidential company documents, so security reports are welcome.
 
 ## Reporting a vulnerability
 
@@ -12,7 +12,7 @@ Include:
 * What an attacker can do, and what they need first, such as an account with a
   given role
 * The steps to reproduce it
-* The Corpus version, shown on the **System status** page
+* The Archfold version, shown on the **System status** page
 
 Do not include real documents, chat content or secrets. Test only on your own
 installation.

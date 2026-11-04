@@ -1,4 +1,4 @@
-# Corpus frontend
+# Archfold frontend
 
 The frontend is a React and TypeScript application built with Vite. This guide
 shows you how to run it on a development machine.
@@ -40,4 +40,4 @@ Restart the development server after changing them.
 ## Customizing the interface
 
 Add pages, sidebar links, translations and themes in `src/custom/` without
-editing core files. See [Customizing Corpus](../documentations/customization/en.md).
+editing core files. See [Customizing Archfold](../documentations/customization/en.md).

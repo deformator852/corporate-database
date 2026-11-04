@@ -131,10 +131,10 @@ services:
 
   # Single sign-on test provider (OpenID Connect), only when asked:
   #   docker compose --env-file backend/.env -f docker-compose.local.yml --profile sso up -d keycloak
-  # Realm "corpus" from dev/keycloak/corpus-realm.json: users ana (group
-  # Corpus Admins) and bob (Legal); admin console https://localhost:8443/admin
+  # Realm "archfold" from dev/keycloak/archfold-realm.json: users ana (group
+  # Archfold Admins) and bob (Legal); admin console https://localhost:8443/admin
   # (admin / admin). Test values only: never use them anywhere else.
-  # HTTPS, as Corpus requires of a provider: a self-signed certificate is made
+  # HTTPS, as Archfold requires of a provider: a self-signed certificate is made
   # on the first start; dev/keycloak/certs/ca.pem is the file OIDC_CACERT needs.
   keycloak:
     image: quay.io/keycloak/keycloak:26.0.7
@@ -159,13 +159,13 @@ services:
         exec /opt/keycloak/bin/kc.sh start-dev --import-realm --http-enabled=false \
           --https-key-store-file=/certs/keycloak.p12 --https-key-store-password=local-test
     volumes:
-      - ./dev/keycloak/corpus-realm.json:/opt/keycloak/data/import/corpus-realm.json:ro
+      - ./dev/keycloak/archfold-realm.json:/opt/keycloak/data/import/archfold-realm.json:ro
       - ./dev/keycloak/certs:/certs
 
   # S3 storage test server (VersityGW), for STORAGE=s3; only when asked:
   #   docker compose --env-file backend/.env -f docker-compose.local.yml --profile s3 up -d s3
-  # http://localhost:7070, bucket corpus-documents, access key
-  # corpus-local-access-key, secret key corpus-local-secret-key-0123456789.
+  # http://localhost:7070, bucket archfold-documents, access key
+  # archfold-local-access-key, secret key archfold-local-secret-key-0123456789.
   # Files on the s3_data volume (a bucket is a folder there). Test values
   # only: never use them anywhere else.
   s3:
@@ -175,19 +175,19 @@ services:
     ports:
       - "127.0.0.1:7070:7070"
     environment:
-      ROOT_ACCESS_KEY: corpus-local-access-key
-      ROOT_SECRET_KEY: corpus-local-secret-key-0123456789
+      ROOT_ACCESS_KEY: archfold-local-access-key
+      ROOT_SECRET_KEY: archfold-local-secret-key-0123456789
     entrypoint:
       - /bin/sh
       - -c
-      - mkdir -p /data/corpus-documents && exec versitygw --port :7070 posix /data
+      - mkdir -p /data/archfold-documents && exec versitygw --port :7070 posix /data
     volumes:
       - s3_data:/data
 
   # Key storage test server (HashiCorp Vault); starts with the rest.
-  # http://localhost:8200, KV v2 at "secret", AppRole "corpus" reading
-  # secret/data/corpus (role_id corpus-local-role-id, secret_id
-  # corpus-local-secret-id), a token that may write it (corpus-local-admin-token).
+  # http://localhost:8200, KV v2 at "secret", AppRole "archfold" reading
+  # secret/data/archfold (role_id archfold-local-role-id, secret_id
+  # archfold-local-secret-id), a token that may write it (archfold-local-admin-token).
   # Data on the vault_data volume: a key moved here survives restarts, and is
   # lost with the volume. Test values only: never use them anywhere else.
   vault:

@@ -4,7 +4,7 @@ comes from, chosen by KEY_STORE in `uv run install` / `uv run configure`.
 KEY_STORE=env (default): the environment, that is backend/.env.
 
 KEY_STORE=vault: HashiCorp Vault. The keys are fields of a KV v2 secret
-(VAULT_KV_MOUNT, default "secret"; VAULT_KV_PATH, default "corpus"), read once
+(VAULT_KV_MOUNT, default "secret"; VAULT_KV_PATH, default "archfold"), read once
 per process after an AppRole login (VAULT_ROLE_ID, VAULT_SECRET_ID); they are
 held in memory only. .env keeps the AppRole credentials, not the key: a copy
 of the disk is no use away from the company network, and the operator can
@@ -41,7 +41,7 @@ class VaultConfig:
     role_id: str
     secret_id: str
     mount: str = "secret"
-    path: str = "corpus"
+    path: str = "archfold"
     cacert: str = ""
     connect: str = ""
 
@@ -57,7 +57,7 @@ class VaultConfig:
             role_id=get("VAULT_ROLE_ID"),
             secret_id=get("VAULT_SECRET_ID"),
             mount=get("VAULT_KV_MOUNT", "secret").strip("/"),
-            path=get("VAULT_KV_PATH", "corpus").strip("/"),
+            path=get("VAULT_KV_PATH", "archfold").strip("/"),
             cacert=get("VAULT_CACERT"),
             connect=get("VAULT_CONNECT"),
         )

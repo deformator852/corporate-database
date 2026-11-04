@@ -67,7 +67,7 @@ class LanguageStep:
 
     def run(self, console: Console) -> None:
         console.print(
-            "Corpus works in one language or in several. With several, each user picks their language "
+            "Archfold works in one language or in several. With several, each user picks their language "
             "with a button at the top of the page, and the assistant answers in it. The search models "
             "offered next are the ones that read every chosen language."
         )

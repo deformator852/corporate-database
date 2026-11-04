@@ -27,7 +27,7 @@ type I18nContextValue = {
     t: TranslateFn;
 };
 
-const LOCALE_STORAGE_KEY = "corpus-locale";
+const LOCALE_STORAGE_KEY = "archfold-locale";
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 

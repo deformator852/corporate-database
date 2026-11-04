@@ -1,7 +1,7 @@
-# Customizing Corpus
+# Customizing Archfold
 
 This guide shows you how to add pages, API endpoints, permissions, themes and
-translations to Corpus without editing core files, so updates keep merging
+translations to Archfold without editing core files, so updates keep merging
 cleanly.
 
 Other languages: [Español](es.md) · [Français](fr.md)
@@ -20,7 +20,7 @@ new version merges without conflicts.
 Replace EXTENSION with any folder name you choose, for example `crm` or `hr`.
 You can have several extensions. They load in alphabetical order, and folders
 whose names start with `_` are skipped. You do not register them anywhere:
-Corpus finds both folders automatically.
+Archfold finds both folders automatically.
 
 You can still edit core files, but each edit may conflict with the next
 update. Use an extension first, and edit core only when there is no extension
@@ -425,7 +425,7 @@ Theme options:
   borders use it. Many ready-made dark themes have it darker, so borders hardly
   show until you override it.
 * Bundle any font your theme uses, for example with a `@fontsource` package.
-  Corpus does not load fonts from the internet.
+  Archfold does not load fonts from the internet.
 
 ## Getting updates
 

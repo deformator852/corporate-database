@@ -25,8 +25,8 @@ def s3(monkeypatch):
     monkeypatch.setattr(storage, "Minio", client)
     monkeypatch.setenv("STORAGE", "s3")
     monkeypatch.setenv("S3_ENDPOINT", "https://s3.acme.io:9443")
-    monkeypatch.setenv("S3_BUCKET", "corpus")
-    monkeypatch.setenv("S3_ACCESS_KEY", "corpus-app")
+    monkeypatch.setenv("S3_BUCKET", "archfold")
+    monkeypatch.setenv("S3_ACCESS_KEY", "archfold-app")
     monkeypatch.setenv("S3_SECRET_KEY", "s3-secret-" + "x" * 20)
     fake.made = made
     return fake
@@ -64,7 +64,7 @@ def test_documents_go_to_the_companys_s3_storage(client, make_user, infra, s3):
     assert s3.made[0]["endpoint"] == "s3.acme.io:9443" and s3.made[0]["secure"] is True
     assert client.get(f"/api/v1/documents/{document_id}/file").content == TEXT
     services = {s["name"]: s for s in client.get("/api/v1/system/status").json()["services"]}
-    assert services["storage"] == {"name": "storage", "status": "ok", "detail": "Bucket corpus at s3.acme.io:9443"}
+    assert services["storage"] == {"name": "storage", "status": "ok", "detail": "Bucket archfold at s3.acme.io:9443"}
 
     assert client.delete(f"/api/v1/documents/{document_id}", headers=csrf(client)).status_code == 204
     assert s3.objects == {}
@@ -116,7 +116,7 @@ def test_a_refusing_s3_storage_shows_on_the_status_page(client, make_user, infra
     assert _storage_status(client) == {
         "name": "storage",
         "status": "down",
-        "detail": "The S3 storage refused Corpus: AccessDenied (bucket corpus at s3.acme.io:9443).",
+        "detail": "The S3 storage refused Archfold: AccessDenied (bucket archfold at s3.acme.io:9443).",
     }
     assert upload(client, "Other", b"Other text.", "other.txt").json()["message"] == "Could not store the document."
 
@@ -135,7 +135,7 @@ def test_amazon_s3_without_list_rights_is_not_shown_as_down(client, make_user, i
     assert _storage_status(client)["status"] == "down"
     s3.missing_code = "NoSuchKey"  # storages that say so
     assert _storage_status(client)["detail"] == (
-        "A document file is missing from the S3 storage (bucket corpus at s3.acme.io:9443)."
+        "A document file is missing from the S3 storage (bucket archfold at s3.acme.io:9443)."
     )
 
 
@@ -161,12 +161,12 @@ def test_production_reaches_the_s3_storage_through_its_tunnel():
     from services.storage import _http_client
     from settings import S3Config
 
-    config = S3Config("https://s3.acme.io", "corpus", "a", "s", connect="s3-tunnel:9000")
+    config = S3Config("https://s3.acme.io", "archfold", "a", "s", connect="s3-tunnel:9000")
     pool = _http_client(config).connection_from_host("s3.acme.io", 443, scheme="https")
     assert (pool.host, pool.port) == ("s3-tunnel", 9000)
     assert pool.assert_hostname == "s3.acme.io" and pool.conn_kw["server_hostname"] == "s3.acme.io"
 
-    direct = _http_client(S3Config("https://s3.acme.io", "corpus", "a", "s"))
+    direct = _http_client(S3Config("https://s3.acme.io", "archfold", "a", "s"))
     assert direct.connection_from_host("s3.acme.io", 443, scheme="https").host == "s3.acme.io"
 
 
@@ -201,7 +201,7 @@ def test_files_move_to_another_storage_once_and_still_decrypt(client, make_user,
     upload(client, "Leave", b"Leave requests go to HR.", "leave.txt")
     keys = run(document_keys())  # in upload order
     infra.files.remove(keys[1])  # gone from the old storage too
-    target = S3Store(S3Config("https://s3.acme.io", "corpus", "corpus-app", "secret"), client=FakeMinio())
+    target = S3Store(S3Config("https://s3.acme.io", "archfold", "archfold-app", "secret"), client=FakeMinio())
 
     moved = move(keys, DiskStore(infra.files.root), target, lambda _: None)
 

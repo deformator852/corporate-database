@@ -1,4 +1,4 @@
-"""Stand-ins for the services around Corpus, so tests run the real code up to
+"""Stand-ins for the services around Archfold, so tests run the real code up to
 the network boundary: an S3 storage (a dict), Qdrant (its own in-memory mode, real
 filters and search), the embedding model (word-hash vectors: shared words =
 similar), Ollama (scripted answers), RabbitMQ (in-process fanout that also
@@ -250,10 +250,12 @@ async def _processed():
 
 
 class FakeVault:
-    """HashiCorp Vault's HTTP API as Corpus uses it: AppRole login and one KV
+    """HashiCorp Vault's HTTP API as Archfold uses it: AppRole login and one KV
     v2 mount. `requests` records (method, path, token) of each call."""
 
-    def __init__(self, role_id: str = "corpus-role", secret_id: str = "corpus-secret", mount: str = "secret") -> None:
+    def __init__(
+        self, role_id: str = "archfold-role", secret_id: str = "archfold-secret", mount: str = "secret"
+    ) -> None:
         self.role_id, self.secret_id, self.mount = role_id, secret_id, mount
         self.secrets: dict[str, dict[str, str]] = {}
         # Tokens: the AppRole may read, the admin may also write.

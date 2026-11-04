@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
-# Production commands for Corpus. Run from any folder.
+# Production commands for Archfold. Run from any folder.
 #
 #   deploy/deploy.sh build                  Build the backend and proxy images.
 #   deploy/deploy.sh models                 Download (or update) the AI models.
-#   deploy/deploy.sh up                     Start Corpus, or apply an update.
+#   deploy/deploy.sh up                     Start Archfold, or apply an update.
 #                                           Downloads the models first when
 #                                           missing: the only internet use.
 #   deploy/deploy.sh admin EMAIL [FIRST LAST]
 #                                           Create an administrator.
 #   deploy/deploy.sh backup [BACKUP-DIR]    Make an encrypted backup of all
-#                                           data (default: backups/). Corpus
+#                                           data (default: backups/). Archfold
 #                                           stops while it runs.
 #   deploy/deploy.sh restore BACKUP         Replace all data with a backup.
 #   deploy/deploy.sh rotate-key             Re-encrypt the data with a new key.
 #                                           First run: uv run configure key rotate
-#   deploy/deploy.sh down                   Stop Corpus. The data is kept.
+#   deploy/deploy.sh down                   Stop Archfold. The data is kept.
 #   deploy/deploy.sh logs [SERVICE]         Follow the logs.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-ENV_FILE=${CORPUS_ENV_FILE:-backend/.env}
+ENV_FILE=${ARCHFOLD_ENV_FILE:-backend/.env}
 [[ -f $ENV_FILE ]] || { echo "Missing $ENV_FILE: run 'uv run install' in backend/ first." >&2; exit 1; }
 setting() { grep -E "^$1=" "$ENV_FILE" | tail -1 | cut -d= -f2- | sed -e 's/^["'\'']//' -e 's/["'\'']$//' || true; }
 # A tunnel runs in its own container, where localhost is the tunnel itself:
@@ -70,7 +70,7 @@ fi
 compose() { docker compose --env-file "$ENV_FILE" -f docker-compose.prod.yml ${profiles[@]+"${profiles[@]}"} "$@"; }
 language=$(setting APP_LANGUAGE)
 languages=$(setting APP_LANGUAGES)
-project=${COMPOSE_PROJECT_NAME:-corpus}
+project=${COMPOSE_PROJECT_NAME:-archfold}
 # Data volumes in a backup. Models (hf_models, ollama_data) are downloaded
 # again by `up` when missing. With STORAGE=s3 the files are in the company's
 # bucket, backed up by the storage itself.
@@ -87,9 +87,9 @@ files_reachable() { [[ $storage != s3 ]] || compose up -d s3-tunnel; }
 # Raw volume contents as a gzip tar stream (compressed before encryption:
 # Qdrant preallocates zero-filled files), read (or replaced) by a throwaway
 # container without network.
-volume_out() { docker run --rm --network none --user 0 -v "${project}_$1:/v:ro" corpus-backend:latest tar -C /v -czf - .; }
+volume_out() { docker run --rm --network none --user 0 -v "${project}_$1:/v:ro" archfold-backend:latest tar -C /v -czf - .; }
 volume_in() {
-  docker run --rm -i --network none --user 0 -v "${project}_$1:/v" corpus-backend:latest \
+  docker run --rm -i --network none --user 0 -v "${project}_$1:/v" archfold-backend:latest \
     sh -c 'find /v -mindepth 1 -delete && tar -C /v -xzpf -'
 }
 restart_app() { compose up -d --remove-orphans >/dev/null 2>&1 || echo "Start failed: run deploy/deploy.sh up" >&2; }
@@ -124,8 +124,8 @@ ensure_models() {
 
 case "${1:-up}" in
   build)
-    docker build -t corpus-backend:latest backend
-    docker build -t corpus-proxy:latest --build-arg "APP_LANGUAGE=${language:-en}" --build-arg "APP_LANGUAGES=$languages" frontend
+    docker build -t archfold-backend:latest backend
+    docker build -t archfold-proxy:latest --build-arg "APP_LANGUAGE=${language:-en}" --build-arg "APP_LANGUAGES=$languages" frontend
     ;;
   models)
     compose --profile setup run --rm models
@@ -156,7 +156,7 @@ case "${1:-up}" in
     fi
     ;;
   backup)
-    dir=${2:-backups}/corpus-$(date +%Y%m%d-%H%M%S)
+    dir=${2:-backups}/archfold-$(date +%Y%m%d-%H%M%S)
     umask 077
     mkdir -p "$dir"
     # Stopped, so the database, files and index are copied at the same moment.

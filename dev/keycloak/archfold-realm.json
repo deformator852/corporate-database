@@ -1,8 +1,8 @@
 {
-  "realm": "corpus",
+  "realm": "archfold",
   "displayName": "Acme (local SSO test)",
   "enabled": true,
-  "groups": [{"name": "Corpus Admins"}, {"name": "Legal"}],
+  "groups": [{"name": "Archfold Admins"}, {"name": "Legal"}],
   "users": [
     {
       "username": "ana",
@@ -12,7 +12,7 @@
       "lastName": "Lopez",
       "enabled": true,
       "credentials": [{"type": "password", "value": "ana-password-1", "temporary": false}],
-      "groups": ["/Corpus Admins"]
+      "groups": ["/Archfold Admins"]
     },
     {
       "username": "bob",
@@ -27,11 +27,11 @@
   ],
   "clients": [
     {
-      "clientId": "corpus",
-      "name": "Corpus",
+      "clientId": "archfold",
+      "name": "Archfold",
       "enabled": true,
       "publicClient": false,
-      "secret": "corpus-local-secret-0123456789",
+      "secret": "archfold-local-secret-0123456789",
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
       "redirectUris": ["http://localhost:5173/api/v1/auth/sso/callback"],

@@ -116,7 +116,7 @@ class DiskStore:
         except OSError as exc:
             raise AppError("unavailable", f"Cannot create the folder {self.root}.", status_code=503) from exc
         if not os.access(self.root, os.W_OK | os.X_OK):
-            raise AppError("unavailable", f"Corpus cannot write to {self.root}.", status_code=503)
+            raise AppError("unavailable", f"Archfold cannot write to {self.root}.", status_code=503)
         return f"Folder {self.root}"
 
 
@@ -181,7 +181,7 @@ class S3Store:
         try:
             self.client.stat_object(self.bucket, key)
         except S3Error as exc:
-            # Without s3:ListBucket, which Corpus does not need, a missing
+            # Without s3:ListBucket, which Archfold does not need, a missing
             # object answers AccessDenied (Amazon S3); a wrong key or
             # secret answers otherwise.
             if exc.code in _MISSING_OBJECT | {"AccessDenied"}:
@@ -210,7 +210,7 @@ class S3Store:
     def check(self, sample: str | None = None) -> str:
         """Reads the details of a document's file (`sample`), or before any
         document of a key that never exists. Without s3:ListBucket, which
-        Corpus does not need, a missing object answers AccessDenied instead
+        Archfold does not need, a missing object answers AccessDenied instead
         of NoSuchKey (Amazon S3): only a real file tells access apart."""
         try:
             self.client.stat_object(self.bucket, sample or _PROBE_KEY)
@@ -221,7 +221,7 @@ class S3Store:
                 ) from exc
             if sample is not None or exc.code not in _MISSING_OBJECT | {"AccessDenied"}:
                 raise AppError(
-                    "unavailable", f"The S3 storage refused Corpus: {exc.code} ({self.where}).", status_code=503
+                    "unavailable", f"The S3 storage refused Archfold: {exc.code} ({self.where}).", status_code=503
                 ) from exc
         except _TRANSPORT_ERRORS as exc:
             raise AppError("unavailable", f"Cannot reach the S3 storage ({self.where}).", status_code=503) from exc
@@ -258,7 +258,7 @@ class ObjectStorage:
         self.store.write(key, data)
 
     def check(self, sample: str | None = None) -> str:
-        """Where the files are, once the store answers and lets Corpus in;
+        """Where the files are, once the store answers and lets Archfold in;
         AppError with the reason otherwise (System status page). `sample`:
         the key of a stored document, if any."""
         return self.store.check(sample)
