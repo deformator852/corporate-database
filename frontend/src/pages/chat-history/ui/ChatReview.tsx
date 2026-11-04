@@ -43,7 +43,7 @@ export function ChatReview() {
     const back = (
         <Link
             to={backTo}
-            className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            className="inline-flex w-fit items-center gap-1.5 text-sm text-base-content/70 underline-offset-4 hover:text-base-content hover:underline"
         >
             <ArrowLeft className="size-4" aria-hidden />
             {t("userDetail.back")}
@@ -55,7 +55,7 @@ export function ChatReview() {
             <div className="stack stack--lg w-full">
                 {back}
                 {status === "loading" ? (
-                    <p className="text-muted-foreground">{t("chatHistory.loading")}</p>
+                    <p className="text-base-content/70">{t("chatHistory.loading")}</p>
                 ) : (
                     <StatusCard
                         title={t("chatHistory.chatLoadErrorTitle")}
@@ -74,7 +74,7 @@ export function ChatReview() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="stack min-w-0">
                     <h1 className="break-words">{data.title}</h1>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-base-content/70">
                         {can("users.view") ? (
                             <Link
                                 to={`/users/${data.user.id}`}
@@ -109,10 +109,10 @@ export function ChatReview() {
                         id={chatMessageAnchor(message.id)}
                         className={cn(
                             "space-y-1.5",
-                            focused === chatMessageAnchor(message.id) && "-mx-2 rounded-xl p-2 ring-2 ring-ring/50",
+                            focused === chatMessageAnchor(message.id) && "-mx-2 rounded-xl p-2 ring-2 ring-primary/50",
                         )}
                     >
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-base-content/70">
                             {message.role === "user" ? data.user.name || data.user.email : t("chat.title")}
                             {" · "}
                             {formatDateTime(message.created_at, tag)}
@@ -121,15 +121,15 @@ export function ChatReview() {
                             className={cn(
                                 "rounded-2xl px-3.5 py-2.5 text-sm break-words whitespace-pre-wrap",
                                 message.role === "user"
-                                    ? "ml-auto max-w-[min(100%,36rem)] bg-primary text-primary-foreground"
-                                    : "mr-auto max-w-[min(100%,48rem)] bg-muted",
+                                    ? "ml-auto max-w-[min(100%,36rem)] bg-primary text-primary-content"
+                                    : "mr-auto max-w-[min(100%,48rem)] bg-base-200",
                             )}
                         >
                             {message.content}
                         </p>
                         {message.sources.length ? <SourceList sources={message.sources} answer={message.content} /> : null}
                         {message.rating ? (
-                            <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <p className="flex items-center gap-1 text-xs text-base-content/70">
                                 {message.rating === "up" ? (
                                     <ThumbsUp className="size-3.5" aria-hidden />
                                 ) : (

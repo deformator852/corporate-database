@@ -24,7 +24,7 @@ from pathlib import Path
 from types import ModuleType
 
 # Raised when the extension points change incompatibly.
-CORE_API = 1
+CORE_API = 2
 
 SRC_DIR = Path(__file__).resolve().parent
 CUSTOM_DIR = SRC_DIR / "custom"

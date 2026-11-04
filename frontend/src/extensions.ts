@@ -9,7 +9,7 @@ import type {ThemeOption} from "@/theme/themes";
 import type {NavItem} from "@/widgets/sidebar/model/nav";
 
 /** Raised when the extension points change incompatibly. */
-export const CORE_API = 1;
+export const CORE_API = 2;
 
 export type Extension = {
     /** The extension API version it was written for; another one is skipped. */

@@ -42,7 +42,7 @@ export default function Login() {
     // for a moment would invite a sign-in that cannot work.
     const showForm = (methods?.password ?? false) || adminForm;
     return (
-        <div className="relative flex min-h-svh flex-col items-center justify-center bg-muted/40 px-4 py-10">
+        <div className="relative flex min-h-svh flex-col items-center justify-center bg-base-200/40 px-4 py-10">
             <div className="absolute top-4 right-4">
                 <ThemeSwitcher />
             </div>
@@ -52,7 +52,7 @@ export default function Login() {
                     <LogoMark className="size-12 shadow-sm" />
                     <div className="space-y-0.5">
                         <p className="text-xl font-semibold tracking-tight">{app}</p>
-                        <p className="text-sm text-muted-foreground">{t("app.tagline")}</p>
+                        <p className="text-sm text-base-content/70">{t("app.tagline")}</p>
                     </div>
                 </div>
 
@@ -67,7 +67,7 @@ export default function Login() {
                         {ssoError ? (
                             <div
                                 role="alert"
-                                className="flex gap-2.5 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
+                                className="d-alert d-alert-error d-alert-soft items-start text-sm"
                             >
                                 <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
                                 <p>
@@ -84,7 +84,7 @@ export default function Login() {
                                 type="button"
                                 variant="link"
                                 size="sm"
-                                className="self-center text-muted-foreground"
+                                className="self-center text-base-content/70"
                                 onClick={() => setAdminForm(true)}
                             >
                                 {t("login.adminSignIn")}
@@ -93,7 +93,7 @@ export default function Login() {
                     </CardContent>
                 </Card>
 
-                <p className="mt-6 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <p className="mt-6 flex items-center gap-1.5 text-xs text-base-content/70">
                     <ShieldCheck className="size-3.5" aria-hidden />
                     {t("login.auditNote")}
                 </p>

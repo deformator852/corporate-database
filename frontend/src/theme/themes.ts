@@ -9,16 +9,14 @@ export type ThemeOption = {
     dark?: boolean;
 };
 
-// The theme of users who have not picked one, unless an extension sets
-// `defaultTheme`. Keep `data-theme` in index.html in line with it.
-const LEDGER: ThemeOption = {id: "ledger", labelKey: "theme.ledger"};
+// The themes are daisyUI's, enabled in index.css. The theme of users who have not picked
+// one, unless an extension sets `defaultTheme`. Keep `data-theme` in index.html
+// in line with it.
+const CORPORATE: ThemeOption = {id: "corporate", labelKey: "theme.corporate"};
 
 const CORE_THEMES: ThemeOption[] = [
-    {id: "neutral", labelKey: "theme.neutral"},
-    LEDGER,
-    {id: "slate", labelKey: "theme.slate", dark: true},
-    {id: "midnight", labelKey: "theme.midnight", dark: true},
-    {id: "vault", labelKey: "theme.vault", dark: true},
+    CORPORATE,
+    {id: "business", labelKey: "theme.dark", dark: true},
 ];
 
 export const THEMES = mergeByKey(
@@ -30,7 +28,7 @@ export const THEMES = mergeByKey(
 export const DEFAULT_THEME: ThemeOption =
     THEMES.find(
         (theme) => theme.id === extensions.findLast((e) => e.defaultTheme)?.defaultTheme,
-    ) ?? LEDGER;
+    ) ?? CORPORATE;
 
 export const THEME_STORAGE_KEY = "ui-theme";
 

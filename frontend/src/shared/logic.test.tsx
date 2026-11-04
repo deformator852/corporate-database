@@ -1,4 +1,4 @@
-import {screen, within} from "@testing-library/react";
+import {screen} from "@testing-library/react";
 import {describe, expect, it} from "vitest";
 
 import {mergeByKey} from "@/extensions";
@@ -102,18 +102,17 @@ describe("Socket reconnects", () => {
 });
 
 describe("App shell", () => {
-    it("remembers the chosen theme", async () => {
+    it("switches between light and dark mode and remembers the choice", async () => {
         const {user} = renderApp("/", sessionUser());
-        await user.click(await screen.findByRole("button", {name: /^Theme:/}));
-        await user.click(within(await screen.findByRole("radiogroup", {name: "Theme"})).getByRole("radio", {name: "Midnight"}));
-        expect(document.documentElement.dataset.theme).toBe("midnight");
+        await user.click(await screen.findByRole("button", {name: "Switch to dark mode"}));
+        expect(document.documentElement.dataset.theme).toBe("business");
         expect(document.documentElement).toHaveClass("dark");
-        expect(localStorage.getItem("ui-theme")).toBe("midnight");
+        expect(localStorage.getItem("ui-theme")).toBe("business");
 
-        await user.click(screen.getByRole("button", {name: /^Theme:/}));
-        await user.click(within(await screen.findByRole("radiogroup", {name: "Theme"})).getByRole("radio", {name: "Ledger"}));
-        expect(document.documentElement.dataset.theme).toBe("ledger");
+        await user.click(screen.getByRole("button", {name: "Switch to light mode"}));
+        expect(document.documentElement.dataset.theme).toBe("corporate");
         expect(document.documentElement).not.toHaveClass("dark");
+        expect(localStorage.getItem("ui-theme")).toBe("corporate");
     });
 
     it("shows a not-found page for unknown addresses", async () => {

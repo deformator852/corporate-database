@@ -17,7 +17,7 @@ export function ReindexNotice({outdated, onStarted}: {outdated: boolean; onStart
 
     if (started !== null) {
         return (
-            <p role="status" className="text-sm text-muted-foreground">
+            <p role="status" className="text-sm text-base-content/70">
                 {t("system.reindex.started", {count: started})}
             </p>
         );

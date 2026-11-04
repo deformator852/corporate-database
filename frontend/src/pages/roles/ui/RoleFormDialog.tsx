@@ -123,7 +123,7 @@ export function RoleFormDialog({
                         {errors.root?.message ? (
                             <div
                                 role="alert"
-                                className="flex gap-2.5 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
+                                className="d-alert d-alert-error d-alert-soft items-start text-sm"
                             >
                                 <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden/>
                                 <p>{errors.root.message}</p>
@@ -142,15 +142,15 @@ export function RoleFormDialog({
                                 aria-describedby={errors.name ? nameErrorId : undefined}
                                 className={
                                     nameLocked
-                                        ? "pointer-events-none cursor-not-allowed bg-input/50 opacity-50"
+                                        ? "pointer-events-none cursor-not-allowed bg-base-300/50 opacity-50"
                                         : undefined
                                 }
                                 {...register("name")}
                             />
                             {derivedKey ? (
-                                <p className="text-sm text-muted-foreground">
+                                <p className="text-sm text-base-content/70">
                                     {t("common.key")}{" "}
-                                    <span className="font-medium text-foreground">
+                                    <span className="font-medium text-base-content">
                                         {derivedKey}
                                     </span>
                                 </p>
@@ -195,7 +195,7 @@ export function RoleFormDialog({
                                     )}
                                 />
                             ) : (
-                                <p className="text-sm text-muted-foreground">
+                                <p className="text-sm text-base-content/70">
                                     {t("roles.form.noPermissionsPermission")}
                                 </p>
                             )}

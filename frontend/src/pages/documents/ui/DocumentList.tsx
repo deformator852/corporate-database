@@ -145,7 +145,7 @@ function DocumentRow({
             <TableCell className="px-4 font-medium">
                 <button
                     type="button"
-                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-sm text-left underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+                    className="d-link d-link-hover inline-flex items-center gap-1.5 text-left"
                     title={t("documents.open")}
                     onClick={() => {
                         setOpenError(null);
@@ -154,16 +154,16 @@ function DocumentRow({
                         );
                     }}
                 >
-                    <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                    <FileText className="size-4 shrink-0 text-base-content/70" aria-hidden />
                     {document.name}
                 </button>
                 {openError ? (
-                    <p role="alert" className="mt-1 text-xs font-normal text-destructive">
+                    <p role="alert" className="mt-1 text-xs font-normal text-error">
                         {openError}
                     </p>
                 ) : null}
             </TableCell>
-            <TableCell className="text-muted-foreground">{document.filename}</TableCell>
+            <TableCell className="text-base-content/70">{document.filename}</TableCell>
             <TableCell>
                 {t(documentClassificationKey(document.classification))}
             </TableCell>
@@ -171,12 +171,12 @@ function DocumentRow({
                 <div className="flex flex-col gap-1">
                     <span>{t(documentStatusKey(status))}</span>
                     {document.status === "failed" && document.error_message ? (
-                        <p className="flex items-start gap-1 text-sm text-destructive">
+                        <p className="flex items-start gap-1 text-sm text-error">
                             <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
                             {document.error_message}
                         </p>
                     ) : document.file_missing ? (
-                        <p className="flex items-start gap-1 text-sm text-destructive">
+                        <p className="flex items-start gap-1 text-sm text-error">
                             <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
                             {t("documents.fileMissing")}
                         </p>
@@ -185,20 +185,13 @@ function DocumentRow({
             </TableCell>
             <TableCell className="px-4">
                 <div className="flex items-center gap-2">
-                    <div
-                        className="h-1.5 w-24 overflow-hidden rounded-full bg-muted"
-                        role="progressbar"
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-valuenow={document.progress}
+                    <progress
+                        className="d-progress d-progress-primary w-24"
+                        value={document.progress}
+                        max={100}
                         aria-label={`${document.progress}%`}
-                    >
-                        <div
-                            className="h-full bg-primary"
-                            style={{width: `${document.progress}%`}}
-                        />
-                    </div>
-                    <span className="text-sm text-muted-foreground tabular-nums">
+                    />
+                    <span className="text-sm text-base-content/70 tabular-nums">
                         {document.progress}%
                     </span>
                 </div>
@@ -244,7 +237,7 @@ function DocumentRow({
                         ) : null}
                     </div>
                     {retryError ? (
-                        <p role="alert" className="mt-1 text-right text-xs text-destructive">
+                        <p role="alert" className="mt-1 text-right text-xs text-error">
                             {retryError}
                         </p>
                     ) : null}

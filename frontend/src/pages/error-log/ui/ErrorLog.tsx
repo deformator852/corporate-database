@@ -65,7 +65,7 @@ export function ErrorLog() {
             {status === "error" ? (
                 <StatusCard title={t("errorLog.loadErrorTitle")} detail={error} onRetry={reload} />
             ) : status === "loading" ? (
-                <p className="text-sm text-muted-foreground">{t("errorLog.loading")}</p>
+                <p className="text-sm text-base-content/70">{t("errorLog.loading")}</p>
             ) : items.length === 0 ? (
                 <StatusCard title={t("errorLog.empty")} detail={t("errorLog.emptyHint")} />
             ) : (
@@ -127,15 +127,15 @@ function Filter({
 
 // Unhandled errors are bugs to look at first: they stand out.
 const CATEGORY_STYLE: Record<string, string> = {
-    unhandled: "border border-destructive/40 text-destructive",
-    app: "border border-border",
-    library: "border border-dashed border-border",
+    unhandled: "border border-error/40 text-error",
+    app: "border border-base-300",
+    library: "border border-dashed border-base-300",
 };
 
 const LEVEL_STYLE: Record<string, string> = {
-    warning: "bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-100",
-    error: "bg-destructive/10 text-destructive",
-    critical: "bg-destructive text-white",
+    warning: "d-badge-warning d-badge-soft",
+    error: "d-badge-error d-badge-soft",
+    critical: "d-badge-error",
 };
 
 function ErrorEntry({entry}: {entry: ErrorLogEntry}) {
@@ -146,11 +146,11 @@ function ErrorEntry({entry}: {entry: ErrorLogEntry}) {
     );
     return (
         <Card className="gap-2 px-4 py-3">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                <span className={cn("rounded-full px-2 py-0.5 font-medium", LEVEL_STYLE[entry.level])}>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-base-content/70">
+                <span className={cn("d-badge d-badge-sm font-medium", LEVEL_STYLE[entry.level])}>
                     {t(levelKey(entry.level))}
                 </span>
-                <span className={cn("rounded-full px-2 py-0.5", CATEGORY_STYLE[entry.category])}>
+                <span className={cn("d-badge d-badge-sm", CATEGORY_STYLE[entry.category])}>
                     {t(categoryKey(entry.category))}
                 </span>
                 <span className="font-mono">{entry.logger}</span>
@@ -161,10 +161,10 @@ function ErrorEntry({entry}: {entry: ErrorLogEntry}) {
             <p className="text-sm font-medium break-words whitespace-pre-wrap">{entry.message}</p>
             {entry.traceback ? (
                 <details className="text-sm">
-                    <summary className="cursor-pointer text-muted-foreground select-none hover:text-foreground">
+                    <summary className="cursor-pointer text-base-content/70 select-none hover:text-base-content">
                         {t("errorLog.traceback")}
                     </summary>
-                    <pre className="mt-2 max-h-96 overflow-auto rounded-lg bg-muted p-3 font-mono text-xs leading-relaxed">
+                    <pre className="mt-2 max-h-96 overflow-auto rounded-lg bg-base-200 p-3 font-mono text-xs leading-relaxed">
                         {entry.traceback}
                     </pre>
                 </details>

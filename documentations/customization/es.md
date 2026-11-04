@@ -51,7 +51,7 @@ de estos:
 | `setup(app)` | Una función que se llama una vez con la app de FastAPI al arrancar |
 | Modelos | Alembic ve cualquier modelo de SQLAlchemy que importe el paquete |
 | `tasks.py` | Un módulo que carga el worker de Celery, si existe |
-| `CORE_API` | La versión de la API de extensiones para la que se escribió el paquete, ahora `1`. Un paquete escrito para otra versión se omite, con un error en el registro |
+| `CORE_API` | La versión de la API de extensiones para la que se escribió el paquete, ahora `2`. Un paquete escrito para otra versión se omite, con un error en el registro |
 
 ## Añadir endpoints de API
 
@@ -268,7 +268,7 @@ Un archivo `frontend/src/custom/EXTENSION/index.tsx` exporta por defecto una
 | `messages` | Traducciones por idioma |
 | `themes` | Temas adicionales en el selector de temas |
 | `defaultTheme` | El tema para los usuarios que no han elegido ninguno |
-| `coreApi` | La versión de la API de extensiones para la que se escribió el módulo, ahora `1`. Un módulo escrito para otra versión se omite, con un error en la consola del navegador |
+| `coreApi` | La versión de la API de extensiones para la que se escribió el módulo, ahora `2`. Un módulo escrito para otra versión se omite, con un error en la consola del navegador |
 
 ## Añadir una página
 
@@ -348,25 +348,50 @@ nav: [{to: "/documents", labelKey: "custom.nav.files", end: true, can: "document
 
 ## Añadir temas
 
-Un tema es un conjunto de variables CSS bajo `[data-theme="THEME-ID"]` más una
-entrada en `themes`. Guarde ambos en su carpeta `custom/`.
+La interfaz está hecha con [daisyUI](https://daisyui.com/). Un tema es un
+conjunto de variables CSS de daisyUI bajo `[data-theme="THEME-ID"]` más una
+entrada en `themes`. Guarde ambos en su carpeta `custom/`. Los temas del núcleo son
+`corporate` y `business` (modo oscuro), con un botón claro/oscuro en la cabecera.
+Al añadir un tema, el botón se convierte en un menú de temas.
 
-1. Escriba el CSS. Sustituya THEME-ID por el ID de su tema, aquí `ocean`:
+### Usar un tema ya hecho
+
+daisyUI incluye [35 temas](https://daisyui.com/docs/themes/). Importe uno y
+regístrelo. Aquí, THEME-ID es `emerald`:
+
+```ts
+// frontend/src/custom/brand/index.ts
+import type {Extension} from "@/extensions";
+import "daisyui/theme/emerald.css";
+
+export default {
+    themes: [{id: "emerald", labelKey: "custom.theme.emerald"}],
+    defaultTheme: "emerald",
+    messages: {en: {"custom.theme.emerald": "Emerald"}},
+} satisfies Extension;
+```
+
+Algunos de estos temas tienen menos contraste de texto que el tema del núcleo.
+Compruébelos antes de usar uno como predeterminado.
+
+### Escribir su propio tema
+
+1. Elija sus colores en el
+   [generador de temas de daisyUI](https://daisyui.com/theme-generator/) y copie
+   las variables en un archivo CSS. Sustituya THEME-ID por el ID de su tema, aquí
+   `ocean`:
 
    ```css
    /* frontend/src/custom/brand/ocean.css */
    [data-theme="ocean"] {
-     --background: #ecfeff;
-     --foreground: #083344;
-     --primary: #0e7490;
-     --primary-foreground: #ffffff;
-     --ring: #0e7490;
-     /* cualquier variable de :root en frontend/src/index.css */
-   }
-
-   [data-theme="ocean"] .app-header {
-     background-color: var(--primary);
-     color: var(--primary-foreground);
+     color-scheme: light;
+     --color-base-100: #ecfeff;
+     --color-base-200: #cffafe;
+     --color-base-300: #a5f3fc;
+     --color-base-content: #083344;
+     --color-primary: #0e7490;
+     --color-primary-content: #ffffff;
+     --radius-box: 0.5rem;
    }
    ```
 
@@ -384,25 +409,28 @@ entrada en `themes`. Guarde ambos en su carpeta `custom/`.
        ],
        defaultTheme: "ocean",
        messages: {
-           es: {"custom.theme.ocean": "Océano", "custom.theme.graphite": "Grafito"},
+           en: {"custom.theme.ocean": "Ocean", "custom.theme.graphite": "Graphite"},
        },
    } satisfies Extension;
    ```
 
 Opciones del tema:
 
-* `id` es el valor de `data-theme` en `<html>`. Dele estilo solo en su archivo
-  CSS, importado desde el módulo de la extensión.
-* La lista completa de variables (`--background`, `--primary`, `--sidebar`,
-  `--success` y otras) está en `:root` de `frontend/src/index.css`. Las
-  variables que no defina conservan los valores del núcleo.
+* `id` es el valor de `data-theme` en `<html>`. Aplique estilos solo en su
+  archivo CSS, importado desde el módulo de la extensión.
+* Las variables aparecen en la
+  [documentación de daisyUI](https://daisyui.com/docs/themes/). Las que no
+  defina conservan los valores del tema predeterminado del núcleo, `corporate`.
 * `dark: true` añade la clase `.dark` y un esquema de color oscuro para los
-  controles del navegador.
-* Un tema con el mismo `id` que uno del núcleo (`neutral`, `ledger`, `slate`,
-  `midnight`, `vault`) reemplaza su etiqueta y sus opciones. Su CSS se carga
-  después del CSS del núcleo y gana.
-* `defaultTheme` se aplica a los usuarios que aún no han elegido tema (sin
-  él, tienen `ledger`). Una elección guardada en el navegador se mantiene.
+  controles del navegador. En su CSS, defina también `color-scheme: dark`.
+* Un tema con el ID de un tema del núcleo reemplaza su etiqueta y sus opciones. Su CSS se carga después del CSS del núcleo y prevalece.
+* `defaultTheme` se aplica a los usuarios que aún no han elegido un tema (sin
+  él, tienen `corporate`). Una elección guardada en el navegador se mantiene.
+* En un tema oscuro, haga `--color-base-300` más claro que `--color-base-100`:
+  los bordes lo usan. Muchos temas oscuros ya hechos lo tienen más oscuro, y los
+  bordes apenas se ven hasta que lo redefine.
+* Incluya en la compilación las fuentes que use su tema, por ejemplo con un
+  paquete `@fontsource`. Corpus no carga fuentes de internet.
 
 ## Obtener actualizaciones
 

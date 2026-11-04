@@ -90,7 +90,7 @@ export function Documents() {
             <PageHeader id="documents-heading" title={t("documents.title")} subtitle={t("documents.subtitle")} />
 
             {canCreate ? (
-                <div className="w-full rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+                <div className="d-card d-card-border w-full bg-base-100 p-4">
                     <DocumentUploadForm
                         onUploaded={(document) => {
                             update((current) =>
@@ -100,7 +100,7 @@ export function Documents() {
                     />
                 </div>
             ) : (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-base-content/70">
                     {t("documents.noUploadPermission")}
                 </p>
             )}

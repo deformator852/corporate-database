@@ -41,7 +41,7 @@ export function DataTable({
                 <TableBody>
                     {loading ? (
                         <TableRow className="hover:bg-transparent">
-                            <TableCell colSpan={shown.length} className="px-4 py-8 text-muted-foreground">
+                            <TableCell colSpan={shown.length} className="px-4 py-8 text-base-content/70">
                                 {loadingText}
                             </TableCell>
                         </TableRow>

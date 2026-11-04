@@ -150,7 +150,7 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
                 {errors.root?.message ? (
                     <div
                         role="alert"
-                        className="flex gap-2.5 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
+                        className="d-alert d-alert-error d-alert-soft items-start text-sm"
                     >
                         <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
                         <p>{errors.root.message}</p>
@@ -158,7 +158,7 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
                 ) : null}
 
                 {success ? (
-                    <p role="status" className="text-sm text-muted-foreground">
+                    <p role="status" className="text-sm text-base-content/70">
                         {success}
                     </p>
                 ) : null}
@@ -226,7 +226,7 @@ export function DocumentUploadForm({onUploaded}: DocumentUploadFormProps) {
                     {listed ? (
                         <>
                             {several ? (
-                                <p className="text-sm text-muted-foreground">
+                                <p className="text-sm text-base-content/70">
                                     {t("documents.upload.namesFromFiles")}
                                 </p>
                             ) : null}
@@ -286,7 +286,7 @@ function FileDropZone({
     return (
         <div
             className={`relative cursor-pointer rounded-lg border border-dashed px-4 py-6 text-center transition-colors ${
-                dragging ? "border-ring bg-accent" : "border-input"
+                dragging ? "border-primary bg-base-200" : "border-base-300"
             }`}
             onClick={(event) => {
                 // The input's own click bubbles up here: do not reopen it.
@@ -313,9 +313,9 @@ function FileDropZone({
                 }
             }}
         >
-            <FileUp className="mx-auto mb-2 size-5 text-muted-foreground" aria-hidden />
+            <FileUp className="mx-auto mb-2 size-5 text-base-content/70" aria-hidden />
             <p className="text-sm">{t("documents.upload.dropPrompt")}</p>
-            <p className="mt-1 text-sm text-muted-foreground">{summary}</p>
+            <p className="mt-1 text-sm text-base-content/70">{summary}</p>
             {/* Inside the drop zone, not a direct child of Field: Field gives
                 direct .sr-only children their natural width, which widened
                 the page on phones. */}

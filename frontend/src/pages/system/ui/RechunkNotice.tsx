@@ -17,7 +17,7 @@ export function RechunkNotice({outdated, onStarted}: {outdated: number; onStarte
 
     if (started !== null) {
         return (
-            <p role="status" className="text-sm text-muted-foreground">
+            <p role="status" className="text-sm text-base-content/70">
                 {t("system.rechunk.started", {count: started})}
             </p>
         );

@@ -51,7 +51,7 @@ export function ChoiceMenu<T extends string>({
                             role="radio"
                             aria-checked={choice.value === value}
                             lang={choice.lang}
-                            className="flex cursor-pointer items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm outline-none hover:bg-muted focus-visible:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+                            className="d-btn d-btn-ghost d-btn-sm justify-between font-normal"
                             onClick={() => {
                                 onChange(choice.value);
                                 setOpen(false);

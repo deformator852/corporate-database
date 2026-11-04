@@ -17,26 +17,27 @@ const nav = mergeByKey(
 );
 
 /** The links the user may open; the same list on desktop and in the phone menu. */
-function NavLinks({className, onNavigate}: {className: string; onNavigate?: () => void}) {
+function NavLinks({className, onNavigate}: {className?: string; onNavigate?: () => void}) {
     const {t} = useI18n();
     return (
         <nav className={className}>
-            {nav.map((item) =>
-                (!item.can || can(item.can)) ? (
-                    <NavLink
-                        key={item.to}
-                        to={item.to}
-                        end={item.end}
-                        onClick={onNavigate}
-                        className={({isActive}) =>
-                            `app-layout__nav-link${isActive ? " app-layout__nav-link--active" : ""}`
-                        }
-                    >
-                        {item.icon ? <item.icon className="app-layout__nav-icon" aria-hidden/> : null}
-                        {t(item.labelKey)}
-                    </NavLink>
-                ) : null,
-            )}
+            <ul className="d-menu w-full flex-nowrap gap-0.5 p-0">
+                {nav.map((item) =>
+                    (!item.can || can(item.can)) ? (
+                        <li key={item.to}>
+                            <NavLink
+                                to={item.to}
+                                end={item.end}
+                                onClick={onNavigate}
+                                className={({isActive}) => (isActive ? "bg-primary font-medium text-primary-content" : "font-medium")}
+                            >
+                                {item.icon ? <item.icon className="size-4" aria-hidden/> : null}
+                                {t(item.labelKey)}
+                            </NavLink>
+                        </li>
+                    ) : null,
+                )}
+            </ul>
         </nav>
     );
 }
@@ -45,7 +46,7 @@ function NavLinks({className, onNavigate}: {className: string; onNavigate?: () =
  * Its exact wording: not translated. */
 function ModelNotice({className}: {className: string}) {
     const builtWithLlama = useSessionStore((state) => state.user?.built_with_llama);
-    return builtWithLlama ? <p className={`text-xs text-muted-foreground ${className}`}>Built with Llama</p> : null;
+    return builtWithLlama ? <p className={`text-xs text-base-content/70 ${className}`}>Built with Llama</p> : null;
 }
 
 /** Desktop: a column next to the page. Hidden on phones (see MobileNav). */
@@ -53,7 +54,7 @@ export function Sidebar() {
     const {t} = useI18n();
     return (
         <aside className="app-layout__sidebar" aria-label={t("nav.label")}>
-            <NavLinks className="app-layout__nav"/>
+            <NavLinks/>
             <ModelNotice className="mt-auto px-3 pt-4"/>
         </aside>
     );
@@ -72,14 +73,14 @@ export function MobileNav() {
             >
                 <Menu aria-hidden/>
             </SheetTrigger>
-            <SheetContent side="left" showCloseButton={false} className="gap-0 bg-sidebar p-0">
+            <SheetContent side="left" showCloseButton={false} className="gap-0 bg-base-100 p-0">
                 <div className="flex min-h-[var(--header-height)] items-center justify-between border-b px-4">
                     <SheetTitle>{t("nav.label")}</SheetTitle>
                     <SheetClose render={<Button type="button" variant="ghost" size="icon" aria-label={t("common.close")}/>}>
                         <X aria-hidden/>
                     </SheetClose>
                 </div>
-                <NavLinks className="flex flex-col gap-1 p-3" onNavigate={() => setOpen(false)}/>
+                <NavLinks className="p-3" onNavigate={() => setOpen(false)}/>
                 <ModelNotice className="mt-auto p-4"/>
             </SheetContent>
         </Sheet>

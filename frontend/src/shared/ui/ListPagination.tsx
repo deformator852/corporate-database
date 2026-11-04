@@ -21,7 +21,7 @@ export function ListPagination({page, pages, perPage, total, shown, onPageChange
             aria-label={t("common.pagination")}
             className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
         >
-            <p className="text-sm text-muted-foreground">{t("common.showing", {from, to, total})}</p>
+            <p className="text-sm text-base-content/70">{t("common.showing", {from, to, total})}</p>
             <div className="flex items-center gap-2">
                 <Button
                     type="button"
@@ -32,7 +32,7 @@ export function ListPagination({page, pages, perPage, total, shown, onPageChange
                 >
                     {t("common.previous")}
                 </Button>
-                <p className="min-w-24 text-center text-sm text-muted-foreground">
+                <p className="min-w-24 text-center text-sm text-base-content/70">
                     {t("common.pageOf", {page, pages: Math.max(pages, 1)})}
                 </p>
                 <Button

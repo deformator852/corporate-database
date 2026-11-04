@@ -51,23 +51,25 @@ export function SourceList({sources, answer = ""}: {sources: ChatSource[]; answe
     return (
         <div className="mr-auto flex max-w-[min(100%,48rem)] flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-xs text-muted-foreground">{t("chat.sources")}</span>
+                <span className="text-xs text-base-content/70">{t("chat.sources")}</span>
                 {sources.map((source) => (
-                    <button
+                    <Button
                         key={source.id}
                         type="button"
+                        variant="outline"
+                        size="xs"
                         title={source.filename}
                         aria-label={t("chat.openSource", {name: source.name})}
                         onClick={() => open(source)}
-                        className="inline-flex max-w-64 cursor-pointer items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs font-medium outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+                        className="max-w-64 rounded-full font-medium"
                     >
-                        <FileText className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                        <FileText className="size-3.5 shrink-0 text-base-content/70" aria-hidden />
                         <span className="truncate">{source.name}</span>
-                    </button>
+                    </Button>
                 ))}
             </div>
             {error ? (
-                <p role="alert" className="text-xs text-destructive">
+                <p role="alert" className="text-xs text-error">
                     {error}
                 </p>
             ) : null}
@@ -83,13 +85,13 @@ export function SourceList({sources, answer = ""}: {sources: ChatSource[]; answe
                         </DialogDescription>
                     </DialogHeader>
                     {quote?.status === "loading" ? (
-                        <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+                        <p className="text-sm text-base-content/70">{t("common.loading")}</p>
                     ) : quote?.status === "error" ? (
-                        <p role="alert" className="text-sm text-destructive">
+                        <p role="alert" className="text-sm text-error">
                             {quote.message}
                         </p>
                     ) : quote?.status === "ready" ? (
-                        <blockquote className="max-h-[60vh] overflow-y-auto rounded-lg border-l-4 bg-muted/50 px-4 py-3 text-sm break-words whitespace-pre-wrap">
+                        <blockquote className="max-h-[60vh] overflow-y-auto rounded-lg border-l-4 bg-base-200/50 px-4 py-3 text-sm break-words whitespace-pre-wrap">
                             {highlighted(quote.chunk.text, answer)}
                         </blockquote>
                     ) : null}
@@ -137,7 +139,7 @@ function highlighted(text: string, answer: string) {
         }
         parts.push(text.slice(last, match.index));
         parts.push(
-            <mark key={match.index} className="rounded-sm bg-yellow-200/70 px-0.5 text-foreground dark:bg-yellow-500/30">
+            <mark key={match.index} className="rounded-sm bg-warning/30 px-0.5 text-base-content">
                 {match[0]}
             </mark>,
         );

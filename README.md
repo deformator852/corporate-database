@@ -106,8 +106,8 @@ language, or let each user pick theirs in the header.
 * Key rotation with one command.
 * The encryption key can live in HashiCorp Vault instead of on the server.
 * Switch the embedding model or the chunk size without losing documents.
-* Light themes (Neutral, Ledger) and dark themes (Slate, Midnight, Vault), and
-  your own through `custom/`.
+* A light and a dark mode, any other of daisyUI's 35 ready-made themes, and your
+  own through `custom/`.
 
 ## For small companies and large corporations
 

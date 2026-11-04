@@ -102,7 +102,7 @@ export function SearchablePicker<T extends PickerItem>({
         list = (
             <div
                 ref={scrollerRef}
-                className="max-h-40 overflow-y-auto overscroll-contain rounded-lg border border-input"
+                className="max-h-40 overflow-y-auto overscroll-contain rounded-lg border border-base-300"
                 onScroll={loadIfAtEnd}
             >
                 {items.map((item) => (
@@ -116,13 +116,13 @@ export function SearchablePicker<T extends PickerItem>({
                     />
                 ))}
                 {canLoadMore ? (
-                    <div className="px-3 py-2 text-sm text-muted-foreground">{t("common.loadingMore")}</div>
+                    <div className="px-3 py-2 text-sm text-base-content/70">{t("common.loadingMore")}</div>
                 ) : null}
             </div>
         );
     } else if (!error) {
         list = (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-base-content/70">
                 {!loaded ? labels.loading : query ? labels.emptySearch : labels.empty}
             </p>
         );
@@ -144,7 +144,7 @@ export function SearchablePicker<T extends PickerItem>({
                 onChange={(event) => setSearch(event.target.value)}
             />
             {value.length > 0 ? (
-                <p className="text-sm text-muted-foreground">{t("common.selectedCount", {count: value.length})}</p>
+                <p className="text-sm text-base-content/70">{t("common.selectedCount", {count: value.length})}</p>
             ) : null}
             {list}
             {error ? <PickerError message={error} onRetry={retry} /> : null}
@@ -171,7 +171,7 @@ function PickerOption({
     return (
         <label
             htmlFor={id}
-            className={`flex items-center gap-2 border-b border-input px-3 py-2 text-sm last:border-b-0 ${
+            className={`flex items-center gap-2 border-b border-base-300 px-3 py-2 text-sm last:border-b-0 ${
                 isLocked ? "cursor-not-allowed opacity-70" : "cursor-pointer"
             }`}
         >
@@ -288,7 +288,7 @@ function PickerError({message, onRetry}: {message: string; onRetry: () => void})
     const {t} = useI18n();
     return (
         <div className="flex flex-col items-start gap-2">
-            <p className="text-sm text-destructive">{message}</p>
+            <p className="text-sm text-error">{message}</p>
             <Button type="button" variant="outline" size="sm" onClick={onRetry}>
                 {t("common.tryAgain")}
             </Button>

@@ -50,7 +50,7 @@ export function Account() {
     const header = (
         <div className="stack">
             <h1>{t("account.title")}</h1>
-            <p className="text-muted-foreground">
+            <p className="text-base-content/70">
                 {`${user.first_name} ${user.last_name}`.trim()} · {user.email}
             </p>
         </div>
@@ -62,7 +62,7 @@ export function Account() {
                 {header}
                 <Card className="gap-1 px-4 py-4 sm:px-5 sm:py-5">
                     <h2 className="text-lg">{t("account.ssoTitle")}</h2>
-                    <p className="text-sm text-muted-foreground">{t("account.ssoHint")}</p>
+                    <p className="text-sm text-base-content/70">{t("account.ssoHint")}</p>
                 </Card>
             </div>
         );
@@ -74,14 +74,14 @@ export function Account() {
             <Card className="gap-4 px-4 py-4 sm:px-5 sm:py-5">
                 <div className="space-y-1">
                     <h2 className="text-lg">{t("account.passwordTitle")}</h2>
-                    <p className="text-sm text-muted-foreground">{t("account.passwordHint")}</p>
+                    <p className="text-sm text-base-content/70">{t("account.passwordHint")}</p>
                 </div>
                 <form className="stack" noValidate onSubmit={(event) => void handleSubmit(onSubmit)(event)}>
                     <FieldGroup>
                         {errors.root?.message ? (
                             <div
                                 role="alert"
-                                className="flex gap-2.5 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
+                                className="d-alert d-alert-error d-alert-soft items-start text-sm"
                             >
                                 <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
                                 <p>{errors.root.message}</p>

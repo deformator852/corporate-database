@@ -1,6 +1,5 @@
 import {Search} from "lucide-react";
 
-import {Input} from "@/components/ui/input";
 import {NativeSelect, NativeSelectOption} from "@/components/ui/native-select";
 import {documentClassificationKey, type DocumentClassification} from "@/entities/document/model";
 import {useI18n} from "@/shared/i18n/I18nProvider";
@@ -29,17 +28,16 @@ export function DocumentFilterBar({search, onSearch, filters, classifications, o
     const {t} = useI18n();
     return (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="relative flex-1">
-                <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                <Input
+            <label className="d-input w-full flex-1">
+                <Search className="size-4 text-base-content/70" aria-hidden />
+                <input
                     type="search"
                     value={search}
                     onChange={(event) => onSearch(event.target.value)}
                     placeholder={t("documents.filter.search")}
                     aria-label={t("documents.filter.search")}
-                    className="pl-8"
                 />
-            </div>
+            </label>
             <NativeSelect
                 className="w-full sm:w-44"
                 aria-label={t("documents.filter.byStatus")}

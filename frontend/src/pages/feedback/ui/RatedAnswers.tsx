@@ -65,7 +65,7 @@ export function RatedAnswers() {
             {status === "error" ? (
                 <StatusCard title={t("feedback.loadErrorTitle")} detail={error} onRetry={reload} />
             ) : status === "loading" ? (
-                <p className="text-sm text-muted-foreground">{t("feedback.loading")}</p>
+                <p className="text-sm text-base-content/70">{t("feedback.loading")}</p>
             ) : items.length === 0 ? (
                 <StatusCard title={t("feedback.empty")} />
             ) : (
@@ -120,10 +120,10 @@ function RatedAnswerCard({item, onRemove}: {item: RatedAnswer; onRemove: () => v
     const linkState: UserDetailLinkState = {from: location.pathname + location.search};
     return (
         <Card className="gap-3 px-4 py-4">
-            <p className="flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
+            <p className="flex flex-wrap items-center gap-x-1 text-xs text-base-content/70">
                 {/* Which way it was rated: needed once both kinds are listed. */}
                 <Thumb
-                    className={cn("size-3.5", item.rating === "down" ? "text-destructive" : "text-success")}
+                    className={cn("size-3.5", item.rating === "down" ? "text-error" : "text-success")}
                     aria-label={t(item.rating === "down" ? "chat.rating.bad" : "chat.rating.good")}
                     role="img"
                 />
@@ -140,11 +140,11 @@ function RatedAnswerCard({item, onRemove}: {item: RatedAnswer; onRemove: () => v
                 )}
             </p>
             <div className="stack">
-                <p className="text-xs font-medium text-muted-foreground">{t("feedback.question")}</p>
+                <p className="text-xs font-medium text-base-content/70">{t("feedback.question")}</p>
                 <p className="font-medium break-words whitespace-pre-wrap">{item.question}</p>
             </div>
             <div className="stack">
-                <p className="text-xs font-medium text-muted-foreground">{t("feedback.answer")}</p>
+                <p className="text-xs font-medium text-base-content/70">{t("feedback.answer")}</p>
                 <p className="text-sm break-words whitespace-pre-wrap">{item.answer}</p>
             </div>
             {item.sources.length ? <SourceList sources={item.sources} answer={item.answer} /> : null}

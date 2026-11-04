@@ -16,7 +16,7 @@ export function PageHeader({
     const text = (
         <div className="stack">
             <h1 id={id}>{title}</h1>
-            <p className="max-w-xl text-muted-foreground">{subtitle}</p>
+            <p className="max-w-xl text-base-content/70">{subtitle}</p>
         </div>
     );
     if (action == null) {

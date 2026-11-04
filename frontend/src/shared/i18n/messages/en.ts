@@ -18,11 +18,10 @@ export const en = {
 
     "theme.label": "Theme",
     "language.label": "Language",
-    "theme.neutral": "Neutral",
-    "theme.ledger": "Ledger",
-    "theme.slate": "Slate",
-    "theme.midnight": "Midnight",
-    "theme.vault": "Vault",
+    "theme.corporate": "Corporate",
+    "theme.dark": "Dark",
+    "theme.toDark": "Switch to dark mode",
+    "theme.toLight": "Switch to light mode",
 
     "common.tryAgain": "Try again",
     "common.cancel": "Cancel",

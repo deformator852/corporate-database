@@ -43,7 +43,7 @@ export function PermissionsList() {
                             return (
                                 <TableRow key={permission.key}>
                                     <TableCell className="px-4 font-medium">{permission.name}</TableCell>
-                                    <TableCell className="text-muted-foreground">{permission.key}</TableCell>
+                                    <TableCell className="text-base-content/70">{permission.key}</TableCell>
                                     <TableCell className="max-w-xs truncate px-4" title={roleNames || undefined}>
                                         {roleNames || t("common.noDataDash")}
                                     </TableCell>

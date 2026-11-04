@@ -35,7 +35,7 @@ export function ReindexBanner() {
         <div
             role="status"
             // Up against the header: the main area's top padding goes below it.
-            className="-mt-(--section-gap) mb-(--section-gap) flex items-center gap-2 border-b border-amber-300/60 bg-amber-50 px-4 py-2 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-100"
+            className="-mt-(--section-gap) mb-(--section-gap) flex items-center gap-2 border-b border-warning/30 bg-warning/10 px-4 py-2 text-sm text-base-content"
         >
             <RefreshCw className="size-4 shrink-0 animate-spin [animation-duration:3s] motion-reduce:animate-none" aria-hidden />
             <p>{t("reindex.banner", {percent: progress.percent})}</p>

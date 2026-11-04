@@ -64,8 +64,8 @@ export function ChatHistoryList() {
 
             {userId != null ? (
                 <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <span className="text-muted-foreground">{t("chatHistory.userFilter")}</span>
-                    <span className="inline-flex items-center gap-0.5 rounded-full bg-muted py-0.5 ps-2.5 pe-0.5">
+                    <span className="text-base-content/70">{t("chatHistory.userFilter")}</span>
+                    <span className="d-badge h-auto gap-0.5 bg-base-200 py-0.5 ps-2.5 pe-0.5">
                         {ownerName}
                         <Button
                             type="button"
@@ -82,7 +82,7 @@ export function ChatHistoryList() {
             ) : null}
 
             {purged ? (
-                <p role="status" className="text-sm text-muted-foreground">
+                <p role="status" className="text-sm text-base-content/70">
                     {purged}
                 </p>
             ) : null}
@@ -90,7 +90,7 @@ export function ChatHistoryList() {
             {status === "error" ? (
                 <StatusCard title={t("chatHistory.loadErrorTitle")} detail={error} onRetry={reload} />
             ) : status === "loading" ? (
-                <p className="text-sm text-muted-foreground">{t("chatHistory.loading")}</p>
+                <p className="text-sm text-base-content/70">{t("chatHistory.loading")}</p>
             ) : items.length === 0 ? (
                 <StatusCard title={t("chatHistory.empty")} />
             ) : (
@@ -120,7 +120,7 @@ export function ChatHistoryList() {
                                 <TableCell>
                                     <button
                                         type="button"
-                                        className="cursor-pointer text-left underline-offset-4 hover:underline"
+                                        className="d-link d-link-hover text-left"
                                         title={t("chatHistory.onlyUser", {name: chat.user.name})}
                                         onClick={() => updateParams({user: String(chat.user.id), page: "1"})}
                                     >
@@ -128,7 +128,7 @@ export function ChatHistoryList() {
                                     </button>
                                 </TableCell>
                                 <TableCell className="text-right tabular-nums">{chat.message_count}</TableCell>
-                                <TableCell className="px-4 text-muted-foreground tabular-nums">
+                                <TableCell className="px-4 text-base-content/70 tabular-nums">
                                     {formatDateTime(chat.updated_at, tag)}
                                 </TableCell>
                                 {canDelete ? (

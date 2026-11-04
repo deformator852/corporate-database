@@ -49,7 +49,7 @@ A package `backend/src/custom/EXTENSION/__init__.py` can define any of these:
 | `setup(app)` | A function called once with the FastAPI app at startup |
 | Models | Any SQLAlchemy model the package imports is visible to Alembic |
 | `tasks.py` | A module the Celery worker loads, if it exists |
-| `CORE_API` | The extension API version the package was written for, now `1`. A package written for another version is skipped, with an error in the log |
+| `CORE_API` | The extension API version the package was written for, now `2`. A package written for another version is skipped, with an error in the log |
 
 ## Adding API endpoints
 
@@ -265,7 +265,7 @@ A file `frontend/src/custom/EXTENSION/index.tsx` default-exports an
 | `messages` | Translations per language |
 | `themes` | Extra themes in the theme picker |
 | `defaultTheme` | The theme for users who have not picked one |
-| `coreApi` | The extension API version the module was written for, now `1`. A module written for another version is skipped, with an error in the browser console |
+| `coreApi` | The extension API version the module was written for, now `2`. A module written for another version is skipped, with an error in the browser console |
 
 ## Adding a page
 
@@ -343,25 +343,49 @@ nav: [{to: "/documents", labelKey: "custom.nav.files", end: true, can: "document
 
 ## Adding themes
 
-A theme is a set of CSS variables under `[data-theme="THEME-ID"]` plus an
-entry in `themes`. Keep both in your `custom/` folder.
+The interface is built with [daisyUI](https://daisyui.com/). A theme is a set of
+daisyUI CSS variables under `[data-theme="THEME-ID"]` plus an entry in `themes`.
+Keep both in your `custom/` folder. The core themes are `corporate` and `business`
+(dark mode), with a light/dark button in the header. Once you add a theme, the
+button becomes a theme menu.
 
-1. Write the CSS. Replace THEME-ID with your theme's ID, here `ocean`:
+### Using a ready-made theme
+
+daisyUI ships [35 themes](https://daisyui.com/docs/themes/). Import one and
+register it. Here, THEME-ID is `emerald`:
+
+```ts
+// frontend/src/custom/brand/index.ts
+import type {Extension} from "@/extensions";
+import "daisyui/theme/emerald.css";
+
+export default {
+    themes: [{id: "emerald", labelKey: "custom.theme.emerald"}],
+    defaultTheme: "emerald",
+    messages: {en: {"custom.theme.emerald": "Emerald"}},
+} satisfies Extension;
+```
+
+Some of these themes have lower text contrast than the core theme. Check them
+before you make one the default.
+
+### Writing your own theme
+
+1. Pick your colors in the
+   [daisyUI theme generator](https://daisyui.com/theme-generator/), and copy the
+   variables into a CSS file. Replace THEME-ID with your theme's ID, here `ocean`:
 
    ```css
    /* frontend/src/custom/brand/ocean.css */
    [data-theme="ocean"] {
-     --background: #ecfeff;
-     --foreground: #083344;
-     --primary: #0e7490;
-     --primary-foreground: #ffffff;
-     --ring: #0e7490;
-     /* any variable from :root in frontend/src/index.css */
-   }
-
-   [data-theme="ocean"] .app-header {
-     background-color: var(--primary);
-     color: var(--primary-foreground);
+     color-scheme: light;
+     --color-base-100: #ecfeff;
+     --color-base-200: #cffafe;
+     --color-base-300: #a5f3fc;
+     --color-base-content: #083344;
+     --color-primary: #0e7490;
+     --color-primary-content: #ffffff;
+     --radius-box: 0.5rem;
    }
    ```
 
@@ -388,16 +412,20 @@ Theme options:
 
 * `id` is the value of `data-theme` on `<html>`. Style it only in your CSS
   file, imported from the extension module.
-* The full variable list (`--background`, `--primary`, `--sidebar`,
-  `--success` and others) is in `:root` of `frontend/src/index.css`. Variables
-  you do not set keep the core values.
+* The variables are listed in the
+  [daisyUI documentation](https://daisyui.com/docs/themes/). Variables you do
+  not set keep the values of the default core theme, `corporate`.
 * `dark: true` adds the `.dark` class and a dark color scheme for browser
-  controls.
-* A theme with the same `id` as a core theme (`neutral`, `ledger`, `slate`,
-  `midnight`, `vault`) replaces its label and options. Your CSS loads after
-  the core CSS and wins.
+  controls. In your CSS, also set `color-scheme: dark`.
+* A theme with the ID of a core theme replaces its label and options.
+  Your CSS loads after the core CSS and wins.
 * `defaultTheme` applies to users who have not picked a theme yet (without
-  it, they get `ledger`). A choice saved in the browser is kept.
+  it, they get `corporate`). A choice saved in the browser is kept.
+* In a dark theme, make `--color-base-300` lighter than `--color-base-100`:
+  borders use it. Many ready-made dark themes have it darker, so borders hardly
+  show until you override it.
+* Bundle any font your theme uses, for example with a `@fontsource` package.
+  Corpus does not load fonts from the internet.
 
 ## Getting updates
 

@@ -52,7 +52,7 @@ export function SessionGate() {
         return (
             <div className="flex min-h-svh flex-col items-center justify-center gap-3 px-4">
                 <p className="font-medium">{t("session.errorTitle")}</p>
-                <p className="text-center text-sm text-muted-foreground">
+                <p className="text-center text-sm text-base-content/70">
                     {error ?? t("session.errorDefault")}
                 </p>
                 <Button type="button" onClick={() => setAttempt((current) => current + 1)}>
@@ -64,7 +64,7 @@ export function SessionGate() {
 
     if (status !== "ready") {
         return (
-            <div className="flex min-h-svh items-center justify-center text-sm text-muted-foreground">
+            <div className="flex min-h-svh items-center justify-center text-sm text-base-content/70">
                 {t("session.loading")}
             </div>
         );

@@ -57,13 +57,13 @@ export function LoginForm() {
                 {errors.root?.message ? (
                     <div
                         role="alert"
-                        className="flex gap-2.5 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
+                        className="d-alert d-alert-error d-alert-soft items-start text-sm"
                     >
                         <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden/>
                         <p>{errors.root.message}</p>
                     </div>
                 ) : notice ? (
-                    <p role="status" className="rounded-lg bg-muted px-3 py-2.5 text-sm">
+                    <p role="status" className="d-alert text-sm">
                         {notice}
                     </p>
                 ) : null}
@@ -105,7 +105,7 @@ export function LoginForm() {
                     {isSubmitting ? t("login.signingIn") : t("login.signIn")}
                 </Button>
 
-                <p className="text-center text-xs text-muted-foreground">
+                <p className="text-center text-xs text-base-content/70">
                     {t("login.forgotHint")}
                 </p>
             </FieldGroup>

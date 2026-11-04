@@ -51,7 +51,7 @@ Un paquet `backend/src/custom/EXTENSION/__init__.py` peut définir l'un des
 | `setup(app)` | Une fonction appelée une fois avec l'application FastAPI au démarrage |
 | Modèles | Alembic voit tout modèle SQLAlchemy importé par le paquet |
 | `tasks.py` | Un module chargé par le worker Celery, s'il existe |
-| `CORE_API` | La version de l'API d'extensions pour laquelle le paquet a été écrit, actuellement `1`. Un paquet écrit pour une autre version est ignoré, avec une erreur dans le journal |
+| `CORE_API` | La version de l'API d'extensions pour laquelle le paquet a été écrit, actuellement `2`. Un paquet écrit pour une autre version est ignoré, avec une erreur dans le journal |
 
 ## Ajouter des endpoints d'API
 
@@ -268,7 +268,7 @@ Un fichier `frontend/src/custom/EXTENSION/index.tsx` exporte par défaut une
 | `messages` | Traductions par langue |
 | `themes` | Thèmes supplémentaires dans le sélecteur de thème |
 | `defaultTheme` | Le thème des utilisateurs qui n'en ont pas choisi |
-| `coreApi` | La version de l'API d'extensions pour laquelle le module a été écrit, actuellement `1`. Un module écrit pour une autre version est ignoré, avec une erreur dans la console du navigateur |
+| `coreApi` | La version de l'API d'extensions pour laquelle le module a été écrit, actuellement `2`. Un module écrit pour une autre version est ignoré, avec une erreur dans la console du navigateur |
 
 ## Ajouter une page
 
@@ -349,26 +349,50 @@ nav: [{to: "/documents", labelKey: "custom.nav.files", end: true, can: "document
 
 ## Ajouter des thèmes
 
-Un thème est un ensemble de variables CSS sous `[data-theme="THEME-ID"]` plus
-une entrée dans `themes`. Gardez les deux dans votre dossier `custom/`.
+L'interface est construite avec [daisyUI](https://daisyui.com/). Un thème est un
+ensemble de variables CSS de daisyUI sous `[data-theme="THEME-ID"]`, plus une
+entrée dans `themes`. Gardez les deux dans votre dossier `custom/`. Les thèmes du noyau
+sont `corporate` et `business` (mode sombre), avec un bouton clair/sombre dans
+l'en-tête. Dès que vous ajoutez un thème, le bouton devient un menu de thèmes.
 
-1. Écrivez le CSS. Remplacez THEME-ID par l'identifiant de votre thème, ici
-   `ocean` :
+### Utiliser un thème prêt à l'emploi
+
+daisyUI fournit [35 thèmes](https://daisyui.com/docs/themes/). Importez-en un et
+enregistrez-le. Ici, THEME-ID est `emerald` :
+
+```ts
+// frontend/src/custom/brand/index.ts
+import type {Extension} from "@/extensions";
+import "daisyui/theme/emerald.css";
+
+export default {
+    themes: [{id: "emerald", labelKey: "custom.theme.emerald"}],
+    defaultTheme: "emerald",
+    messages: {en: {"custom.theme.emerald": "Emerald"}},
+} satisfies Extension;
+```
+
+Certains de ces thèmes ont un contraste de texte plus faible que le thème du
+noyau. Vérifiez-les avant d'en faire le thème par défaut.
+
+### Écrire votre propre thème
+
+1. Choisissez vos couleurs dans le
+   [générateur de thèmes de daisyUI](https://daisyui.com/theme-generator/), puis
+   copiez les variables dans un fichier CSS. Remplacez THEME-ID par l'ID de votre
+   thème, ici `ocean` :
 
    ```css
    /* frontend/src/custom/brand/ocean.css */
    [data-theme="ocean"] {
-     --background: #ecfeff;
-     --foreground: #083344;
-     --primary: #0e7490;
-     --primary-foreground: #ffffff;
-     --ring: #0e7490;
-     /* toute variable de :root dans frontend/src/index.css */
-   }
-
-   [data-theme="ocean"] .app-header {
-     background-color: var(--primary);
-     color: var(--primary-foreground);
+     color-scheme: light;
+     --color-base-100: #ecfeff;
+     --color-base-200: #cffafe;
+     --color-base-300: #a5f3fc;
+     --color-base-content: #083344;
+     --color-primary: #0e7490;
+     --color-primary-content: #ffffff;
+     --radius-box: 0.5rem;
    }
    ```
 
@@ -386,26 +410,29 @@ une entrée dans `themes`. Gardez les deux dans votre dossier `custom/`.
        ],
        defaultTheme: "ocean",
        messages: {
-           fr: {"custom.theme.ocean": "Océan", "custom.theme.graphite": "Graphite"},
+           en: {"custom.theme.ocean": "Ocean", "custom.theme.graphite": "Graphite"},
        },
    } satisfies Extension;
    ```
 
 Options du thème :
 
-* `id` est la valeur de `data-theme` sur `<html>`. Stylez-le uniquement dans
-  votre fichier CSS, importé depuis le module de l'extension.
-* La liste complète des variables (`--background`, `--primary`, `--sidebar`,
-  `--success` et d'autres) se trouve dans `:root` de
-  `frontend/src/index.css`. Les variables que vous ne définissez pas gardent
-  les valeurs du noyau.
-* `dark: true` ajoute la classe `.dark` et un schéma de couleurs sombre pour
-  les contrôles du navigateur.
-* Un thème avec le même `id` qu'un thème du noyau (`neutral`, `ledger`,
-  `slate`, `midnight`, `vault`) remplace son libellé et ses options. Votre CSS
-  se charge après celui du noyau et l'emporte.
-* `defaultTheme` s'applique aux utilisateurs qui n'ont pas encore choisi de
-  thème (sans lui, ils ont `ledger`). Un choix enregistré dans le navigateur est conservé.
+* `id` est la valeur de `data-theme` sur `<html>`. Appliquez vos styles
+  uniquement dans votre fichier CSS, importé depuis le module de l'extension.
+* Les variables sont listées dans la
+  [documentation de daisyUI](https://daisyui.com/docs/themes/). Celles que vous
+  ne définissez pas gardent les valeurs du thème par défaut du noyau, `corporate`.
+* `dark: true` ajoute la classe `.dark` et un schéma de couleurs sombre pour les
+  contrôles du navigateur. Dans votre CSS, définissez aussi `color-scheme: dark`.
+* Un thème avec l'ID d'un thème du noyau remplace son libellé et ses options. Votre CSS est chargé après celui du noyau et l'emporte.
+* `defaultTheme` s'applique aux utilisateurs qui n'ont pas encore choisi de thème
+  (sans lui, ils ont `corporate`). Un choix enregistré dans le navigateur est conservé.
+* Dans un thème sombre, rendez `--color-base-300` plus clair que
+  `--color-base-100` : les bordures l'utilisent. Beaucoup de thèmes sombres prêts
+  à l'emploi l'ont plus foncé, et les bordures se voient à peine tant que vous ne
+  le redéfinissez pas.
+* Intégrez à la compilation les polices de votre thème, par exemple avec un
+  paquet `@fontsource`. Corpus ne charge pas de polices depuis internet.
 
 ## Obtenir les mises à jour
 

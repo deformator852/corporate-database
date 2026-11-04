@@ -112,7 +112,7 @@ export function AuditLog() {
                             const details = describe(t, entry);
                             return (
                                 <TableRow key={entry.id}>
-                                    <TableCell className="px-4 whitespace-nowrap text-muted-foreground tabular-nums">
+                                    <TableCell className="px-4 whitespace-nowrap text-base-content/70 tabular-nums">
                                         {timeFormat.format(new Date(entry.created_at))}
                                     </TableCell>
                                     <TableCell className="max-w-48 truncate">
@@ -135,7 +135,7 @@ export function AuditLog() {
                                         className={cn(
                                             "whitespace-nowrap font-medium",
                                             entry.action === "auth.login_failed" &&
-                                                "text-destructive",
+                                                "text-error",
                                         )}
                                     >
                                         {actionLabel(t, entry.action)}
@@ -143,10 +143,10 @@ export function AuditLog() {
                                     <TableCell className="max-w-48 truncate">
                                         {entry.target_label ?? t("common.noDataDash")}
                                     </TableCell>
-                                    <TableCell className="min-w-48 whitespace-normal text-muted-foreground">
+                                    <TableCell className="min-w-48 whitespace-normal text-base-content/70">
                                         {details || t("common.noDataDash")}
                                     </TableCell>
-                                    <TableCell className="px-4 whitespace-nowrap text-muted-foreground tabular-nums">
+                                    <TableCell className="px-4 whitespace-nowrap text-base-content/70 tabular-nums">
                                         {entry.ip ?? t("common.noDataDash")}
                                     </TableCell>
                                 </TableRow>

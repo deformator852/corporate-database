@@ -41,7 +41,7 @@ export function SelectedFiles({
                             <p className="truncate" title={file.name}>
                                 {file.name}
                             </p>
-                            {problem ? <p className="text-destructive">{problem}</p> : null}
+                            {problem ? <p className="text-error">{problem}</p> : null}
                         </div>
                         <NativeSelect
                             size="sm"

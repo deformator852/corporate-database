@@ -1,7 +1,6 @@
 import {Files, X} from "lucide-react";
 import {useRef, useState} from "react";
 
-import {Button} from "@/components/ui/button";
 import {
     Dialog,
     DialogContent,
@@ -46,34 +45,30 @@ export function ChatDocumentPicker({value, onChange, disabled}: ChatDocumentPick
 
     return (
         <div className="flex flex-wrap items-center gap-1.5">
-            <Button
+            <button
                 type="button"
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground"
+                className="d-btn d-btn-ghost d-btn-sm text-base-content/70"
                 disabled={disabled}
                 onClick={() => setOpen(true)}
             >
-                <Files aria-hidden />
+                <Files className="size-4" aria-hidden />
                 {value.length ? t("chat.documents.chosen", {count: value.length}) : t("chat.documents.all")}
-            </Button>
+            </button>
             {value.map((document) => (
                 <span
                     key={document.id}
-                    className="inline-flex max-w-56 items-center gap-0.5 rounded-full bg-muted py-0.5 ps-2.5 pe-0.5 text-xs"
+                    className="d-badge h-auto max-w-56 gap-0.5 bg-base-200 py-0.5 ps-2.5 pe-0.5 text-xs"
                 >
                     <span className="truncate">{document.name}</span>
-                    <Button
+                    <button
                         type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        className="rounded-full"
+                        className="d-btn d-btn-ghost d-btn-circle d-btn-xs"
                         disabled={disabled}
                         aria-label={t("chat.documents.remove", {name: document.name})}
                         onClick={() => onChange(value.filter((item) => item.id !== document.id))}
                     >
-                        <X aria-hidden />
-                    </Button>
+                        <X className="size-3.5" aria-hidden />
+                    </button>
                 </span>
             ))}
 
@@ -100,12 +95,12 @@ export function ChatDocumentPicker({value, onChange, disabled}: ChatDocumentPick
                         }}
                     />
                     <DialogFooter>
-                        <Button type="button" variant="outline" disabled={!value.length} onClick={() => onChange([])}>
+                        <button type="button" className="d-btn d-btn-outline" disabled={!value.length} onClick={() => onChange([])}>
                             {t("chat.documents.clear")}
-                        </Button>
-                        <Button type="button" onClick={() => setOpen(false)}>
+                        </button>
+                        <button type="button" className="d-btn d-btn-primary" onClick={() => setOpen(false)}>
                             {t("chat.documents.done")}
-                        </Button>
+                        </button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

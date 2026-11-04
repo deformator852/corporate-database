@@ -134,7 +134,7 @@ function RoleRow({role, actions}: {role: RoleListItem; actions: RoleActions | nu
     return (
         <TableRow>
             <TableCell className="px-4 font-medium">{role.name}</TableCell>
-            <TableCell className="text-muted-foreground">{role.key}</TableCell>
+            <TableCell className="text-base-content/70">{role.key}</TableCell>
             <TableCell className="max-w-xs truncate" title={permissionNames || undefined}>
                 {permissionNames || t("common.noDataDash")}
             </TableCell>

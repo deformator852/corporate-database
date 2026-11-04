@@ -34,7 +34,7 @@ describe("Language switcher", () => {
 
     it("is hidden with a single language", async () => {
         renderApp("/", sessionUser());
-        expect(await screen.findByRole("button", {name: /Theme/})).toBeInTheDocument();
+        expect(await screen.findByRole("button", {name: "Sign out"})).toBeInTheDocument();
         expect(screen.queryByRole("button", {name: /Language/})).not.toBeInTheDocument();
     });
 });

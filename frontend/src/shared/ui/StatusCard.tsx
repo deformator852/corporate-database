@@ -15,9 +15,9 @@ type StatusCardProps = {
 export function StatusCard({title, detail, onRetry, children}: StatusCardProps) {
     const {t} = useI18n();
     return (
-        <div className="flex flex-col items-start gap-3 rounded-xl bg-card px-4 py-8 ring-1 ring-foreground/10">
+        <div className="flex flex-col items-start gap-3 d-card d-card-border bg-base-100 px-4 py-8">
             <p className="font-medium">{title}</p>
-            {detail ? <p className="text-sm text-muted-foreground">{detail}</p> : null}
+            {detail ? <p className="text-sm text-base-content/70">{detail}</p> : null}
             {onRetry ? (
                 <Button type="button" onClick={onRetry}>
                     {t("common.tryAgain")}

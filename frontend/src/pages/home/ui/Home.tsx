@@ -1,7 +1,7 @@
 import {PanelLeft, SquarePen, X} from "lucide-react";
 import {useState} from "react";
+import {cn} from "cn";
 
-import {Button} from "@/components/ui/button";
 import {Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger} from "@/components/ui/sheet";
 import {useChat} from "@pages/home/model/useChat";
 import {can} from "@/shared/lib/api/me";
@@ -62,72 +62,66 @@ function Home() {
     }
 
     return (
-        <div className="flex h-full min-h-0 flex-1 gap-4 overflow-hidden">
+        <div className="flex h-full min-h-0 flex-1 gap-4 overflow-hidden text-base-content">
             <h1 className="sr-only">{t("chat.title")}</h1>
             {historyShown ? (
                 <aside
                     id="chat-history"
                     aria-label={t("chat.history")}
-                    className="hidden w-64 shrink-0 overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 md:block"
+                    className="d-card d-card-border hidden w-64 shrink-0 overflow-hidden bg-base-100 md:block"
                 >
                     {history}
                 </aside>
             ) : null}
             <section
                 aria-label={t("chat.panelLabel")}
-                className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10"
+                className="d-card d-card-border relative h-full min-h-0 flex-1 overflow-hidden bg-base-100"
             >
-                <header className="flex shrink-0 items-center gap-1 border-b border-border px-2 py-1.5">
-                    <Button
+                <header className="d-navbar min-h-0 shrink-0 gap-1 border-b border-base-300 p-1.5">
+                    <button
                         type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="hidden md:inline-flex"
+                        className="d-btn d-btn-ghost d-btn-square d-btn-sm hidden md:inline-flex"
                         aria-label={t(historyShown ? "chat.hideHistory" : "chat.showHistory")}
                         aria-controls="chat-history"
                         aria-expanded={historyShown}
                         onClick={toggleHistory}
                     >
-                        <PanelLeft aria-hidden />
-                    </Button>
+                        <PanelLeft className="size-4" aria-hidden />
+                    </button>
                     <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
                         <SheetTrigger
                             render={
-                                <Button
+                                <button
                                     type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="md:hidden"
+                                    className="d-btn d-btn-ghost d-btn-square d-btn-sm md:hidden"
                                     aria-label={t("chat.showHistory")}
                                 />
                             }
                         >
-                            <PanelLeft aria-hidden />
+                            <PanelLeft className="size-4" aria-hidden />
                         </SheetTrigger>
                         <SheetContent side="left" showCloseButton={false} className="gap-0 p-0">
                             <div className="flex items-center justify-between border-b px-4 py-2">
                                 <SheetTitle>{t("chat.history")}</SheetTitle>
                                 <SheetClose
-                                    render={<Button type="button" variant="ghost" size="icon" aria-label={t("common.close")} />}
+                                    render={<button type="button" className="d-btn d-btn-ghost d-btn-square d-btn-sm" aria-label={t("common.close")} />}
                                 >
-                                    <X aria-hidden />
+                                    <X className="size-4" aria-hidden />
                                 </SheetClose>
                             </div>
                             <div className="min-h-0 flex-1">{history}</div>
                         </SheetContent>
                     </Sheet>
                     <p className="min-w-0 flex-1 truncate px-1 text-sm font-medium">{t("chat.title")}</p>
-                    <Button
+                    <button
                         type="button"
-                        variant="ghost"
-                        size="icon"
-                        className={historyShown ? "md:hidden" : undefined}
+                        className={cn("d-btn d-btn-ghost d-btn-square d-btn-sm", historyShown && "md:hidden")}
                         aria-label={t("chat.newChat")}
                         disabled={pending}
                         onClick={startNewChat}
                     >
-                        <SquarePen aria-hidden />
-                    </Button>
+                        <SquarePen className="size-4" aria-hidden />
+                    </button>
                 </header>
                 <ChatMessages
                     messages={chat.messages}

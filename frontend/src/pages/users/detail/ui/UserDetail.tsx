@@ -151,7 +151,7 @@ function UserDetailView({userId}: {userId: number}) {
     const back = (
         <Link
             to={backTo}
-            className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            className="inline-flex w-fit items-center gap-1.5 text-sm text-base-content/70 underline-offset-4 hover:text-base-content hover:underline"
         >
             <ArrowLeft className="size-4" aria-hidden />
             {t("userDetail.back")}
@@ -162,7 +162,7 @@ function UserDetailView({userId}: {userId: number}) {
         return (
             <div className="stack stack--lg w-full">
                 {back}
-                <p className="text-muted-foreground">{t("userDetail.loading")}</p>
+                <p className="text-base-content/70">{t("userDetail.loading")}</p>
             </div>
         );
     }
@@ -207,12 +207,11 @@ function UserDetailView({userId}: {userId: number}) {
 
             <Card className="gap-4 px-4 py-4 sm:gap-5 sm:px-5 sm:py-5">
                 <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-                    <span
-                        className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary text-base font-semibold text-primary-foreground sm:size-14 sm:text-lg"
-                        aria-hidden
-                    >
-                        {initials}
-                    </span>
+                    <div className="d-avatar d-avatar-placeholder shrink-0" aria-hidden>
+                        <div className="size-12 rounded-full bg-primary text-base font-semibold text-primary-content sm:size-14 sm:text-lg">
+                            {initials}
+                        </div>
+                    </div>
                     <div className="min-w-0 space-y-0.5">
                         <div className="flex min-w-0 items-center gap-2">
                             <h1 className="truncate text-xl sm:text-2xl">{name}</h1>
@@ -220,7 +219,7 @@ function UserDetailView({userId}: {userId: number}) {
                                 <Badge variant="secondary">{t("users.disabled")}</Badge>
                             ) : null}
                         </div>
-                        <p className="truncate text-sm text-muted-foreground">{profile.email}</p>
+                        <p className="truncate text-sm text-base-content/70">{profile.email}</p>
                     </div>
                 </div>
 
@@ -229,13 +228,13 @@ function UserDetailView({userId}: {userId: number}) {
                         profile.roles.map((role) => (
                             <span
                                 key={role.key}
-                                className="rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-accent-foreground"
+                                className="d-badge d-badge-sm bg-base-200 font-medium"
                             >
                                 {role.name}
                             </span>
                         ))
                     ) : (
-                        <span className="text-sm text-muted-foreground">{t("userDetail.noRoles")}</span>
+                        <span className="text-sm text-base-content/70">{t("userDetail.noRoles")}</span>
                     )}
                 </div>
 
@@ -245,8 +244,7 @@ function UserDetailView({userId}: {userId: number}) {
                             <Link
                                 to={`/chat-history?user=${profile.id}`}
                                 state={{userName: name || profile.email} satisfies ChatHistoryLinkState}
-                                // Through cn: it drops the base border-transparent the variant overrides.
-                                className={cn(buttonVariants({variant: "outline", size: "sm"}))}
+                                className={buttonVariants({variant: "outline", size: "sm"})}
                             >
                                 <MessagesSquare aria-hidden />
                                 {t("userDetail.viewChats")}
@@ -261,7 +259,7 @@ function UserDetailView({userId}: {userId: number}) {
                     </div>
                 ) : null}
                 {purged ? (
-                    <p role="status" className="text-sm text-muted-foreground">
+                    <p role="status" className="text-sm text-base-content/70">
                         {purged}
                     </p>
                 ) : null}
@@ -269,7 +267,7 @@ function UserDetailView({userId}: {userId: number}) {
                 <dl className="grid grid-cols-2 gap-3 border-t pt-4 lg:grid-cols-3">
                     {stats.map((stat) => (
                         <div key={stat.label} className="space-y-0.5">
-                            <dt className="text-xs text-muted-foreground">{stat.label}</dt>
+                            <dt className="text-xs text-base-content/70">{stat.label}</dt>
                             <dd className="text-sm font-medium tabular-nums">{stat.value}</dd>
                         </div>
                     ))}
@@ -283,10 +281,10 @@ function UserDetailView({userId}: {userId: number}) {
 
                 {days.map((group) => (
                     <div key={group.day} className="space-y-2">
-                        <h3 className="sticky top-0 z-10 bg-background/95 py-1 text-xs font-medium tracking-wide text-muted-foreground uppercase backdrop-blur">
+                        <h3 className="sticky top-0 z-10 bg-base-100/95 py-1 text-xs font-medium tracking-wide text-base-content/70 uppercase backdrop-blur">
                             {group.day}
                         </h3>
-                        <ol className="list-none overflow-hidden rounded-xl bg-card p-0 ring-1 ring-foreground/10">
+                        <ol className="list-none overflow-hidden rounded-box border border-base-300 bg-base-100 p-0">
                             {group.entries.map((entry) => {
                                 const details = describe(t, entry);
                                 const failed = entry.action === "auth.login_failed";
@@ -299,30 +297,30 @@ function UserDetailView({userId}: {userId: number}) {
                                     >
                                         <time
                                             dateTime={entry.created_at}
-                                            className="text-sm text-muted-foreground tabular-nums sm:col-start-1 sm:row-start-1"
+                                            className="text-sm text-base-content/70 tabular-nums sm:col-start-1 sm:row-start-1"
                                         >
                                             {timeFormat.format(new Date(entry.created_at))}
                                         </time>
-                                        <span className="justify-self-end text-xs text-muted-foreground tabular-nums sm:col-start-3 sm:row-start-1 sm:pt-0.5">
+                                        <span className="justify-self-end text-xs text-base-content/70 tabular-nums sm:col-start-3 sm:row-start-1 sm:pt-0.5">
                                             {entry.ip ?? ""}
                                         </span>
                                         <div className="col-span-2 min-w-0 space-y-0.5 sm:col-span-1 sm:col-start-2 sm:row-start-1">
                                             <p
                                                 className={cn(
                                                     "text-sm font-medium break-words",
-                                                    failed && "text-destructive",
+                                                    failed && "text-error",
                                                 )}
                                             >
                                                 {actionLabel(t, entry.action)}
                                                 {entry.target_label ? (
-                                                    <span className="font-normal text-foreground">
+                                                    <span className="font-normal text-base-content">
                                                         {" · "}
                                                         {entry.target_label}
                                                     </span>
                                                 ) : null}
                                             </p>
                                             {details ? (
-                                                <p className="text-sm break-words text-muted-foreground">
+                                                <p className="text-sm break-words text-base-content/70">
                                                     {details}
                                                 </p>
                                             ) : null}
@@ -336,12 +334,12 @@ function UserDetailView({userId}: {userId: number}) {
 
                 <div ref={sentinelRef} aria-hidden className="h-px" />
 
-                <div role="status" className="py-2 text-center text-sm text-muted-foreground">
+                <div role="status" className="py-2 text-center text-sm text-base-content/70">
                     {feed.loading ? (
                         t("userDetail.loadingMore")
                     ) : feed.error ? (
                         <span className="inline-flex flex-col items-center gap-2">
-                            <span className="text-destructive">{feed.error}</span>
+                            <span className="text-error">{feed.error}</span>
                             <Button type="button" size="sm" variant="outline" onClick={loadMore}>
                                 {t("common.tryAgain")}
                             </Button>

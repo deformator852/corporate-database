@@ -52,7 +52,7 @@ export function NotificationBell() {
     if (feed.error) {
         body = (
             <div className="flex flex-col items-start gap-3 px-4 py-5">
-                <p className="text-sm text-muted-foreground">{feed.error}</p>
+                <p className="text-sm text-base-content/70">{feed.error}</p>
                 <Button type="button" variant="outline" size="sm" onClick={feed.retry}>
                     {t("common.tryAgain")}
                 </Button>
@@ -76,15 +76,17 @@ export function NotificationBell() {
             </ul>
         );
     } else if (feed.loading) {
-        body = <p className="px-4 py-8 text-center text-sm text-muted-foreground">{t("notifications.loading")}</p>;
+        body = <p className="px-4 py-8 text-center text-sm text-base-content/70">{t("notifications.loading")}</p>;
     } else {
         body = (
             <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
-                <span className="flex size-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                    <BellOff className="size-5" aria-hidden />
-                </span>
+                <div className="d-avatar d-avatar-placeholder">
+                    <div className="size-11 rounded-full bg-base-200 text-base-content/70">
+                        <BellOff className="size-5" aria-hidden />
+                    </div>
+                </div>
                 <p className="font-medium">{t("notifications.empty")}</p>
-                <p className="text-sm text-muted-foreground">{t("notifications.emptyHint")}</p>
+                <p className="text-sm text-base-content/70">{t("notifications.emptyHint")}</p>
             </div>
         );
     }
@@ -115,7 +117,7 @@ export function NotificationBell() {
             >
                 <Bell />
                 {unreadCount > 0 ? (
-                    <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] leading-none font-semibold text-destructive-foreground ring-2 ring-background">
+                    <span className="d-badge d-badge-error d-badge-xs absolute -top-0.5 -right-0.5 px-1 font-semibold ring-2 ring-base-100">
                         {unreadCount > 9 ? "9+" : unreadCount}
                     </span>
                 ) : null}
@@ -129,7 +131,7 @@ export function NotificationBell() {
                     <div className="flex items-center gap-2">
                         <p className="font-semibold">{t("notifications.label")}</p>
                         {unreadCount > 0 ? (
-                            <span className="rounded-full bg-primary px-1.5 py-0.5 text-[11px] leading-none font-semibold text-primary-foreground tabular-nums">
+                            <span className="d-badge d-badge-primary d-badge-sm font-semibold tabular-nums">
                                 {unreadCount}
                             </span>
                         ) : null}
@@ -138,7 +140,7 @@ export function NotificationBell() {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="text-muted-foreground"
+                        className="text-base-content/70"
                         disabled={!data || data.total === 0}
                         onClick={() => void feed.clear()}
                     >
@@ -161,42 +163,40 @@ function NotificationRow({item, isNew, onDismiss}: {item: NotificationItem; isNe
             data-notification-id={item.id}
             data-unread={item.read ? undefined : "true"}
             className={cn(
-                "group relative flex gap-3 border-b px-4 py-3 transition-colors last:border-b-0 hover:bg-muted/60",
+                "group relative flex gap-3 border-b px-4 py-3 transition-colors last:border-b-0 hover:bg-base-200/60",
                 isNew && "bg-primary/5",
             )}
         >
-            <span
-                className={cn(
-                    "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full",
-                    failed ? "bg-destructive/10 text-destructive" : "bg-success/10 text-success",
-                )}
-                aria-hidden
-            >
-                <Icon className="size-4" />
-            </span>
+            <div className="d-avatar d-avatar-placeholder mt-0.5 shrink-0" aria-hidden>
+                <div className={cn("size-8 rounded-full", failed ? "bg-error/10 text-error" : "bg-success/10 text-success")}>
+                    <Icon className="size-4" />
+                </div>
+            </div>
             <div className="min-w-0 flex-1 pr-6">
                 <p className="flex items-center gap-1.5 font-medium">
                     {isNew ? <span className="sr-only">{t("notifications.new")}</span> : null}
                     <span className="truncate">{t(notificationTypeKey(item.type))}</span>
                 </p>
-                <p className="mt-0.5 text-sm break-words text-muted-foreground">{item.message}</p>
+                <p className="mt-0.5 text-sm break-words text-base-content/70">{item.message}</p>
                 <time
                     dateTime={item.created_at}
                     title={formatNotificationTime(item.created_at, localeIntlTag(locale))}
-                    className="mt-1 block text-xs text-muted-foreground"
+                    className="mt-1 block text-xs text-base-content/70"
                 >
                     {formatRelativeTime(item.created_at, localeIntlTag(locale))}
                 </time>
             </div>
-            <button
+            <Button
                 type="button"
+                variant="ghost"
+                size="icon-sm"
                 aria-label={t("notifications.dismiss")}
                 title={t("notifications.dismiss")}
                 onClick={onDismiss}
-                className="absolute top-2.5 right-2.5 flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity outline-none group-hover:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-ring/50 [@media(hover:none)]:opacity-100"
+                className="absolute top-2.5 right-2.5 text-base-content/70 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
             >
-                <X className="size-4" aria-hidden />
-            </button>
+                <X aria-hidden />
+            </Button>
         </li>
     );
 }

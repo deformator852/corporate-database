@@ -216,7 +216,7 @@ function UserRow({user, actions}: {user: UserListItem; actions: UserActions | nu
                     {user.disabled ? <Badge variant="secondary">{t("users.disabled")}</Badge> : null}
                 </span>
             </TableCell>
-            <TableCell className="text-muted-foreground">{user.email}</TableCell>
+            <TableCell className="text-base-content/70">{user.email}</TableCell>
             <TableCell>
                 {user.roles.length > 0 ? user.roles.map((role) => role.name).join(", ") : t("common.noDataDash")}
             </TableCell>
@@ -287,7 +287,7 @@ function UserRowActions({user, actions}: {user: UserListItem; actions: UserActio
                 ) : null}
             </div>
             {actions.enableError?.id === user.id ? (
-                <p role="alert" className="mt-1 text-right text-xs text-destructive">
+                <p role="alert" className="mt-1 text-right text-xs text-error">
                     {actions.enableError.message}
                 </p>
             ) : null}

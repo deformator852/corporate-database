@@ -33,7 +33,7 @@ describe("Documents page", () => {
         expect(within(failed).getByText("Secret")).toBeInTheDocument();
         expect(within(failed).getByText("Failed")).toBeInTheDocument();
         expect(within(failed).getByText("The document has no text.")).toBeInTheDocument();
-        expect(within(failed).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "15");
+        expect(within(failed).getByRole("progressbar")).toHaveAttribute("value", "15");
     });
 
     it("marks documents whose file is not in the storage", async () => {
@@ -257,7 +257,7 @@ describe("Uploading several files", () => {
         expect(await screen.findByRole("alert")).toHaveTextContent("1 of 3 files were not uploaded.");
         const names = server.sent("POST", "/documents").map((r) => (r.body as FormData).get("name"));
         expect(names).toEqual(["Budget", "fake", "Travel policy"]);
-        const left = screen.getByRole("listitem");  // only the failed file stays
+        const left = within(screen.getByRole("main")).getByRole("listitem");  // only the failed file stays
         expect(left).toHaveTextContent("fake.pdf");
         expect(left).toHaveTextContent("The file content does not match its type.");
         expect(await screen.findAllByText("Queued")).toHaveLength(2);

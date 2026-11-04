@@ -1,7 +1,37 @@
 @import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+
+/* The prefix keeps daisyUI's .stack and others off this app's classes. */
+@plugin "daisyui" {
+  themes: corporate --default, business;
+  prefix: "d-";
+  logs: false;
+  exclude: reset;
+}
+
+/* daisyUI's themes, changed only for WCAG AA: white text on the stock colors of
+   Corporate fails, and they are used as text too. */
+@plugin "daisyui/theme" {
+  name: "corporate";
+  default: true;
+  --color-primary: oklch(52% 0.158 241.966);
+  --color-info: oklch(50% 0.126 221.723);
+  --color-success: oklch(45% 0.13 149.214);
+  --color-warning: oklch(50% 0.11 75);
+  --color-warning-content: oklch(100% 0 0);
+  --color-error: oklch(50% 0.19 25);
+  --color-error-content: oklch(100% 0 0);
+}
+
+/* Stock Business has error text too dark for its page, and base-200 and base-300,
+   which borders and muted surfaces use, darker than the page. */
+@plugin "daisyui/theme" {
+  name: "business";
+  --color-base-200: oklch(30% 0 0);
+  --color-base-300: oklch(36% 0 0);
+  --color-error: oklch(72% 0.17 25);
+  --color-error-content: oklch(15% 0 0);
+}
 
 @custom-variant dark (&:is(.dark *));
 
@@ -13,45 +43,6 @@
   --section-gap: clamp(1.5rem, 4vw, 2.5rem);
   --stack-gap: 1rem;
 
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --border: oklch(0.922 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-  --success: oklch(0.5 0.14 145);
-  --success-foreground: oklch(0.985 0 0);
-  --warning: oklch(0.72 0.14 75);
-  --warning-foreground: oklch(0.28 0.06 55);
-  --info: oklch(0.5 0.1 230);
-  --info-foreground: oklch(0.985 0 0);
 }
 
 @layer base {
@@ -73,12 +64,10 @@
     height: 100%;
     margin: 0;
     overflow: hidden;
-    background-color: var(--background);
-    color: var(--foreground);
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    @apply bg-background text-foreground;
+    @apply bg-base-100 text-base-content;
   }
 
   #root {
@@ -150,11 +139,11 @@
   /* Inverted colors: plainly visible in every theme (a light tint over the
      text barely showed). Coloured surfaces invert their own pair. */
   ::selection {
-    background-color: var(--foreground);
-    color: var(--background);
+    background-color: var(--color-base-content);
+    color: var(--color-base-100);
   }
   * {
-    @apply border-border outline-ring/50;
+    @apply border-base-300 outline-primary/50;
   }
 }
 
@@ -167,26 +156,6 @@
     overflow: hidden;
   }
 
-  .app-header {
-    position: sticky;
-    top: 0;
-    z-index: 50;
-    flex-shrink: 0;
-    border-bottom: 1px solid var(--border);
-    background-color: color-mix(in srgb, var(--background) 92%, transparent);
-    backdrop-filter: blur(8px);
-  }
-
-  .app-header__inner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--stack-gap);
-    min-height: var(--header-height);
-    width: 100%;
-    padding-inline: var(--gutter);
-  }
-
   .app-main {
     flex: 1 1 auto;
     width: 100%;
@@ -195,7 +164,7 @@
 
   .app-footer {
     flex-shrink: 0;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--color-base-300);
     padding-block: 1rem;
   }
 
@@ -267,44 +236,6 @@
     display: none;
   }
 
-  .app-layout__nav {
-    display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
-  }
-
-  .app-layout__nav-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.625rem;
-    min-height: 2.25rem;
-    padding-inline: 0.75rem;
-    border-radius: calc(var(--radius) - 2px);
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--sidebar-foreground, var(--foreground));
-    text-decoration: none;
-    transition:
-      background-color 0.15s ease,
-      color 0.15s ease;
-  }
-
-  .app-layout__nav-icon {
-    flex-shrink: 0;
-    width: 1rem;
-    height: 1rem;
-  }
-
-  .app-layout__nav-link:hover {
-    background-color: var(--sidebar-accent, var(--muted));
-    color: var(--sidebar-accent-foreground, var(--foreground));
-  }
-
-  .app-layout__nav-link--active {
-    background-color: var(--sidebar-primary, var(--primary));
-    color: var(--sidebar-primary-foreground, var(--primary-foreground));
-  }
-
   .app-layout__main {
     display: flex;
     flex: 1 1 auto;
@@ -340,14 +271,10 @@
       flex-direction: column;
       flex-shrink: 0;
       width: var(--sidebar-width);
-      background-color: var(--sidebar, var(--background));
-      border-inline-end: 1px solid var(--sidebar-border, var(--border));
+      background-color: var(--color-base-100);
+      border-inline-end: 1px solid var(--color-base-300);
       padding-block: 1rem;
       padding-inline: 0.75rem;
-    }
-
-    .app-layout__nav-link {
-      width: 100%;
     }
 
     .app-layout__main {
@@ -360,290 +287,14 @@
     }
   }
 
-  /* Dark themes: header shares the sidebar surface; active link gets an accent edge. */
-  :is([data-theme="slate"], [data-theme="midnight"], [data-theme="vault"]) .app-header {
-    background-color: color-mix(in srgb, var(--sidebar) 88%, transparent);
-  }
-
-  :is([data-theme="slate"], [data-theme="midnight"], [data-theme="vault"]) .app-layout__nav-link {
-    border-inline-start: 2px solid transparent;
-  }
-
-  :is([data-theme="slate"], [data-theme="midnight"], [data-theme="vault"]) .app-layout__nav-link--active {
-    border-inline-start-color: var(--primary);
-  }
 }
 
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: 'Geist Variable', sans-serif;
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --color-foreground: var(--foreground);
-  --color-background: var(--background);
-  --color-success: var(--success);
-  --color-success-foreground: var(--success-foreground);
-  --color-warning: var(--warning);
-  --color-warning-foreground: var(--warning-foreground);
-  --color-info: var(--info);
-  --color-info-foreground: var(--info-foreground);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
-}
-
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.205 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
-}
-
-/*
-  Slate — dark graphite-slate surfaces, indigo accents. Applied with the .dark
-  class (see theme/themes.ts); :root raises specificity above .dark.
-  All text pairs are WCAG AA (4.5:1+).
-*/
-:root[data-theme="slate"] {
-  --radius: 0.5rem;
-  --background: #1c2230;
-  --foreground: #e5e9f0;
-  --card: #252c3b;
-  --card-foreground: #e5e9f0;
-  --popover: #283041;
-  --popover-foreground: #e5e9f0;
-  --primary: #818cf8;
-  --primary-foreground: #1e1b4b;
-  --secondary: #2a3242;
-  --secondary-foreground: #e5e9f0;
-  --muted: #2a3242;
-  --muted-foreground: #a3adbf;
-  --accent: #2e3648;
-  --accent-foreground: #f1f5f9;
-  --destructive: #f87171;
-  --destructive-foreground: #1f0707;
-  --border: #323a4b;
-  --input: #3a4356;
-  --ring: #818cf8;
-  --chart-1: #818cf8;
-  --chart-2: #38bdf8;
-  --chart-3: #34d399;
-  --chart-4: #fbbf24;
-  --chart-5: #f472b6;
-  --sidebar: #161b26;
-  --sidebar-foreground: #cbd5e1;
-  --sidebar-primary: #2b3250;
-  --sidebar-primary-foreground: #c7d2fe;
-  --sidebar-accent: #222938;
-  --sidebar-accent-foreground: #f1f5f9;
-  --sidebar-border: #262d3c;
-  --sidebar-ring: #818cf8;
-  --success: #4ade80;
-  --success-foreground: #052e16;
-  --warning: #fbbf24;
-  --warning-foreground: #422006;
-  --info: #7dd3fc;
-  --info-foreground: #0c1a2e;
-}
-
-/*
-  Midnight — dark navy surfaces, teal accents. Applied with the .dark class
-  (see theme/themes.ts); :root raises specificity above .dark.
-  All text pairs are WCAG AA (4.5:1+).
-*/
-:root[data-theme="midnight"] {
-  --radius: 0.625rem;
-  --background: #0b1120;
-  --foreground: #e2e8f0;
-  --card: #111a2e;
-  --card-foreground: #e2e8f0;
-  --popover: #131d33;
-  --popover-foreground: #e2e8f0;
-  --primary: #2dd4bf;
-  --primary-foreground: #042f2e;
-  --secondary: #1b2740;
-  --secondary-foreground: #e2e8f0;
-  --muted: #1b2740;
-  --muted-foreground: #94a3b8;
-  --accent: #1e2a44;
-  --accent-foreground: #f1f5f9;
-  --destructive: #f87171;
-  --destructive-foreground: #1f0707;
-  --border: #1f2a40;
-  --input: #2a3754;
-  --ring: #2dd4bf;
-  --chart-1: #2dd4bf;
-  --chart-2: #60a5fa;
-  --chart-3: #a78bfa;
-  --chart-4: #fbbf24;
-  --chart-5: #f472b6;
-  --sidebar: #080d1a;
-  --sidebar-foreground: #cbd5e1;
-  --sidebar-primary: #123a3f;
-  --sidebar-primary-foreground: #5eead4;
-  --sidebar-accent: #131d33;
-  --sidebar-accent-foreground: #f1f5f9;
-  --sidebar-border: #1a2439;
-  --sidebar-ring: #2dd4bf;
-  --success: #34d399;
-  --success-foreground: #022c22;
-  --warning: #fbbf24;
-  --warning-foreground: #422006;
-  --info: #60a5fa;
-  --info-foreground: #0b1120;
-}
-
-/*
-  Ledger — warm ivory paper, enamel-green ink and brass focus rings, the
-  colors of the Corpus website. A light theme for long reading.
-  All text pairs are WCAG AA (4.5:1+).
-*/
-:root[data-theme="ledger"] {
-  --radius: 0.375rem;
-  --background: #f6f2e8;
-  --foreground: #1b2a24;
-  --card: #fbf9f3;
-  --card-foreground: #1b2a24;
-  --popover: #fdfcf8;
-  --popover-foreground: #1b2a24;
-  --primary: #1f4d40;
-  --primary-foreground: #f8f5ed;
-  --secondary: #ebe5d7;
-  --secondary-foreground: #1b2a24;
-  --muted: #eee8db;
-  --muted-foreground: #59625b;
-  --accent: #e7dfcb;
-  --accent-foreground: #1b2a24;
-  --destructive: #a3332a;
-  --destructive-foreground: #ffffff;
-  --border: #dcd3c0;
-  --input: #cfc4ad;
-  --ring: #94692a;
-  --chart-1: #1f4d40;
-  --chart-2: #94692a;
-  --chart-3: #2c6585;
-  --chart-4: #a3542a;
-  --chart-5: #6b7a3a;
-  --sidebar: #efe9dc;
-  --sidebar-foreground: #2a3832;
-  --sidebar-primary: #1f4d40;
-  --sidebar-primary-foreground: #f8f5ed;
-  --sidebar-accent: #e4dbc6;
-  --sidebar-accent-foreground: #1b2a24;
-  --sidebar-border: #dcd3c0;
-  --sidebar-ring: #94692a;
-  --success: #2e6b3c;
-  --success-foreground: #ffffff;
-  --warning: #c9933d;
-  --warning-foreground: #3a2507;
-  --info: #2c6585;
-  --info-foreground: #ffffff;
-}
-
-/*
-  Vault — dark enamel-green surfaces and brass accents: the dark half of
-  Ledger, the colors of the Corpus website in dark mode. Applied with the
-  .dark class (see theme/themes.ts); :root raises specificity above .dark.
-  All text pairs are WCAG AA (4.5:1+).
-*/
-:root[data-theme="vault"] {
-  --radius: 0.375rem;
-  --background: #0f1d19;
-  --foreground: #ebe4d2;
-  --card: #142621;
-  --card-foreground: #ebe4d2;
-  --popover: #172a24;
-  --popover-foreground: #ebe4d2;
-  --primary: #d4a85e;
-  --primary-foreground: #1f1606;
-  --secondary: #1c312a;
-  --secondary-foreground: #ebe4d2;
-  --muted: #1c312a;
-  --muted-foreground: #a7b2aa;
-  --accent: #213830;
-  --accent-foreground: #f3eddf;
-  --destructive: #ef8a7a;
-  --destructive-foreground: #2a0c07;
-  --border: #243b33;
-  --input: #2e473e;
-  --ring: #d4a85e;
-  --chart-1: #d4a85e;
-  --chart-2: #6fbf9a;
-  --chart-3: #7fb3d5;
-  --chart-4: #e09a6b;
-  --chart-5: #b7c26e;
-  --sidebar: #0b1714;
-  --sidebar-foreground: #cfd6cd;
-  --sidebar-primary: #1f3a31;
-  --sidebar-primary-foreground: #e6c07c;
-  --sidebar-accent: #172a24;
-  --sidebar-accent-foreground: #f3eddf;
-  --sidebar-border: #1b2f28;
-  --sidebar-ring: #d4a85e;
-  --success: #6fcf97;
-  --success-foreground: #062012;
-  --warning: #e5b45a;
-  --warning-foreground: #2b1a03;
-  --info: #7fb3d5;
-  --info-foreground: #0a1a26;
+  --radius-sm: calc(var(--radius-box) * 0.6);
+  --radius-md: calc(var(--radius-box) * 0.8);
+  --radius-lg: var(--radius-box);
+  --radius-xl: calc(var(--radius-box) * 1.4);
+  --radius-2xl: calc(var(--radius-box) * 1.8);
 }

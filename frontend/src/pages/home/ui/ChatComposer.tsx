@@ -1,8 +1,6 @@
 import {ArrowUp, Square} from "lucide-react";
 import {type FormEvent, type KeyboardEvent, type ReactNode} from "react";
 
-import {Button} from "@/components/ui/button";
-import {Textarea} from "@/components/ui/textarea";
 import {useI18n} from "@/shared/i18n/I18nProvider";
 
 type ChatComposerProps = {
@@ -51,7 +49,7 @@ export function ChatComposer({
 
     return (
         <form
-            className="flex shrink-0 flex-col gap-2 border-t border-border p-3"
+            className="flex shrink-0 flex-col gap-2 border-t border-base-300 p-3"
             aria-label={t("chat.sendForm")}
             onSubmit={handleSubmit}
         >
@@ -60,34 +58,34 @@ export function ChatComposer({
                 <label className="sr-only" htmlFor="chat-message">
                     {t("chat.messageLabel")}
                 </label>
-                <Textarea
+                <textarea
                     id="chat-message"
                     name="message"
                     rows={2}
                     value={value}
                     disabled={pending}
                     placeholder={t("chat.placeholder")}
-                    className="max-h-40 min-h-12 resize-none"
+                    className="d-textarea max-h-40 min-h-12 w-full resize-none"
                     onChange={(event) => onChange(event.target.value)}
                     onKeyDown={handleKeyDown}
                 />
                 {pending ? (
-                    <Button
+                    <button
                         type="submit"
-                        size="icon"
+                        className="d-btn d-btn-primary d-btn-square"
                         aria-label={t("chat.stop")}
                     >
-                        <Square className="size-3.5 fill-current" />
-                    </Button>
+                        <Square className="size-3.5 fill-current" aria-hidden />
+                    </button>
                 ) : (
-                    <Button
+                    <button
                         type="submit"
-                        size="icon"
+                        className="d-btn d-btn-primary d-btn-square"
                         disabled={!canSend}
                         aria-label={t("chat.send")}
                     >
-                        <ArrowUp />
-                    </Button>
+                        <ArrowUp className="size-4" aria-hidden />
+                    </button>
                 )}
             </div>
         </form>

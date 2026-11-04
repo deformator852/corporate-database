@@ -41,7 +41,7 @@ const SERVICE_ICONS: Record<string, LucideIcon> = {
 const STATUS_STYLE: Record<ServiceStatus, {icon: LucideIcon; tone: string}> = {
     ok: {icon: CircleCheck, tone: "text-success"},
     warning: {icon: CircleAlert, tone: "text-warning"},
-    down: {icon: CircleX, tone: "text-destructive"},
+    down: {icon: CircleX, tone: "text-error"},
 };
 
 export function SystemStatusPage() {
@@ -79,7 +79,7 @@ export function SystemStatusPage() {
                 action={
                     <div className="flex items-center gap-3">
                         {checkedAt ? (
-                            <span className="text-xs text-muted-foreground tabular-nums">
+                            <span className="text-xs text-base-content/70 tabular-nums">
                                 {t("system.checkedAt", {time: checkedAt.toLocaleTimeString()})}
                             </span>
                         ) : null}
@@ -101,7 +101,7 @@ export function SystemStatusPage() {
             />
 
             {error ? (
-                <div role="alert" className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                <div role="alert" className="d-alert d-alert-error d-alert-soft text-sm">
                     {error}
                 </div>
             ) : null}
@@ -110,10 +110,8 @@ export function SystemStatusPage() {
                 <>
                     <div
                         className={cn(
-                            "flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium ring-1",
-                            problems === 0
-                                ? "bg-success/10 text-success ring-success/20"
-                                : "bg-warning/10 text-warning ring-warning/20",
+                            "d-alert d-alert-soft text-sm font-medium",
+                            problems === 0 ? "d-alert-success" : "d-alert-warning",
                         )}
                     >
                         {problems === 0 ? <CircleCheck className="size-4" aria-hidden /> : <CircleAlert className="size-4" aria-hidden />}
@@ -128,9 +126,11 @@ export function SystemStatusPage() {
                                 const {icon: StatusIcon, tone} = STATUS_STYLE[service.status];
                                 return (
                                     <Card key={service.name} className="flex-row items-start gap-3 px-4 py-4">
-                                        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                                            <Icon className="size-4.5" aria-hidden />
-                                        </span>
+                                        <div className="d-avatar d-avatar-placeholder shrink-0">
+                                            <div className="size-9 rounded-lg bg-base-200 text-base-content/70">
+                                                <Icon className="size-4.5" aria-hidden />
+                                            </div>
+                                        </div>
                                         <div className="min-w-0 flex-1 space-y-0.5">
                                             <p className="flex items-center justify-between gap-2 font-medium">
                                                 {t(`system.service.${service.name}` as MessageKey)}
@@ -140,7 +140,7 @@ export function SystemStatusPage() {
                                                 </span>
                                             </p>
                                             {service.detail ? (
-                                                <p className="text-sm break-words text-muted-foreground">{service.detail}</p>
+                                                <p className="text-sm break-words text-base-content/70">{service.detail}</p>
                                             ) : null}
                                         </div>
                                     </Card>
@@ -151,7 +151,7 @@ export function SystemStatusPage() {
 
                     {data.missing_files ? (
                         <Card role="alert" className="flex-row items-start gap-2 px-4 py-3 text-sm">
-                            <CircleAlert className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
+                            <CircleAlert className="mt-0.5 size-4 shrink-0 text-error" aria-hidden />
                             {t("system.missingFiles", {count: data.missing_files})}
                         </Card>
                     ) : null}
@@ -163,7 +163,7 @@ export function SystemStatusPage() {
                             <h2 id="documents-heading" className="text-lg">{t("system.documents")}</h2>
                             <Card className="gap-0 px-4 py-2">
                                 {Object.keys(data.documents).length === 0 ? (
-                                    <p className="py-2 text-sm text-muted-foreground">{t("system.noDocuments")}</p>
+                                    <p className="py-2 text-sm text-base-content/70">{t("system.noDocuments")}</p>
                                 ) : (
                                     <dl className="divide-y">
                                         {Object.entries(data.documents).map(([status, count]) => (
@@ -190,7 +190,7 @@ export function SystemStatusPage() {
                                         ] as [MessageKey, string][]
                                     ).map(([label, value]) => (
                                         <div key={label} className="flex justify-between gap-4 py-2 text-sm">
-                                            <dt className="text-muted-foreground">{t(label)}</dt>
+                                            <dt className="text-base-content/70">{t(label)}</dt>
                                             <dd className="truncate text-right font-medium">{value}</dd>
                                         </div>
                                     ))}
@@ -200,7 +200,7 @@ export function SystemStatusPage() {
                     </div>
                 </>
             ) : !error ? (
-                <p className="text-muted-foreground">{t("common.loading")}</p>
+                <p className="text-base-content/70">{t("common.loading")}</p>
             ) : null}
         </div>
     );

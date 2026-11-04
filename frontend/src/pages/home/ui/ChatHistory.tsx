@@ -1,7 +1,5 @@
 import {MessageSquare, Search, SquarePen} from "lucide-react";
 
-import {Button} from "@/components/ui/button";
-import {Input} from "@/components/ui/input";
 import {useDebouncedSearch} from "@/shared/lib/hooks/useDebouncedSearch";
 import {cn} from "cn";
 import {useI18n} from "@/shared/i18n/I18nProvider";
@@ -57,35 +55,31 @@ export function ChatHistory({
     return (
         <div className="flex h-full min-h-0 flex-col">
             <div className="flex shrink-0 flex-col gap-1.5 p-2">
-                <Button type="button" variant="ghost" className="w-full justify-start" disabled={disabled} onClick={onNew}>
-                    <SquarePen aria-hidden />
+                <button type="button" className="d-btn d-btn-ghost d-btn-sm w-full justify-start" disabled={disabled} onClick={onNew}>
+                    <SquarePen className="size-4" aria-hidden />
                     {t("chat.newChat")}
-                </Button>
-                <div className="relative">
-                    <Search
-                        className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-                        aria-hidden
-                    />
-                    <Input
+                </button>
+                <label className="d-input d-input-sm w-full">
+                    <Search className="size-4 text-base-content/70" aria-hidden />
+                    <input
                         type="search"
                         value={search}
                         placeholder={t("chat.searchHistory")}
                         aria-label={t("chat.searchHistory")}
                         autoComplete="off"
                         maxLength={100}
-                        className="pl-8"
                         onChange={(event) => setSearch(event.target.value)}
                     />
-                </div>
+                </label>
             </div>
             {error ? (
-                <p role="alert" className="px-3 py-4 text-sm text-destructive">
+                <p role="alert" className="d-alert d-alert-error m-2 text-sm">
                     {error}
                 </p>
             ) : conversations == null ? (
-                <p className="px-3 py-4 text-sm text-muted-foreground">{t("common.loading")}</p>
+                <p className="px-3 py-4 text-sm text-base-content/70">{t("common.loading")}</p>
             ) : conversations.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-sm text-muted-foreground">
+                <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-sm text-base-content/70">
                     <MessageSquare className="size-5" aria-hidden />
                     {query ? t("chat.historyNoMatch") : t("chat.historyEmpty")}
                 </div>
@@ -93,8 +87,8 @@ export function ChatHistory({
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2">
                     {groupByAge(conversations).map((group) => (
                         <section key={group.label} aria-label={t(group.label)} className="mt-3 first:mt-1">
-                            <h2 className="px-2.5 pb-1 text-xs font-medium text-muted-foreground">{t(group.label)}</h2>
-                            <ul className="list-none ps-0">
+                            <h2 className="px-2.5 pb-1 text-xs font-medium text-base-content/70">{t(group.label)}</h2>
+                            <ul className="d-menu d-menu-sm w-full flex-nowrap list-none p-0">
                                 {group.items.map((conversation) => {
                                     const active = conversation.id === activeId;
                                     return (
@@ -106,8 +100,8 @@ export function ChatHistory({
                                                 title={conversation.title}
                                                 onClick={() => onOpen(conversation.id)}
                                                 className={cn(
-                                                    "block w-full cursor-pointer truncate rounded-lg px-2.5 py-2 text-left text-sm outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed",
-                                                    active && "bg-muted font-medium",
+                                                    "block w-full truncate text-left disabled:cursor-not-allowed",
+                                                    active && "bg-base-200 font-medium text-base-content",
                                                 )}
                                             >
                                                 {conversation.title}
