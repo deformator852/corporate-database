@@ -1,3 +1,0 @@
-# Kept out of the releases customers receive (tools/publish-release.sh).
-.gitattributes export-ignore
-tools/ export-ignore

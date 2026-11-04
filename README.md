@@ -463,23 +463,19 @@ Llama 3.1 Community License, the Gemma Terms of Use, and Apache 2.0 for
 Qwen. Check the license of the models you choose.
 
 Built with Llama: with a Llama model, the default, Corpus shows "Built with
-Llama" at the bottom of the menu, as the Llama license asks.
+Llama" at the bottom of the menu, as the Llama license asks. By using a Llama
+model, you accept the
+[Llama 3.1 Community License](https://www.llama.com/llama3_1/license/) and its
+Acceptable Use Policy.
 
 ## License
 
-Corpus is proprietary software. Copyright (c) 2026 Nikita Andreevich
-Kostenko. All rights reserved. See [LICENSE](LICENSE).
+Corpus is licensed under the [Apache License 2.0](LICENSE). See also
+[NOTICE](NOTICE).
 
-* One license covers one company: its own servers, its own employees, its
-  own internal use. Each other company, including subsidiaries and clients,
-  needs its own license.
-* You may configure Corpus, extend it in `custom/`, and adapt it for your
-  company's internal use.
-* You may not distribute, resell, rent or publish the code, offer Corpus as
-  a hosted service, install it for others, or sell it, changed or unchanged,
-  as your own product.
-* The license is perpetual and includes a year of updates. Later updates
-  need a renewal.
+You may use, change and distribute it, also commercially, as the license says.
+It comes with no warranty, and it does not grant the right to use the Corpus
+name for your own product.
 
-To buy a license, renew updates or ask a question, write to
-[kostneko30@gmail.com](mailto:kostneko30@gmail.com).
+To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md). To report a
+vulnerability, see [SECURITY.md](SECURITY.md).

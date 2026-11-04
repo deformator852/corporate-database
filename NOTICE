@@ -1,0 +1,10 @@
+Corpus
+Copyright 2026 Nikita Andreevich Kostenko
+
+Licensed under the Apache License, Version 2.0. See the LICENSE file.
+
+Corpus downloads AI models during installation and does not include them. Each
+model has its own license. The default language model is Llama 3.1:
+
+Llama 3.1 is licensed under the Llama 3.1 Community License, Copyright © Meta
+Platforms, Inc. All Rights Reserved.

@@ -4,6 +4,7 @@ version = "1.0.0"
 description = "Corpus backend: API, document worker and command-line tools"
 readme = "README.md"
 requires-python = ">=3.14"
+license = "Apache-2.0"
 dependencies = [
     "aio-pika>=10.0.1",
     "alembic>=1.20.0",
