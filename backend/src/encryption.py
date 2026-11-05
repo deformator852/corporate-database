@@ -50,9 +50,9 @@ class _Key:
         self.cipher = AESGCM(self.material)
         # Separate derivation: the id can be stored and shown without
         # revealing anything about the key itself.
-        # The "corpus" labels here predate the name Archfold. They are part of the
-        # derivation: changing them makes stored data unreadable.
-        self.id = hmac.new(raw, b"corpus key id", hashlib.sha256).digest()[:_KEY_ID_BYTES]
+        # The "archfold" labels here are part of the derivation: changing them
+        # makes stored data unreadable.
+        self.id = hmac.new(raw, b"archfold key id", hashlib.sha256).digest()[:_KEY_ID_BYTES]
 
 
 def key_fingerprint(secret: str) -> str:
@@ -178,7 +178,7 @@ def keyed_digest(data: bytes) -> bytes:
     digests, but without the key nobody can test a guess against one (a
     plain hash of a short secret line can be). Digests made before a key
     rotation stop matching new ones."""
-    return hmac.new(_current().material, b"corpus digest:" + data, hashlib.sha256).digest()[:16]
+    return hmac.new(_current().material, b"archfold digest:" + data, hashlib.sha256).digest()[:16]
 
 
 def encrypt_text(text: str, context: str = "") -> str:
@@ -223,7 +223,7 @@ _SALT_BYTES = 16
 
 
 def _stream_cipher(key: _Key, salt: bytes) -> AESGCM:
-    derived = HKDF(algorithm=SHA256(), length=32, salt=salt, info=b"corpus stream")
+    derived = HKDF(algorithm=SHA256(), length=32, salt=salt, info=b"archfold stream")
     return AESGCM(derived.derive(key.material))
 
 
